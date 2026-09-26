@@ -1,0 +1,240 @@
+:root {
+  --bg: #0e0f13;
+  --panel: #16181f;
+  --border: #262a35;
+  --text: #e6e8ee;
+  --muted: #8b91a3;
+  --accent: #7c9cff;
+  --agent: #2a2140;
+
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  height: 100vh;
+}
+
+.empty {
+  display: grid;
+  place-content: center;
+  height: 100vh;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- session */
+
+.session {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.session > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.session h1 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.lock {
+  font-size: 0.8rem;
+}
+
+.status {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.status.on::before,
+.status.off::before {
+  content: "●";
+  margin-right: 0.35rem;
+}
+
+.status.on::before {
+  color: #4ade80;
+}
+
+.status.off::before {
+  color: #f59e0b;
+}
+
+/* --------------------------------------------------------------- timeline */
+
+.timeline {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.empty-timeline {
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.msg {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.msg.agent {
+  background: var(--agent);
+  border-color: #3a2f5c;
+}
+
+.msg .meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.msg .author {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.msg time {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.msg p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------- composer */
+
+.composer {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.composer select,
+.composer input,
+.composer button {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+}
+
+.composer input {
+  flex: 1;
+  min-width: 0;
+}
+
+.composer input:focus-visible,
+.composer select:focus-visible,
+.composer button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.composer button {
+  cursor: pointer;
+  padding-inline: 0.9rem;
+}
+
+.composer button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ------------------------------------------------------------------ aside */
+
+aside {
+  border-left: 1px solid var(--border);
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.panel h2 {
+  margin: 0 0 0.6rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.participants {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.participants li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.endpoint {
+  display: block;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  word-break: break-all;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem;
+  color: var(--muted);
+}
+
+.hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  aside {
+    display: none;
+  }
+}

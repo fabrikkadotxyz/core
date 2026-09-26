@@ -1,0 +1,24 @@
+{
+  "name": "@fabrikka/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "tsx --env-file-if-exists=../../.env src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.17",
+    "@hono/node-ws": "^1.3.1",
+    "@fabrikka/db": "workspace:*",
+    "@fabrikka/types": "workspace:*",
+    "drizzle-orm": "0.45.3",
+    "hono": "^4.13.9"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "@types/node": "^24.0.0"
+  }
+}

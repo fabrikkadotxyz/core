@@ -1,0 +1,60 @@
+# Fabrikka — working agreements
+
+## Documentation first
+
+**This project is documentation-first. Docs are written before the code they describe, and they are the source of truth.**
+
+Concretely, for any change beyond a typo:
+
+1. **Write or update the doc first.** A new capability starts life as a change to `docs/` — not as a commit that gets documented afterwards.
+2. **Land the doc in the same change as the code.** A PR that changes behaviour without touching the relevant doc is incomplete.
+3. **An architectural choice gets an ADR** in `docs/decisions/` before it is implemented. See `docs/decisions/README.md`.
+4. **If code and docs disagree, the doc is the bug report.** Either the code is wrong, or the doc was never updated — resolve it, don't route around it.
+
+Why this project in particular: Fabrikka's value is a *protocol surface* that external agents depend on. The MCP tools, the channel contract and the trust model are consumed by software we don't control, so they have to be specified before they're built or they become accidental APIs we can never change.
+
+### Where things are documented
+
+| Doc | Holds |
+| --- | --- |
+| `README.md` | What Fabrikka is, quickstart |
+| `ARCHITECTURE.md` | The architectural rule, layers, hybrid wake-up design |
+| `docs/protocol.md` | **The contract external agents depend on** — MCP tools, channel notifications, spawn invocations |
+| `docs/security.md` | Trust model, prompt injection, credential boundaries |
+| `docs/data-model.md` | Schema and what each table is for |
+| `docs/roadmap.md` | Milestones M0–M9 and their acceptance tests |
+| `docs/decisions/` | ADRs — one per architectural decision, immutable once accepted |
+
+Change `docs/protocol.md` with particular care: agents in the wild are bound to it.
+
+## The rule that overrides everything
+
+> **Fabrikka does not own the agent. Fabrikka owns the session.**
+
+The bridge is the sharp edge of this rule. It must never install, update or supervise an agent runtime — **the agent spawns the bridge, not the reverse.** See `ARCHITECTURE.md`.
+
+## Conventions
+
+- TypeScript throughout. pnpm workspaces. No package is added to the monorepo without a second consumer for it.
+- The remote MCP endpoint uses **MCP SDK v2**; the bridge uses **v1**. This is deliberate and load-bearing — see `docs/decisions/0005-two-sdk-generations.md`.
+- Milestones are sequential. Each has a manual acceptance test in `docs/roadmap.md`. Don't start the next one until the current one's test passes.
+
+## Milestone workflow
+
+Milestones are defined in `docs/roadmap.md` and are **sequential**. For each one:
+
+1. **Docs first.** Update `docs/` (and an ADR, if the milestone makes an architectural choice) before writing code.
+2. **Build it.**
+3. **Run the milestone's manual test**, exactly as written in `docs/roadmap.md`. It is a gate, not a suggestion — do not start the next milestone until it passes.
+4. **Add a scripted acceptance check** at `scripts/acceptance/m<N>.mjs` covering what can be checked without a human. It does not replace the manual test; it stops the previous milestone from silently regressing.
+5. **Commit, one commit per milestone**, tagged `m<N>`. The commit message states what the milestone delivers and records that its test passed.
+
+```bash
+pnpm typecheck
+node scripts/acceptance/m0.mjs     # and every earlier milestone's check
+git commit -m "M0: ..." && git tag m0
+```
+
+Run **every** existing acceptance check before committing a milestone, not just the current one.
+
+`docs/roadmap.md` also marks one hard ordering gate: **M6 (safety rails) must land before a second human is ever put in a session with a spawn-enabled agent.** See `docs/security.md`.

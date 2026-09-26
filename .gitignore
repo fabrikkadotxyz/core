@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+.env
+.env.local
+!.env.example
+
+# Tauri (M9)
+target/
+
+.DS_Store
+*.log

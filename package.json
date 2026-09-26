@@ -1,0 +1,25 @@
+{
+  "name": "fabrikka",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "db:up": "docker compose -f docker/docker-compose.yml up -d",
+    "db:down": "docker compose -f docker/docker-compose.yml down",
+    "db:generate": "pnpm --filter @fabrikka/db generate",
+    "db:migrate": "pnpm --filter @fabrikka/db migrate",
+    "db:seed": "pnpm --filter @fabrikka/db seed",
+    "acceptance": "for f in scripts/acceptance/*.mjs; do echo \"--- $f\"; node \"$f\" || exit 1; done"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

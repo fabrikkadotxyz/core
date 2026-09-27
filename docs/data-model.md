@@ -167,12 +167,17 @@ session_agents
 
 agent_connections
   id              uuid pk
-  agent_id        uuid -> agents.id not null
+  participant_id  uuid -> participants.id not null unique
   session_id      uuid -> sessions.id not null
   kind            text not null          -- bridge | remote_http
   status          text not null          -- connected | working | idle | offline
   last_seen_at    timestamptz not null
 ```
+
+Keyed on **participant**, not agent: an agent is only "present" as a participant
+of a specific session, and that is also what a token identifies (ADR 0009). One
+row per participant, upserted — a reconnect replaces the previous state rather
+than accumulating rows.
 
 `kind` matters: only a `bridge` connection can receive a `claude/channel` push. A mention to an agent with no live `bridge` connection takes the spawn path instead. See `ARCHITECTURE.md`.
 

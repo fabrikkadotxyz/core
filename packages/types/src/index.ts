@@ -85,6 +85,19 @@ export type ServerEvent =
   | { type: 'message.created'; message: Message }
   | { type: 'participant.updated'; participant: Participant }
   | { type: 'context.updated'; context: SessionContext }
+  | {
+      /**
+       * A mention that did NOT reach an agent, and why. Emitted so a human can
+       * see that someone addressed an agent and nothing happened — silent
+       * non-delivery is indistinguishable from a bug. See ADR 0010.
+       */
+      type: 'mention.blocked';
+      messageId: string;
+      participantId: string;
+      displayName: string;
+      reason: 'own_message' | 'not_trusted' | 'no_connection';
+    }
+  | { type: 'presence.updated'; participantId: string; status: ConnectionStatus }
   | { type: 'stream.error'; code: 'unauthenticated' | 'not_found' };
 
 /** Client -> server. M0 posts over HTTP; the socket is read-only for now. */
@@ -133,13 +146,22 @@ export interface AgentSummary {
   ownerUserId: string;
 }
 
-/** Returned once, at creation. The token is never recoverable afterwards. */
+/**
+ * Returned once, at creation. The token is never recoverable afterwards.
+ *
+ * Carries both ways to connect: lane A (pull, any MCP client) and lane B
+ * (real-time push into a running Claude Code session). See docs/protocol.md.
+ */
 export interface CreatedAgentView {
   agent: AgentSummary;
   token: string;
   mcpUrl: string;
-  /** Ready-to-paste `claude mcp add` command. */
+  /** Lane A: ready-to-paste `claude mcp add` command. */
   claudeCommand: string;
+  /** Lane B: `.mcp.json` contents for the agent's project directory. */
+  bridgeMcpJson: string;
+  /** Lane B: the command that starts Claude Code with the channel opted in. */
+  bridgeCommand: string;
 }
 
 export interface SessionContext {

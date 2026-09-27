@@ -105,15 +105,40 @@ honestly here, **enforced at M6**.
 
 ## M4 — Bridge CLI + channels (lane B) — *the moment it feels alive*
 
-`packages/bridge` ships `npx fabrikka connect <session>`: a **v1-SDK** stdio MCP server holding a WebSocket to Fabrikka. Declares `experimental['claude/channel']` + `tools`, pushes `notifications/claude/channel`, exposes a `reply` tool.
+`packages/bridge` ships the `fabrikka` CLI: a **v1-SDK** stdio MCP server holding
+a WebSocket to Fabrikka. Claude Code spawns it from `.mcp.json`; it declares
+`experimental['claude/channel']` and pushes `notifications/claude/channel`.
 
-Two details that will cost an afternoon if missed — `meta` keys must be `[A-Za-z0-9_]+` or they are silently dropped, and `MCP_PROTOCOL_NEGOTIATION` must stay unset or the server won't register as a channel at all. See `docs/protocol.md`.
+The bridge **proxies** the session's HTTP endpoint rather than reimplementing
+tools, so it gains future tools for free and cannot drift from lane A
+([ADR 0010](decisions/0010-bridge-proxies-and-gates-at-source.md)). Replying is
+`post_message` — there is no separate `reply` tool.
 
-**Test:**
-```bash
-claude --dangerously-load-development-channels server:fabrikka
-```
-Accept the dev-channel warning; confirm the startup notice names `server:fabrikka`. From the browser send `@claude-fede what's in my working directory?`. Claude reacts **in your running terminal session, with your repo open**, and the answer lands back in the browser. This is the demo.
+**Delivery is decided by the server, never the bridge.** A channel push starts a
+turn, and the bridge runs on the user's machine as a process they can edit, so the
+gate belongs upstream. Mention-gated, never its own messages, and `owner_only` by
+default — which means the prompt-injection gate lands here, not at M6. M6 adds the
+turn budget, the kill switch, and the same gate on the spawn path. A blocked
+mention emits `mention.blocked` so a human can see it.
+
+Three details that fail **silently** if missed, all in `docs/protocol.md`:
+`meta` keys must be `[A-Za-z0-9_]+`; `MCP_PROTOCOL_NEGOTIATION` must stay unset or
+the server is never registered as a channel; and markers must be expanded before
+delivery or the model receives `<@uuid>` and cannot tell who was addressed.
+
+**Test** (the push→react step needs an *interactive* session — `claude -p` exits
+after one turn, so a channel event arriving mid-turn has no next turn to land on):
+1. In a session you own, *Agents* → add `claude-fede` → **Live session** tab.
+2. Save the `.mcp.json` into a project directory and start Claude Code there with
+   the printed `--dangerously-load-development-channels` command. Accept the
+   full-screen warning; confirm the dim startup notice names `server:fabrikka`.
+3. Participants shows `@claude-fede` as **connected**.
+4. From the browser send `@claude-fede what's in my working directory?`. Claude
+   reacts **in your running terminal, with your repo open**, and its answer lands
+   back in the browser. This is the demo.
+5. Invite a second person and have them mention `@claude-fede`: nothing happens,
+   and the timeline says it was not notified because only its owner can direct it.
+   Flip the agent to *session trusted* and it goes through.
 
 ## M5 — Spawn-on-mention fallback + Codex
 

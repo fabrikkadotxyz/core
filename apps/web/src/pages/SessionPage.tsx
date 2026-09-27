@@ -4,6 +4,7 @@ import type {
   AgentSummary,
   CreatedAgentView,
   InviteSummary,
+  ServerEvent,
   Message,
   Participant,
   SessionView,
@@ -28,6 +29,9 @@ export function SessionPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [blocked, setBlocked] = useState<
+    Extract<ServerEvent, { type: 'mention.blocked' }>[]
+  >([]);
 
   const reload = useCallback(() => {
     sessions
@@ -59,6 +63,23 @@ export function SessionPage() {
           // Patch the participant list rather than refetching messages: chips
           // resolve names from this list, so a rename updates every message on
           // screen at once. That is the point of storing ids, not names.
+          if (event.type === 'presence.updated') {
+            setView((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    participants: prev.participants.map((p) =>
+                      p.id === event.participantId ? { ...p, status: event.status } : p,
+                    ),
+                  }
+                : prev,
+            );
+          }
+          // Surface a mention that did not reach its agent. Silent non-delivery
+          // is indistinguishable from a bug (ADR 0010).
+          if (event.type === 'mention.blocked') {
+            setBlocked((prev) => [...prev.slice(-4), event]);
+          }
           if (event.type === 'participant.updated') {
             setView((prev) =>
               prev
@@ -137,6 +158,21 @@ export function SessionPage() {
             </span>
           </header>
 
+          {blocked.length > 0 && (
+            <ul className="blocked-notices">
+              {blocked.map((b) => (
+                <li key={`${b.messageId}-${b.participantId}`}>
+                  @{b.displayName} was not notified —{' '}
+                  {b.reason === 'not_trusted'
+                    ? 'only its owner can direct it'
+                    : b.reason === 'no_connection'
+                      ? 'no live connection'
+                      : 'it wrote the message'}
+                </li>
+              ))}
+            </ul>
+          )}
+
           <Timeline
             messages={messages}
             participants={view.participants}
@@ -161,6 +197,11 @@ export function SessionPage() {
                 <li key={p.id}>
                   <span>{p.kind === 'agent' ? '🤖' : '👤'}</span>
                   <span>@{p.displayName}</span>
+                  {p.kind === 'agent' && (
+                    <span className={`presence ${p.status ?? 'offline'}`}>
+                      {p.status ?? 'offline'}
+                    </span>
+                  )}
                   {p.id === view.me.participantId && <em className="small">you</em>}
                   {(p.id === view.me.participantId || isOwner) && (
                     <button
@@ -370,7 +411,6 @@ function AgentsPanel({
   const [name, setName] = useState('');
   const [provider, setProvider] = useState('claude-code');
   const [fresh, setFresh] = useState<CreatedAgentView | null>(null);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
@@ -388,7 +428,6 @@ function AgentsPanel({
     try {
       const created = await sessions.addAgent(ref_, { displayName, provider });
       setFresh(created);
-      setCopied(false);
       setName('');
       refresh();
       onChanged();
@@ -422,27 +461,7 @@ function AgentsPanel({
 
       {error && <p className="error small">{error}</p>}
 
-      {fresh && (
-        <div className="fresh-invite">
-          <p className="hint">
-            <strong>Copy this now — the token is shown only once.</strong> Run it
-            where your agent lives, then restart the agent.
-          </p>
-          <code className="endpoint">{fresh.claudeCommand}</code>
-          <button
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(fresh.claudeCommand);
-                setCopied(true);
-              } catch {
-                setError('could not copy — select the text and copy it manually');
-              }
-            }}
-          >
-            {copied ? 'Copied ✓' : 'Copy command'}
-          </button>
-        </div>
-      )}
+      {fresh && <AgentSetup created={fresh} onError={setError} />}
 
       {agents.length > 0 && (
         <ul className="participants">
@@ -500,6 +519,96 @@ function AgentsPanel({
         </>
       )}
     </Panel>
+  );
+}
+
+/**
+ * The two ways to connect, with the trade-off stated rather than buried.
+ *
+ * Lane A works with any MCP client but is pull-only — an idle agent never wakes.
+ * Lane B pushes into a session that is already running, which is what makes the
+ * product feel alive, at the cost of a local process and a research-preview flag.
+ * See ARCHITECTURE.md.
+ */
+function AgentSetup({
+  created,
+  onError,
+}: {
+  created: CreatedAgentView;
+  onError: (msg: string) => void;
+}) {
+  const [lane, setLane] = useState<'bridge' | 'remote'>('bridge');
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copy = async (label: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+    } catch {
+      onError('could not copy — select the text and copy it manually');
+    }
+  };
+
+  return (
+    <div className="fresh-invite">
+      <p className="hint">
+        <strong>Copy this now — the token is shown only once.</strong>
+      </p>
+
+      <div className="lane-tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={lane === 'bridge'}
+          className={lane === 'bridge' ? 'active' : undefined}
+          onClick={() => setLane('bridge')}
+        >
+          Live session
+        </button>
+        <button
+          role="tab"
+          aria-selected={lane === 'remote'}
+          className={lane === 'remote' ? 'active' : undefined}
+          onClick={() => setLane('remote')}
+        >
+          Any MCP client
+        </button>
+      </div>
+
+      {lane === 'bridge' ? (
+        <>
+          <p className="hint">
+            Pushes into a Claude Code session you already have open, with your repo
+            loaded. Save this as <code>.mcp.json</code> in that project:
+          </p>
+          <code className="endpoint">{created.bridgeMcpJson}</code>
+          <button onClick={() => copy('json', created.bridgeMcpJson)}>
+            {copied === 'json' ? 'Copied ✓' : 'Copy .mcp.json'}
+          </button>
+
+          <p className="hint">Then start Claude Code with the channel opted in:</p>
+          <code className="endpoint">{created.bridgeCommand}</code>
+          <button onClick={() => copy('cmd', created.bridgeCommand)}>
+            {copied === 'cmd' ? 'Copied ✓' : 'Copy command'}
+          </button>
+          <p className="hint">
+            The <code>--dangerously-</code> flag is required because channels are a
+            research preview and third-party ones are not on Anthropic's allowlist.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="hint">
+            Works with Claude Code, Codex, Cursor — anything speaking MCP. The agent
+            can read and post, but <strong>cannot be woken</strong>: it participates
+            only while it happens to be running.
+          </p>
+          <code className="endpoint">{created.claudeCommand}</code>
+          <button onClick={() => copy('remote', created.claudeCommand)}>
+            {copied === 'remote' ? 'Copied ✓' : 'Copy command'}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 

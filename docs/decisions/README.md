@@ -42,3 +42,4 @@ What we rejected and why.
 | [0007](0007-email-is-a-transport.md) | Email is a transport, not a mechanism | Accepted |
 | [0008](0008-mentions-as-stable-markers.md) | Mentions are stable markers, and mention rows are derived | Accepted |
 | [0009](0009-participant-scoped-tokens.md) | Session tokens are participant-scoped, and OAuth is deferred | Accepted |
+| [0010](0010-bridge-proxies-and-gates-at-source.md) | The bridge proxies upstream, and delivery is gated at the source | Accepted |

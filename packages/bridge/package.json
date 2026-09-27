@@ -1,0 +1,29 @@
+{
+  "name": "@fabrikka/bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local bridge that lets a running Claude Code session participate in a Fabrikka session",
+  "bin": {
+    "fabrikka": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.1.0",
+    "@modelcontextprotocol/sdk": "1.30.1",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^7.0.2",
+    "esbuild": "^0.28.2"
+  },
+  "files": [
+    "dist"
+  ]
+}

@@ -527,3 +527,68 @@ a {
   letter-spacing: 0.06em;
   color: var(--muted);
 }
+
+/* --------------------------------------------------- M4 presence & lanes */
+
+.presence {
+  font-size: 0.65rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.presence.connected,
+.presence.idle {
+  color: #86efac;
+  border-color: #2f6b45;
+}
+
+/* `working` should be the one that catches the eye. */
+.presence.working {
+  color: #fcd34d;
+  border-color: #7c5e16;
+}
+
+.lane-tabs {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.lane-tabs button {
+  flex: 1;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.35rem 0.4rem;
+}
+
+.lane-tabs button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.fresh-invite code.endpoint {
+  white-space: pre-wrap;
+  max-height: 11rem;
+  overflow-y: auto;
+}
+
+.blocked-notices {
+  margin: 0;
+  padding: 0.5rem 1.25rem 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.blocked-notices li {
+  font-size: 0.72rem;
+  color: #fcd34d;
+  border-left: 2px solid #7c5e16;
+  padding-left: 0.5rem;
+}

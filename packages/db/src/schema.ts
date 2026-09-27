@@ -3,7 +3,7 @@
  *
  * Tables are introduced by the milestone that needs them (docs/roadmap.md).
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
- * M2 (mentions) and M3 (agents, tokens, session context).
+ * M2 (mentions), M3 (agents, tokens, session context) and M4 (presence).
  */
 import {
   boolean,
@@ -316,3 +316,41 @@ export const sessionContext = pgTable('session_context', {
   constraints: jsonb('constraints').$type<string[]>().notNull().default([]),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/* -------------------------------------------------------------------------- */
+/* M4 — agent connections (presence)                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A live agent connection.
+ *
+ * Keyed on participant, not agent: an agent is only "present" as a participant
+ * of a specific session, which is also what a token identifies (ADR 0009). One
+ * row per participant, upserted, so a reconnect replaces the previous state
+ * rather than accumulating rows.
+ *
+ * `kind` matters for delivery: only a `bridge` connection can receive a
+ * claude/channel push. A mention to an agent with no live bridge takes the spawn
+ * path at M5. See ARCHITECTURE.md.
+ */
+export const agentConnections = pgTable(
+  'agent_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    participantId: uuid('participant_id')
+      .notNull()
+      .unique()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    /** bridge | remote_http */
+    kind: text('kind').notNull(),
+    /** connected | working | idle | offline */
+    status: text('status').notNull().default('offline'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('agent_connections_session_idx').on(t.sessionId)],
+);

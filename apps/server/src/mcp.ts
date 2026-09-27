@@ -17,6 +17,7 @@ import type { Database } from '@fabrikka/db';
 import type { Mention, TrustTier } from '@fabrikka/types';
 import { resolveSessionToken, trustOf, type TokenActor } from './agents.ts';
 import { publish } from './bus.ts';
+import { deliverMentions } from './delivery.ts';
 import { renderMentions } from './mentions.ts';
 import {
   createMessage,
@@ -299,6 +300,8 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
       if (!result.ok) throw new Error(result.error);
 
       publish(actor.sessionId, { type: 'message.created', message: result.message });
+      // Agent-to-agent mentions go through the same gate as human ones.
+      await deliverMentions(db, actor.sessionId, result.message);
 
       const participants = await listParticipantsWithUsers(db, actor.sessionId);
       return text({

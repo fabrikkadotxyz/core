@@ -35,8 +35,15 @@ import {
 import { publish, subscribe } from './bus.ts';
 import { createMcpApp } from './mcp.ts';
 import {
+  connectionStatuses,
+  deliverMentions,
+  listenForMentions,
+  setConnectionStatus,
+} from './delivery.ts';
+import {
   addAgentToSession,
   issueToken,
+  resolveSessionToken,
   listSessionAgents,
   listSessionTokens,
   revokeToken,
@@ -71,6 +78,16 @@ import {
 const PORT = Number(process.env.PORT ?? 9090);
 const PUBLIC_URL = process.env.PUBLIC_URL ?? `http://localhost:${PORT}`;
 const SECURE_COOKIES = PUBLIC_URL.startsWith('https://');
+
+/**
+ * How to invoke the bridge, for the generated .mcp.json.
+ *
+ * Defaults to the published package. Point it at the local build during
+ * development: BRIDGE_COMMAND="node /path/to/packages/bridge/dist/cli.js"
+ */
+const BRIDGE_COMMAND = (process.env.BRIDGE_COMMAND ?? 'npx -y @fabrikka/bridge')
+  .split(' ')
+  .filter(Boolean);
 
 const { db } = createClient();
 
@@ -211,9 +228,13 @@ sessionRoutes.get('/', async (c) => {
   const s = await resolve(c);
   if (!s) return c.notFound();
 
+  const statuses = await connectionStatuses(db, s.id);
   const view: SessionView = {
     session: s.view,
-    participants: await listParticipants(db, s.id),
+    participants: (await listParticipants(db, s.id)).map((p) => ({
+      ...p,
+      status: statuses.get(p.id),
+    })),
     members: await listMembers(db, s.id),
     me: { role: s.role, participantId: s.participantId },
     mcpEndpoint: `${PUBLIC_URL}/mcp/o/${s.view.ownerSlug}/s/${s.view.publicId}`,
@@ -278,6 +299,9 @@ sessionRoutes.post('/messages', async (c) => {
   if (!result.ok) return c.json({ error: result.error }, 400);
 
   publish(s.id, { type: 'message.created', message: result.message });
+  // Mentions of agents are evaluated and pushed here, not in the bridge.
+  await deliverMentions(db, s.id, result.message);
+
   return c.json(result.message, 201);
 });
 
@@ -392,15 +416,7 @@ sessionRoutes.post('/agents', async (c) => {
     },
   });
 
-  return c.json(
-    {
-      agent,
-      token,
-      mcpUrl,
-      claudeCommand: `claude mcp add --transport http fabrikka ${mcpUrl} --header "Authorization: Bearer ${token}"`,
-    },
-    201,
-  );
+  return c.json({ ...agentSetup(mcpUrl, token), agent }, 201);
 });
 
 sessionRoutes.patch('/agents/:sessionAgentId/trust', async (c) => {
@@ -443,14 +459,7 @@ sessionRoutes.post('/tokens', async (c) => {
   if (!token) return c.notFound();
 
   const mcpUrl = `${PUBLIC_URL}/mcp/o/${s.view.ownerSlug}/s/${s.view.publicId}`;
-  return c.json(
-    {
-      token,
-      mcpUrl,
-      claudeCommand: `claude mcp add --transport http fabrikka ${mcpUrl} --header "Authorization: Bearer ${token}"`,
-    },
-    201,
-  );
+  return c.json(agentSetup(mcpUrl, token), 201);
 });
 
 sessionRoutes.post('/tokens/:id/revoke', async (c) => {
@@ -525,6 +534,114 @@ sessionRoutes.post('/invites/:id/revoke', async (c) => {
   if (!revoked) return c.notFound();
   return c.json({ ok: true });
 });
+
+/**
+ * The bridge socket — lane B.
+ *
+ * Authenticated with the same participant-scoped bearer token as the MCP
+ * endpoint, sent as a header (possible because the bridge is a Node process, not
+ * a browser). The server decides what to push; the bridge is a dumb pipe.
+ * See ADR 0010 and docs/protocol.md.
+ */
+app.get(
+  '/bridge/o/:owner/s/:session',
+  upgradeWebSocket((c) => {
+    const ownerSlug = c.req.param('owner');
+    const sessionPublicId = c.req.param('session');
+    const bearer = c.req.header('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+
+    let unsubscribe: (() => void) | undefined;
+    let actorRef: { sessionId: string; participantId: string } | undefined;
+
+    return {
+      async onOpen(_evt, ws) {
+        // Refusals travel in-band: a close code issued during the upgrade
+        // arrives as 1006 with no reason (see docs/protocol.md).
+        const refuse = (code: 'unauthenticated' | 'not_found') => {
+          ws.send(JSON.stringify({ type: 'error', code }));
+          ws.close();
+        };
+
+        if (!bearer) return refuse('unauthenticated');
+        if (!ownerSlug || !sessionPublicId) return refuse('not_found');
+
+        const actor = await resolveSessionToken(db, bearer);
+        if (
+          !actor ||
+          actor.sessionPublicId !== sessionPublicId ||
+          actor.ownerSlug !== ownerSlug
+        ) {
+          return refuse('not_found');
+        }
+        // A channel push starts a turn, so only an agent may hold a bridge.
+        if (actor.participantKind !== 'agent') return refuse('not_found');
+
+        actorRef = { sessionId: actor.sessionId, participantId: actor.participantId };
+
+        ws.send(
+          JSON.stringify({
+            type: 'ready',
+            participant: {
+              id: actor.participantId,
+              display_name: actor.participantName,
+            },
+            session: { id: actor.sessionPublicId, owner: actor.ownerSlug },
+          }),
+        );
+
+        unsubscribe = listenForMentions(actor.participantId, ({ message, trust }) => {
+          ws.send(JSON.stringify({ type: 'mention', message, trust }));
+        });
+
+        await setConnectionStatus(db, {
+          sessionId: actor.sessionId,
+          participantId: actor.participantId,
+          kind: 'bridge',
+          status: 'connected',
+        });
+      },
+
+      async onMessage(evt, _ws) {
+        if (!actorRef) return;
+        try {
+          const frame = JSON.parse(String(evt.data)) as {
+            type?: string;
+            status?: string;
+          };
+          if (frame.type !== 'status') return;
+          if (
+            frame.status !== 'working' &&
+            frame.status !== 'idle' &&
+            frame.status !== 'connected'
+          ) {
+            return;
+          }
+          await setConnectionStatus(db, {
+            ...actorRef,
+            kind: 'bridge',
+            status: frame.status,
+          });
+        } catch {
+          // Ignore a malformed frame rather than dropping the connection.
+        }
+      },
+
+      async onClose() {
+        unsubscribe?.();
+        if (actorRef) {
+          await setConnectionStatus(db, {
+            ...actorRef,
+            kind: 'bridge',
+            status: 'offline',
+          }).catch(() => {});
+        }
+      },
+      onError() {
+        unsubscribe?.();
+      },
+    };
+  }),
+);
 
 /**
  * The MCP endpoint — lane A. Its own auth (participant-scoped bearer tokens),
@@ -613,6 +730,40 @@ app.get(
 
 
 app.route('/api/o/:owner/s/:session', sessionRoutes);
+
+/**
+ * Both ways to connect an agent, generated with the token already in place.
+ *
+ * Lane A is pull-only and works with any MCP client. Lane B adds real-time push
+ * into a running Claude Code session, which needs a local process and a
+ * research-preview flag. See docs/protocol.md.
+ */
+function agentSetup(mcpUrl: string, token: string) {
+  const bridgeMcpJson = JSON.stringify(
+    {
+      mcpServers: {
+        fabrikka: {
+          command: BRIDGE_COMMAND[0],
+          args: [...BRIDGE_COMMAND.slice(1), 'connect'],
+          env: { FABRIKKA_URL: mcpUrl, FABRIKKA_TOKEN: token },
+        },
+      },
+    },
+    null,
+    2,
+  );
+
+  return {
+    token,
+    mcpUrl,
+    // Lane A: any MCP client, pull only.
+    claudeCommand: `claude mcp add --transport http fabrikka ${mcpUrl} --header "Authorization: Bearer ${token}"`,
+    // Lane B: real-time push. The .mcp.json goes in the project directory, then
+    // Claude Code is started with the channel opted in.
+    bridgeMcpJson,
+    bridgeCommand: 'claude --dangerously-load-development-channels server:fabrikka',
+  };
+}
 
 /** Resolve the session addressed by the current route, for the current user. */
 async function resolve(c: {

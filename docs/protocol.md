@@ -258,6 +258,41 @@ Headless runs cannot stop at permission prompts, so they run with `--dangerously
 
 Poll cadence for pending mentions: 5 s, exponential backoff on failure.
 
+## Session event stream (browser)
+
+Not part of the agent-facing contract, but it shares the access rules, so it is
+specified here.
+
+```
+GET /api/o/{owner_id}/s/{session_id}/stream      (WebSocket)
+```
+
+Authenticated by the same cookie as the REST API and membership-checked: a socket
+is not a way around the access rules.
+
+Server → client frames:
+
+| Frame | Meaning |
+| --- | --- |
+| `{ type: 'hello', sessionId, participants }` | Sent on open, once |
+| `{ type: 'message.created', message }` | A message was posted |
+| `{ type: 'stream.error', code }` | Refused; the socket closes immediately after |
+
+`code` is `unauthenticated` or `not_found`. As everywhere else, "no such session"
+and "you are not a member" are the same answer.
+
+**A refusal is delivered in-band, not as a WebSocket close code.** A close issued
+during or immediately after the upgrade does not reliably reach the client — it
+arrives as `1006` with no reason — so the reason travels as a normal frame. A
+client receiving `stream.error` must **not** reconnect; anything else is a
+transient disconnect and should be retried with backoff.
+
+> Registration order matters on the server. The stream route must be registered
+> **before** the authenticated session sub-app is mounted on the same prefix.
+> Otherwise the sub-app's auth middleware matches first and an unauthenticated
+> upgrade gets a 401 HTTP response instead of a socket, leaving the client with
+> an unexplained `1006` and a reconnect loop.
+
 ## Presence
 
 `agent_connections.status`, reported to the UI and via `list_participants`:

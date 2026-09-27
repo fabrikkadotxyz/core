@@ -238,3 +238,220 @@ aside {
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------- M1 shell */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.topbar .spacer,
+.spacer {
+  flex: 1;
+}
+
+.page > .app {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.centered {
+  display: grid;
+  place-content: center;
+  min-height: 100vh;
+  padding: 1rem;
+  color: var(--text);
+}
+
+.column {
+  width: min(680px, 100%);
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+  overflow-y: auto;
+}
+
+/* ----------------------------------------------------------------- forms */
+
+.card {
+  width: min(380px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.card h1 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+input,
+select,
+button {
+  font: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0.55rem 0.7rem;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  cursor: pointer;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b0d12;
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  font-weight: 500;
+  text-align: left;
+}
+
+button.link.danger {
+  color: #f87171;
+}
+
+.inline-form {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.inline-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.error {
+  margin: 0;
+  color: #f87171;
+  font-size: 0.85rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.75rem;
+}
+
+.badge {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 5px;
+  background: var(--border);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-style: normal;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* --------------------------------------------------------- session list */
+
+.session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.session-list a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.session-list a:hover {
+  border-color: var(--accent);
+}
+
+.session-title {
+  font-weight: 600;
+}
+
+.session-title em {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-style: normal;
+}
+
+/* -------------------------------------------------------------- invites */
+
+.fresh-invite {
+  margin-top: 0.6rem;
+  padding: 0.6rem;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.participants li {
+  flex-wrap: wrap;
+}
+
+.participants li em {
+  color: var(--muted);
+  font-style: normal;
+}

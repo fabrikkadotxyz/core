@@ -39,3 +39,4 @@ What we rejected and why.
 | [0004](0004-per-participant-credentials.md) | MCP credentials are per-participant | Accepted |
 | [0005](0005-two-sdk-generations.md) | Two MCP SDK generations in one repo | Accepted |
 | [0006](0006-owner-scoped-endpoint-path.md) | Owner-scoped MCP endpoint path | Accepted |
+| [0007](0007-email-is-a-transport.md) | Email is a transport, not a mechanism | Accepted |

@@ -67,11 +67,19 @@ export interface Session {
 /* Realtime: browser <-> server                                               */
 /* -------------------------------------------------------------------------- */
 
-/** Server -> client. */
+/**
+ * Server -> client.
+ *
+ * `stream.error` is sent as a normal frame before the socket closes. WebSocket
+ * close codes do not reliably survive a close issued during the upgrade, so the
+ * reason a stream was refused is carried in-band rather than in the close code.
+ * A client that sees this must NOT reconnect.
+ */
 export type ServerEvent =
   | { type: 'hello'; sessionId: string; participants: Participant[] }
   | { type: 'message.created'; message: Message }
-  | { type: 'participant.updated'; participant: Participant };
+  | { type: 'participant.updated'; participant: Participant }
+  | { type: 'stream.error'; code: 'unauthenticated' | 'not_found' };
 
 /** Client -> server. M0 posts over HTTP; the socket is read-only for now. */
 export type ClientEvent = { type: 'ping' };
@@ -89,6 +97,75 @@ export interface PostMessageBody {
 export interface SessionView {
   session: Session;
   participants: Participant[];
+  members: Member[];
+  /** The requesting user's role and participant identity in this session. */
+  me: { role: SessionRole; participantId: string };
   /** The ready-to-paste `claude mcp add` command. See docs/protocol.md. */
   mcpEndpoint: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* M1 — auth, membership, invites                                             */
+/* -------------------------------------------------------------------------- */
+
+export type SessionRole = 'owner' | 'member';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  ownerSlug: string;
+  isInstanceOwner: boolean;
+}
+
+export interface Member {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: SessionRole;
+}
+
+export interface SessionSummary {
+  publicId: string;
+  ownerSlug: string;
+  title: string;
+  status: SessionStatus;
+  role: SessionRole;
+  memberCount: number;
+  createdAt: string;
+}
+
+/**
+ * An invite as shown to a session owner. Deliberately carries no token — the
+ * plaintext is returned once at creation and is never recoverable (ADR 0007).
+ */
+export interface InviteSummary {
+  id: string;
+  role: SessionRole;
+  /** Optional scope. When set, only this address may redeem. Nothing is sent. */
+  invitedEmail: string | null;
+  expiresAt: string;
+  redeemedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+/** Returned once, at creation. `url` is what the UI puts on the clipboard. */
+export interface CreatedInviteView {
+  invite: InviteSummary;
+  token: string;
+  url: string;
+}
+
+export interface LoginBody {
+  email: string;
+  password: string;
+}
+
+/** Signup always carries an invite token: there is no open registration. */
+export interface SignupBody {
+  token: string;
+  email: string;
+  password: string;
+  displayName: string;
 }

@@ -16,7 +16,7 @@ The rule that follows from it:
 
 ## Status
 
-Pre-MVP, building M0. See [`docs/roadmap.md`](docs/roadmap.md).
+Pre-MVP. M0 and M1 done; next is M3's remote MCP endpoint. See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## How agents join
 
@@ -48,14 +48,25 @@ When a mention arrives, a live bridge connection gets a channel push; otherwise 
 
 ## Development
 
-Requires Node 22+, pnpm and Docker.
+Requires Node 22+, pnpm and Docker. **No mail server** — see
+[ADR 0007](docs/decisions/0007-email-is-a-transport.md).
 
 ```bash
+cp .env.example .env
 pnpm install
-docker compose -f docker/docker-compose.yml up -d
+pnpm db:up
 pnpm db:migrate
-pnpm dev
+
+# Create the first account. There is no open registration, so this is the
+# only way in on a fresh instance.
+pnpm admin create-user --email you@example.com --owner
+
+pnpm dev          # web on :5173, server on :9090
 ```
+
+Then invite people with a **link**, not an email: open a session, *Create invite
+link*, and send it however you like. Forgot a password?
+`pnpm admin reset-password --email <e>`. See [`docs/operations.md`](docs/operations.md).
 
 ## Documentation
 
@@ -67,6 +78,7 @@ pnpm dev
 | [`docs/protocol.md`](docs/protocol.md) | **The contract external agents bind to** |
 | [`docs/security.md`](docs/security.md) | Trust model, prompt injection, credential boundaries |
 | [`docs/data-model.md`](docs/data-model.md) | Schema and what each table is for |
+| [`docs/operations.md`](docs/operations.md) | Running an instance: bootstrap, admin CLI, invites, backups |
 | [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M9 and their acceptance tests |
 | [`docs/decisions/`](docs/decisions/) | ADRs — why each of the above is the way it is |
 

@@ -2,12 +2,14 @@
  * Database schema. Documented in docs/data-model.md — update that first.
  *
  * Tables are introduced by the milestone that needs them (docs/roadmap.md).
- * This file currently covers M0: the messaging core.
+ * Currently covers M0 (messaging core) and M1 (auth, membership, invites).
  */
 import {
+  boolean,
   index,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -27,9 +29,17 @@ export const users = pgTable('users', {
    */
   ownerSlug: text('owner_slug').notNull().unique(),
   email: text('email').notNull().unique(),
-  /** Null until M1 introduces auth. */
+  /** scrypt$N$r$p$salt$hash — see docs/security.md. */
   passwordHash: text('password_hash'),
   displayName: text('display_name').notNull(),
+  /** Set by `admin create-user --owner`. Instance-level, not per-session. */
+  isInstanceOwner: boolean('is_instance_owner').notNull().default(false),
+  /**
+   * Always null self-hosted: email is an identifier, not a proven address
+   * (ADR 0007). Recorded so cloud verification can layer on without a schema
+   * change; nothing in the core reads it.
+   */
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -94,4 +104,87 @@ export const messages = pgTable(
       .defaultNow(),
   },
   (t) => [index('messages_session_created_idx').on(t.sessionId, t.createdAt)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* M1 — auth, membership, invites                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Login sessions as server-side rows, NOT JWTs.
+ *
+ * A stateless token cannot be revoked before it expires, and membership here
+ * governs private sessions holding live credentials — logout, member removal and
+ * password reset must cut access immediately. Only the SHA-256 of the cookie
+ * value is stored, so reading this table yields nothing usable.
+ */
+export const authSessions = pgTable(
+  'auth_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('auth_sessions_user_idx').on(t.userId)],
+);
+
+export const sessionMembers = pgTable(
+  'session_members',
+  {
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** owner | member */
+    role: text('role').notNull().default('member'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
+);
+
+/**
+ * An invite is a durable record plus a token link — never a message (ADR 0007).
+ * Single-use, expiring, revocable, hashed at rest. `invitedEmail` scopes it to
+ * one address, enforced at redemption, so it needs no mail server.
+ */
+export const sessionInvites = pgTable(
+  'session_invites',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    /** SHA-256. The plaintext is returned exactly once, at creation. */
+    tokenHash: text('token_hash').notNull().unique(),
+    /** Role granted on redemption. */
+    role: text('role').notNull().default('member'),
+    /** Optional scope: only a user authenticating as this address may redeem. */
+    invitedEmail: text('invited_email'),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
+    redeemedByUserId: uuid('redeemed_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('session_invites_session_idx').on(t.sessionId)],
 );

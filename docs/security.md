@@ -26,6 +26,66 @@ Enforced by: every MCP token is scoped to exactly one `session_id` **and** one p
 
 Non-members get **404, not 403**, on a session URL. Existence is itself private.
 
+## Authentication and membership
+
+No outbound email is required for anything here — see
+[ADR 0007](decisions/0007-email-is-a-transport.md).
+
+### Passwords
+
+Hashed with **scrypt** from `node:crypto` (N=2^17, r=8, p=1, 32-byte random
+salt, 64-byte output), stored as `scrypt$N$r$p$salt$hash`. Verified with a
+constant-time comparison.
+
+scrypt rather than argon2id purely because it needs no native module: a
+self-hoster runs `docker compose up` and it works, with no build toolchain. The
+parameters are chosen to sit above OWASP's floor; they are encoded in the stored
+string so they can be raised later and old hashes upgraded on next login.
+
+### Login sessions
+
+Server-side rows (`auth_sessions`), not JWTs. **A stateless token cannot be
+revoked before it expires**, and membership here governs private sessions
+holding live credentials — logging out, removing a member or resetting a
+password has to cut access immediately.
+
+- Cookie carries 32 bytes of opaque randomness; only its SHA-256 is stored, so
+  reading the database does not yield usable credentials.
+- `httpOnly`, `sameSite=lax`, `secure` whenever the public URL is HTTPS.
+- 30-day expiry, `last_seen_at` refreshed on use.
+- A password reset deletes every `auth_sessions` row for that user.
+
+### No open registration
+
+The first account is created by `admin create-user --owner`. Every subsequent
+account is created by **redeeming an invite**. There is no open signup route, so
+an instance exposed to the internet has no anonymous write surface, and signup
+and invite-acceptance are one code path rather than two.
+
+### Invite links are bearer credentials in a URL
+
+This is the real exposure introduced by not sending email. An invite link pasted
+into a public channel admits anyone who reads it. Mitigations:
+
+- **Single use** — redeeming marks it consumed.
+- **Expiring** — 7 days by default.
+- **Revocable** — an owner can kill an unredeemed invite.
+- **Hashed at rest** — only SHA-256 is stored; the plaintext is shown exactly
+  once at creation and is not recoverable.
+- **Optionally scoped to an email address** — when `invited_email` is set, only a
+  user authenticating as that address can redeem it. This gives an addressed
+  invite's security property with zero mail configuration, because the scope is
+  enforced at redemption rather than by delivery.
+
+The UI states plainly that the link grants access to that session.
+
+### Existence is private
+
+Every session route returns **404, never 403**, to a non-member. A 403
+distinguishes "exists but you can't have it" from "doesn't exist", which leaks
+the existence and id of private sessions. This applies uniformly to the web API,
+the MCP endpoint, and a wrong `owner_id` path segment (ADR 0006).
+
 ## Threat 1 — prompt injection between participants
 
 This is the big one, and it is not a corner case: it is the product's core feature viewed from the other side.

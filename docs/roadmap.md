@@ -14,9 +14,35 @@ Monorepo, Hono server, Postgres via `docker/`, Drizzle schema for `users` / `ses
 
 ## M1 — Auth, real sessions, privacy
 
-Email/password auth, session CRUD (create / rename / archive), `session_members`, invite by email.
+**Runs with zero mail configuration** — see [ADR 0007](decisions/0007-email-is-a-transport.md).
+Email is a transport for links the system already generates, never a prerequisite.
 
-**Test:** Sign up two users. Fede creates a session and invites Alice; both see it. A third account hitting the session URL gets **404, not 403** — existence is private.
+- Password auth (scrypt from `node:crypto`, no native module) with server-side
+  `auth_sessions` so access can be revoked immediately.
+- **No open registration.** First account via `pnpm admin create-user --owner`;
+  every later account redeems an invite. One code path, not two.
+- Session CRUD: create / rename / archive, private by default.
+- `session_members` with `owner | member` roles.
+- **Invite links**, not invite emails: single-use, 7-day expiry, revocable,
+  hashed at rest, optionally scoped to an email address (enforced at redemption,
+  so it needs no mail server). UI offers *Copy invite link*.
+- Admin CLI: `create-user`, `reset-password`, `list-users`, `delete-user`.
+  `reset-password` **is** the password recovery path — there is no emailed link.
+
+**Test:**
+1. `pnpm admin create-user --email fede@example.com --owner`, log in as fede.
+2. Confirm signup without an invite token is refused.
+3. Create a session; rename it; archive it; confirm it's private by default.
+4. Create an invite, copy the link, redeem it in a private window as alice.
+   Both now see the session.
+5. `pnpm admin create-user` a third account, carol, and hit the session URL:
+   **404, not 403** — existence is private.
+6. Redeem the same invite link again — refused (single use). Revoke a second
+   invite before use — refused.
+7. Create an invite scoped to `alice@example.com` and try to redeem it as carol
+   — refused, with no mail server involved.
+8. `pnpm admin reset-password --email alice@example.com`, confirm alice's
+   existing login is invalidated immediately.
 
 ## M2 — Participants and mentions as first-class
 

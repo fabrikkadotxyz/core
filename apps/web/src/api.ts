@@ -1,50 +1,115 @@
-import type { Message, ServerEvent, SessionView } from '@fabrikka/types';
+/**
+ * API client.
+ *
+ * Requests go to a relative /api path: Vite proxies it in dev and it is
+ * same-origin in production, so cookie-based auth behaves identically in both.
+ */
+import type {
+  AuthUser,
+  CreatedInviteView,
+  InviteSummary,
+  LoginBody,
+  Member,
+  Message,
+  ServerEvent,
+  SessionSummary,
+  SessionView,
+  SignupBody,
+} from '@fabrikka/types';
 
-const SERVER = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:9090';
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
-/** Path segments of the current session, mirroring the MCP endpoint shape. */
+async function call<T>(
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: init.method ?? 'GET',
+    headers: init.body ? { 'Content-Type': 'application/json' } : undefined,
+    body: init.body ? JSON.stringify(init.body) : undefined,
+    credentials: 'same-origin',
+  });
+
+  const text = await res.text();
+  const json = text ? (JSON.parse(text) as unknown) : undefined;
+
+  if (!res.ok) {
+    const message =
+      (json as { error?: string } | undefined)?.error ?? `request failed (${res.status})`;
+    throw new ApiError(res.status, message);
+  }
+  return json as T;
+}
+
+/* ------------------------------------------------------------------- auth */
+
+export const auth = {
+  me: () => call<{ user: AuthUser }>('/auth/me'),
+  login: (body: LoginBody) =>
+    call<{ user: AuthUser }>('/auth/login', { method: 'POST', body }),
+  logout: () => call<{ ok: true }>('/auth/logout', { method: 'POST' }),
+  signup: (body: SignupBody) =>
+    call<{ user: AuthUser; session: { ownerSlug: string; publicId: string } }>(
+      '/auth/signup',
+      { method: 'POST', body },
+    ),
+};
+
+/* --------------------------------------------------------------- invites */
+
+export const invites = {
+  /** Unauthenticated preview, so the invite page can name the session. */
+  preview: (token: string) =>
+    call<{ sessionTitle: string; invitedEmail: string | null }>(`/invites/${token}`),
+  redeem: (token: string) =>
+    call<{ session: { ownerSlug: string; publicId: string } }>(
+      `/invites/${token}/redeem`,
+      { method: 'POST' },
+    ),
+};
+
+/* -------------------------------------------------------------- sessions */
+
 export interface SessionRef {
   owner: string;
   session: string;
 }
 
-/** `/o/{owner}/s/{session}` — falls back to the M0 seed. */
-export function sessionRefFromLocation(): SessionRef {
-  const m = window.location.pathname.match(/^\/o\/([^/]+)\/s\/([^/]+)/);
-  return m ? { owner: m[1]!, session: m[2]! } : { owner: 'fede', session: 'demo' };
-}
+const base = ({ owner, session }: SessionRef) =>
+  `/o/${encodeURIComponent(owner)}/s/${encodeURIComponent(session)}`;
 
-function base({ owner, session }: SessionRef): string {
-  return `${SERVER}/api/o/${encodeURIComponent(owner)}/s/${encodeURIComponent(session)}`;
-}
+export const sessions = {
+  list: () => call<SessionSummary[]>('/sessions'),
+  create: (title: string) =>
+    call<SessionSummary>('/sessions', { method: 'POST', body: { title } }),
+  get: (ref: SessionRef) => call<SessionView>(base(ref)),
+  update: (ref: SessionRef, body: { title?: string; status?: 'active' | 'archived' }) =>
+    call<{ ok: true }>(base(ref), { method: 'PATCH', body }),
+  remove: (ref: SessionRef) => call<{ ok: true }>(base(ref), { method: 'DELETE' }),
 
-export async function fetchSession(ref: SessionRef): Promise<SessionView> {
-  const res = await fetch(base(ref));
-  if (!res.ok) throw new Error(`session not found (${res.status})`);
-  return res.json();
-}
+  messages: (ref: SessionRef) => call<Message[]>(`${base(ref)}/messages`),
+  postMessage: (ref: SessionRef, content: string) =>
+    call<Message>(`${base(ref)}/messages`, { method: 'POST', body: { content } }),
 
-export async function fetchMessages(ref: SessionRef): Promise<Message[]> {
-  const res = await fetch(`${base(ref)}/messages`);
-  if (!res.ok) throw new Error(`could not load messages (${res.status})`);
-  return res.json();
-}
+  members: (ref: SessionRef) => call<Member[]>(`${base(ref)}/members`),
+  removeMember: (ref: SessionRef, userId: string) =>
+    call<{ ok: true }>(`${base(ref)}/members/${userId}`, { method: 'DELETE' }),
 
-export async function postMessage(
-  ref: SessionRef,
-  authorParticipantId: string,
-  content: string,
-): Promise<void> {
-  const res = await fetch(
-    `${base(ref)}/messages?as=${encodeURIComponent(authorParticipantId)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
-    },
-  );
-  if (!res.ok) throw new Error(`could not send (${res.status})`);
-}
+  invites: (ref: SessionRef) => call<InviteSummary[]>(`${base(ref)}/invites`),
+  createInvite: (ref: SessionRef, body: { invitedEmail?: string } = {}) =>
+    call<CreatedInviteView>(`${base(ref)}/invites`, { method: 'POST', body }),
+  revokeInvite: (ref: SessionRef, id: string) =>
+    call<{ ok: true }>(`${base(ref)}/invites/${id}/revoke`, { method: 'POST' }),
+};
+
+/* -------------------------------------------------------------- realtime */
 
 /** Subscribes to the session event stream. Returns a teardown function. */
 export function openStream(
@@ -55,23 +120,28 @@ export function openStream(
   let ws: WebSocket | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
   let closed = false;
+  /** Set when the server refuses the stream; suppresses reconnection. */
+  let refused = false;
 
   const connect = () => {
     if (closed) return;
-    const url = `${base(ref).replace(/^http/, 'ws')}/stream`;
-    ws = new WebSocket(url);
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}/api${base(ref)}/stream`);
 
     ws.onopen = () => onStatus(true);
     ws.onmessage = (evt) => {
       try {
-        onEvent(JSON.parse(evt.data as string) as ServerEvent);
+        const event = JSON.parse(evt.data as string) as ServerEvent;
+        // A refusal is permanent: reconnecting would just loop.
+        if (event.type === 'stream.error') refused = true;
+        onEvent(event);
       } catch {
-        // Ignore malformed frames rather than tearing down the stream.
+        // Ignore a malformed frame rather than tearing down the stream.
       }
     };
     ws.onclose = () => {
       onStatus(false);
-      if (!closed) retry = setTimeout(connect, 1000);
+      if (!closed && !refused) retry = setTimeout(connect, 1000);
     };
     ws.onerror = () => ws?.close();
   };

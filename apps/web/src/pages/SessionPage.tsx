@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type {
+  AgentSummary,
+  CreatedAgentView,
   InviteSummary,
   Message,
   Participant,
   SessionView,
 } from '@fabrikka/types';
-import { ApiError, openStream, sessions, type SessionRef } from '../api.ts';
+import {
+  ApiError,
+  openStream,
+  sessions,
+  type SessionRef,
+  type TokenSummary,
+} from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { MentionComposer, MentionText } from '../mentions.tsx';
 
@@ -207,10 +215,7 @@ export function SessionPage() {
 
           {isOwner && <InvitesPanel ref_={ref} />}
 
-          <Panel title="MCP endpoint">
-            <code className="endpoint">{view.mcpEndpoint}</code>
-            <p className="hint">Not served until M3.</p>
-          </Panel>
+          {isOwner && <AgentsPanel ref_={ref} onChanged={reload} />}
 
           {isOwner && (
             <Panel title="Settings">
@@ -340,6 +345,159 @@ function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
             </li>
           ))}
         </ul>
+      )}
+    </Panel>
+  );
+}
+
+/**
+ * Connecting an agent.
+ *
+ * The whole point of M3 is that this is one copy-paste, not a configuration
+ * exercise: the server returns a ready-to-run `claude mcp add` command with the
+ * token already in it. The token is shown once and is not recoverable, like an
+ * invite (ADR 0009).
+ */
+function AgentsPanel({
+  ref_,
+  onChanged,
+}: {
+  ref_: SessionRef;
+  onChanged: () => void;
+}) {
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [tokens, setTokens] = useState<TokenSummary[]>([]);
+  const [name, setName] = useState('');
+  const [provider, setProvider] = useState('claude-code');
+  const [fresh, setFresh] = useState<CreatedAgentView | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    sessions.agents(ref_).then(setAgents).catch(() => {});
+    sessions.tokens(ref_).then(setTokens).catch(() => {});
+  }, [ref_]);
+
+  useEffect(refresh, [refresh]);
+
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const displayName = name.trim();
+    if (!displayName) return;
+    setError(null);
+    try {
+      const created = await sessions.addAgent(ref_, { displayName, provider });
+      setFresh(created);
+      setCopied(false);
+      setName('');
+      refresh();
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <Panel title="Agents">
+      <form className="stack" onSubmit={add}>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="agent name, e.g. claude-fede"
+          aria-label="Agent name"
+        />
+        <select
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+          aria-label="Provider"
+        >
+          <option value="claude-code">Claude Code</option>
+          <option value="codex">Codex</option>
+          <option value="other">Other MCP agent</option>
+        </select>
+        <button type="submit" disabled={!name.trim()}>
+          Add agent
+        </button>
+      </form>
+
+      {error && <p className="error small">{error}</p>}
+
+      {fresh && (
+        <div className="fresh-invite">
+          <p className="hint">
+            <strong>Copy this now — the token is shown only once.</strong> Run it
+            where your agent lives, then restart the agent.
+          </p>
+          <code className="endpoint">{fresh.claudeCommand}</code>
+          <button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(fresh.claudeCommand);
+                setCopied(true);
+              } catch {
+                setError('could not copy — select the text and copy it manually');
+              }
+            }}
+          >
+            {copied ? 'Copied ✓' : 'Copy command'}
+          </button>
+        </div>
+      )}
+
+      {agents.length > 0 && (
+        <ul className="participants">
+          {agents.map((a) => (
+            <li key={a.sessionAgentId}>
+              <span>🤖 @{a.displayName}</span>
+              <span className="muted small">{a.provider}</span>
+              <button
+                className="link small"
+                title={
+                  a.trustTier === 'owner_only'
+                    ? 'Only you can direct this agent. Click to let any member direct it.'
+                    : 'Any member can direct this agent. Click to restrict it to you.'
+                }
+                onClick={async () => {
+                  await sessions.setAgentTrust(
+                    ref_,
+                    a.sessionAgentId,
+                    a.trustTier === 'owner_only' ? 'session_trusted' : 'owner_only',
+                  );
+                  refresh();
+                }}
+              >
+                {a.trustTier === 'owner_only' ? 'owner only' : 'session trusted'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {tokens.length > 0 && (
+        <>
+          <h3 className="subhead">Tokens</h3>
+          <ul className="participants">
+            {tokens.map((t) => (
+              <li key={t.id}>
+                <span className="small">@{t.participantName}</span>
+                <span className="muted small">
+                  {t.lastUsedAt
+                    ? `used ${new Date(t.lastUsedAt).toLocaleDateString()}`
+                    : 'never used'}
+                </span>
+                <button
+                  className="link small"
+                  onClick={async () => {
+                    await sessions.revokeToken(ref_, t.id);
+                    refresh();
+                  }}
+                >
+                  revoke
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </Panel>
   );

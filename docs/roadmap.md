@@ -76,15 +76,32 @@ makes **mentions** first-class, per
 
 ## M3 — Remote session MCP endpoint (lane A) — *first real payoff*
 
-`/mcp/o/{owner_id}/s/{session_id}` via `createMcpHandler` + `createMcpHonoApp`. Bearer token verified in front of the handler, passed as `handler.fetch(req, { authInfo })`. `oauthMetadata` middleware for protected-resource metadata. Tools: `get_session_context`, `list_participants`, `read_messages`, `post_message`. Static session tokens; OAuth later.
+`/mcp/o/{owner_id}/s/{session_id}` served with `createMcpHandler` on a
+`createMcpHonoApp` sub-app. Tools: `whoami`, `get_session_context`,
+`update_session_context`, `list_participants`, `read_messages`, `post_message`.
+
+Auth is a **static bearer token scoped to one `(session, participant)` pair** —
+see [ADR 0009](decisions/0009-participant-scoped-tokens.md). The token *is* the
+agent's identity, so authorship cannot be spoofed by a request body. A missing
+credential answers 401; every other failure is a 404.
+
+No OAuth metadata is served yet, deliberately: advertising an authorization
+server that does not exist would send clients into a flow that cannot complete.
+
+Adding an agent creates its identity, participant row and first token in one
+step, and returns a ready-to-paste `claude mcp add` command. Each message carries
+a per-reader `trust` field (`owner` / `session` / `untrusted`) — reported
+honestly here, **enforced at M6**.
 
 **Test:**
-```bash
-claude mcp add --transport http fabrikka \
-  https://<host>/mcp/o/<owner_id>/s/<session_id> \
-  --header "Authorization: Bearer <token>"
-```
-Ask Claude to read the session and post a summary; it appears in the browser attributed to `@claude-fede`. Confirm a token for session A returns nothing for session B, and a wrong `owner_id` returns 404.
+1. In a session you own, *Agents* → add `claude-fede` → **Copy command**.
+2. Paste it in a terminal, then `claude mcp list` — it reports `✔ Connected`.
+3. Ask Claude to read the session and post a summary mentioning `@you`. It
+   appears in the browser attributed to `@claude-fede`, with your name as a chip
+   — the agent wrote prose, the server resolved the mention.
+4. Confirm a token for session A returns **404** on session B's URL, and that a
+   wrong `owner_id` in the path returns 404.
+5. Revoke the token in the UI; the next agent call fails immediately.
 
 ## M4 — Bridge CLI + channels (lane B) — *the moment it feels alive*
 
@@ -116,11 +133,16 @@ When no `bridge` connection is attached, spawn a headless run per mention and st
 
 **Test:** Alice sends `@claude-fede rm -rf /tmp/demo`. Fede's agent does **not** act; it shows as untrusted context. Set two agents to mention each other — the turn budget halts it. Hit the kill switch mid-run — the spawned process dies.
 
-## M7 — Session context + artifacts
+## M7 — Session context UI + artifacts
 
-`session_context` editable in the UI, exposed via `get_session_context` / `update_session_context`. File upload and link artifacts, listed over MCP.
+The context **tools and storage landed at M3** (`get_session_context` /
+`update_session_context`), so this milestone is the human side plus artifacts:
+context editable in the browser, file upload and link artifacts, listed and
+readable over MCP via `list_artifacts` / `read_artifact`.
 
-**Test:** Fede writes an Objective in the browser; Claude reads it via MCP without being told. Claude appends a Decision; it renders in the browser. Upload a CSV; Claude lists and reads it.
+**Test:** Fede writes an Objective in the browser; Claude reads it via MCP
+without being told. Claude appends a Decision; it renders in the browser. Upload
+a CSV; Claude lists and reads it.
 
 ## M8 — MCP aggregation (per-participant credentials)
 

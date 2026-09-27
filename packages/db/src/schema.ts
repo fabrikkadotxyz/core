@@ -2,8 +2,8 @@
  * Database schema. Documented in docs/data-model.md — update that first.
  *
  * Tables are introduced by the milestone that needs them (docs/roadmap.md).
- * Currently covers M0 (messaging core), M1 (auth, membership, invites) and
- * M2 (mentions).
+ * Currently covers M0 (messaging core), M1 (auth, membership, invites),
+ * M2 (mentions) and M3 (agents, tokens, session context).
  */
 import {
   boolean,
@@ -219,3 +219,100 @@ export const messageMentions = pgTable(
     index('message_mentions_participant_idx').on(t.participantId),
   ],
 );
+
+/* -------------------------------------------------------------------------- */
+/* M3 — agents, tokens, session context                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * An agent belongs to a user, not to a session.
+ *
+ * `Claude Code` is a provider; `@claude-fede` is a participant. This row is the
+ * middle term: a named agent identity owned by someone, which can then be added
+ * to any number of sessions. See ARCHITECTURE.md.
+ */
+export const agents = pgTable('agents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerId: uuid('owner_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** claude-code | codex | other */
+  provider: text('provider').notNull().default('other'),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sessionAgents = pgTable(
+  'session_agents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    /**
+     * owner_only (default) | session_trusted
+     *
+     * Only the agent's own owner can direct it until an owner deliberately
+     * elevates the session. Enforcement lands at M6; M3 reports it honestly in
+     * each message's `trust` field. See docs/security.md.
+     */
+    trustTier: text('trust_tier').notNull().default('owner_only'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('session_agents_session_agent').on(t.sessionId, t.agentId)],
+);
+
+/**
+ * A bearer token scoped to one (session, participant) pair — an actor, not a
+ * user. See docs/decisions/0009-participant-scoped-tokens.md.
+ *
+ * Separate from `auth_sessions` on purpose: a browser login is a user acting
+ * across sessions, an agent token is a participant inside exactly one.
+ */
+export const sessionTokens = pgTable(
+  'session_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    /** The actor this token speaks as. Authorship cannot be spoofed by a body. */
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    /** Human label, e.g. "claude-fede on my laptop". */
+    label: text('label'),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Nullable: agents are long-lived, so no expiry by default. */
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('session_tokens_session_idx').on(t.sessionId)],
+);
+
+/**
+ * Structured session context, deliberately denormalized.
+ *
+ * Facts and decisions are lists of text, not an entity graph. If this needs to
+ * become relational it will be obvious from use; it is not obvious now.
+ * See docs/data-model.md.
+ */
+export const sessionContext = pgTable('session_context', {
+  sessionId: uuid('session_id')
+    .primaryKey()
+    .references(() => sessions.id, { onDelete: 'cascade' }),
+  objective: text('objective'),
+  facts: jsonb('facts').$type<string[]>().notNull().default([]),
+  decisions: jsonb('decisions').$type<string[]>().notNull().default([]),
+  questions: jsonb('questions').$type<string[]>().notNull().default([]),
+  constraints: jsonb('constraints').$type<string[]>().notNull().default([]),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

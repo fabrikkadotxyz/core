@@ -5,7 +5,10 @@
  * same-origin in production, so cookie-based auth behaves identically in both.
  */
 import type {
+  AgentSummary,
+  AgentTrustPolicy,
   AuthUser,
+  CreatedAgentView,
   CreatedInviteView,
   InviteSummary,
   LoginBody,
@@ -13,10 +16,22 @@ import type {
   Message,
   Participant,
   ServerEvent,
+  SessionContext,
   SessionSummary,
   SessionView,
   SignupBody,
 } from '@fabrikka/types';
+
+/** Mirrors the server's token listing; kept here so the UI has a name for it. */
+export interface TokenSummary {
+  id: string;
+  participantId: string;
+  participantName: string;
+  label: string | null;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -112,6 +127,23 @@ export const sessions = {
   members: (ref: SessionRef) => call<Member[]>(`${base(ref)}/members`),
   removeMember: (ref: SessionRef, userId: string) =>
     call<{ ok: true }>(`${base(ref)}/members/${userId}`, { method: 'DELETE' }),
+
+  agents: (ref: SessionRef) => call<AgentSummary[]>(`${base(ref)}/agents`),
+  addAgent: (ref: SessionRef, body: { displayName: string; provider?: string }) =>
+    call<CreatedAgentView>(`${base(ref)}/agents`, { method: 'POST', body }),
+  setAgentTrust: (ref: SessionRef, sessionAgentId: string, trustTier: AgentTrustPolicy) =>
+    call<{ ok: true }>(`${base(ref)}/agents/${sessionAgentId}/trust`, {
+      method: 'PATCH',
+      body: { trustTier },
+    }),
+
+  tokens: (ref: SessionRef) => call<TokenSummary[]>(`${base(ref)}/tokens`),
+  revokeToken: (ref: SessionRef, id: string) =>
+    call<{ ok: true }>(`${base(ref)}/tokens/${id}/revoke`, { method: 'POST' }),
+
+  context: (ref: SessionRef) => call<SessionContext>(`${base(ref)}/context`),
+  updateContext: (ref: SessionRef, patch: Partial<SessionContext>) =>
+    call<SessionContext>(`${base(ref)}/context`, { method: 'PATCH', body: patch }),
 
   invites: (ref: SessionRef) => call<InviteSummary[]>(`${base(ref)}/invites`),
   createInvite: (ref: SessionRef, body: { invitedEmail?: string } = {}) =>

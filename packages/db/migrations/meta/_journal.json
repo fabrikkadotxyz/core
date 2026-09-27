@@ -22,6 +22,13 @@
       "when": 1790479147218,
       "tag": "0002_mute_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790503861847,
+      "tag": "0003_far_terrax",
+      "breakpoints": true
     }
   ]
 }

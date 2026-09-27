@@ -10,18 +10,6 @@
 /** Humans and agents are the same kind of thing: a participant in a session. */
 export type ParticipantKind = 'human' | 'agent';
 
-/**
- * How much authority a message's author has over a receiving agent.
- *
- * Evaluated per recipient: the same message is `owner` to the agent its author
- * owns and `untrusted` to every other agent in the session. Anything below
- * `owner` is data, never instructions. See docs/security.md.
- */
-export type TrustTier = 'owner' | 'session' | 'untrusted';
-
-/** Default is `owner_only` — only an agent's own owner can cause it to act. */
-export type AgentTrustPolicy = 'owner_only' | 'session_trusted';
-
 export type SessionStatus = 'active' | 'archived';
 
 /** Only a `bridge` connection can receive a claude/channel push. */
@@ -96,6 +84,7 @@ export type ServerEvent =
   | { type: 'hello'; sessionId: string; participants: Participant[] }
   | { type: 'message.created'; message: Message }
   | { type: 'participant.updated'; participant: Participant }
+  | { type: 'context.updated'; context: SessionContext }
   | { type: 'stream.error'; code: 'unauthenticated' | 'not_found' };
 
 /** Client -> server. M0 posts over HTTP; the socket is read-only for now. */
@@ -117,6 +106,49 @@ export interface PostMessageBody {
 
 export interface RenameParticipantBody {
   displayName: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* M3 — agents, tokens, session context                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How much authority a message's author has over the agent reading it.
+ *
+ * Evaluated per reader: the same message is `owner` to the agent its author owns
+ * and `untrusted` to every other agent in the room. Anything below `owner` is
+ * data, never instructions. See docs/security.md.
+ */
+export type TrustTier = 'owner' | 'session' | 'untrusted';
+
+/** Default is `owner_only`: only an agent's own owner can direct it. */
+export type AgentTrustPolicy = 'owner_only' | 'session_trusted';
+
+export interface AgentSummary {
+  participantId: string;
+  sessionAgentId: string;
+  displayName: string;
+  provider: string;
+  trustTier: AgentTrustPolicy;
+  ownerUserId: string;
+}
+
+/** Returned once, at creation. The token is never recoverable afterwards. */
+export interface CreatedAgentView {
+  agent: AgentSummary;
+  token: string;
+  mcpUrl: string;
+  /** Ready-to-paste `claude mcp add` command. */
+  claudeCommand: string;
+}
+
+export interface SessionContext {
+  objective: string | null;
+  facts: string[];
+  decisions: string[];
+  questions: string[];
+  constraints: string[];
+  updatedAt: string | null;
 }
 
 export interface SessionView {

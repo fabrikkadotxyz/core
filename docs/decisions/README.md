@@ -41,3 +41,4 @@ What we rejected and why.
 | [0006](0006-owner-scoped-endpoint-path.md) | Owner-scoped MCP endpoint path | Accepted |
 | [0007](0007-email-is-a-transport.md) | Email is a transport, not a mechanism | Accepted |
 | [0008](0008-mentions-as-stable-markers.md) | Mentions are stable markers, and mention rows are derived | Accepted |
+| [0009](0009-participant-scoped-tokens.md) | Session tokens are participant-scoped, and OAuth is deferred | Accepted |

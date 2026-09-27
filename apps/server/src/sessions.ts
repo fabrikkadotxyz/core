@@ -9,12 +9,13 @@
  *    isn't there. Callers render `null` as 404, never 403 — a 403 would leak the
  *    existence and id of private sessions (docs/security.md).
  */
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import {
   messageMentions,
   messages,
   participants,
+  sessionContext,
   sessionMembers,
   sessions,
   users,
@@ -24,6 +25,7 @@ import type {
   Message,
   Participant,
   Session,
+  SessionContext,
   SessionSummary,
 } from '@fabrikka/types';
 import { resolveMentions } from './mentions.ts';
@@ -317,11 +319,39 @@ export async function listParticipants(
   }));
 }
 
+export interface ListMessagesOptions {
+  limit?: number;
+  /** Return messages older than this message id, for paging back. */
+  before?: string;
+}
+
 export async function listMessages(
   db: Database,
   sessionId: string,
-  limit = 100,
+  options: ListMessagesOptions | number = {},
 ): Promise<Message[]> {
+  const { limit = 100, before } =
+    typeof options === 'number' ? { limit: options, before: undefined } : options;
+
+  let cursor: Date | undefined;
+  if (before) {
+    const [anchor] = await db
+      .select({ createdAt: messages.createdAt })
+      .from(messages)
+      .where(and(eq(messages.id, before), eq(messages.sessionId, sessionId)))
+      .limit(1);
+    // An unknown cursor returns nothing rather than silently restarting from the
+    // top, which would make a paging client loop forever.
+    if (!anchor) return [];
+    cursor = anchor.createdAt;
+  }
+
+  const where = cursor
+    ? and(eq(messages.sessionId, sessionId), lt(messages.createdAt, cursor))
+    : eq(messages.sessionId, sessionId);
+
+  // Take the NEWEST `limit` before the cursor, then flip to oldest-first. Taking
+  // the oldest would page forward through history instead of back from now.
   const rows = await db
     .select({
       id: messages.id,
@@ -334,12 +364,99 @@ export async function listMessages(
     })
     .from(messages)
     .innerJoin(participants, eq(participants.id, messages.authorParticipantId))
-    .where(eq(messages.sessionId, sessionId))
-    .orderBy(asc(messages.createdAt))
+    .where(where)
+    .orderBy(desc(messages.createdAt))
     .limit(limit);
+
+  rows.reverse();
 
   const mentions = await mentionsForSession(db, sessionId);
   return rows.map((r) => toMessage(r, mentions.get(r.id) ?? []));
+}
+
+/**
+ * Participants including the backing `user_id`.
+ *
+ * Trust evaluation needs to know which human owns an agent, so the MCP layer
+ * needs the user behind each human participant. Not exposed over the web API —
+ * it would leak internal user ids into the browser for no benefit.
+ */
+export async function listParticipantsWithUsers(
+  db: Database,
+  sessionId: string,
+): Promise<(Participant & { userId: string | null })[]> {
+  const rows = await db
+    .select()
+    .from(participants)
+    .where(eq(participants.sessionId, sessionId))
+    .orderBy(asc(participants.displayName));
+
+  return rows.map((p) => ({
+    id: p.id,
+    sessionId: p.sessionId,
+    kind: p.kind as Participant['kind'],
+    displayName: p.displayName,
+    userId: p.userId,
+  }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Session context                                                            */
+/* -------------------------------------------------------------------------- */
+
+const EMPTY_CONTEXT: SessionContext = {
+  objective: null,
+  facts: [],
+  decisions: [],
+  questions: [],
+  constraints: [],
+  updatedAt: null,
+};
+
+/** Absent context reads as empty, so callers never special-case a missing row. */
+export async function getSessionContext(
+  db: Database,
+  sessionId: string,
+): Promise<SessionContext> {
+  const [row] = await db
+    .select()
+    .from(sessionContext)
+    .where(eq(sessionContext.sessionId, sessionId))
+    .limit(1);
+
+  if (!row) return EMPTY_CONTEXT;
+
+  return {
+    objective: row.objective,
+    facts: row.facts ?? [],
+    decisions: row.decisions ?? [],
+    questions: row.questions ?? [],
+    constraints: row.constraints ?? [],
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** Patch semantics: only the fields supplied are changed. */
+export async function updateSessionContext(
+  db: Database,
+  sessionId: string,
+  patch: Partial<Omit<SessionContext, 'updatedAt'>>,
+): Promise<SessionContext> {
+  const fields = {
+    ...(patch.objective !== undefined ? { objective: patch.objective } : {}),
+    ...(patch.facts !== undefined ? { facts: patch.facts } : {}),
+    ...(patch.decisions !== undefined ? { decisions: patch.decisions } : {}),
+    ...(patch.questions !== undefined ? { questions: patch.questions } : {}),
+    ...(patch.constraints !== undefined ? { constraints: patch.constraints } : {}),
+    updatedAt: new Date(),
+  };
+
+  await db
+    .insert(sessionContext)
+    .values({ sessionId, ...fields })
+    .onConflictDoUpdate({ target: sessionContext.sessionId, set: fields });
+
+  return getSessionContext(db, sessionId);
 }
 
 /**

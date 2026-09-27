@@ -519,3 +519,11 @@ a {
 .mention-menu li.active {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
+
+.subhead {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}

@@ -17,6 +17,7 @@ import type {
   LoginBody,
   PostMessageBody,
   RenameParticipantBody,
+  SessionContext,
   SessionView,
   SignupBody,
 } from '@fabrikka/types';
@@ -32,6 +33,15 @@ import {
   resolveToken,
 } from './auth.ts';
 import { publish, subscribe } from './bus.ts';
+import { createMcpApp } from './mcp.ts';
+import {
+  addAgentToSession,
+  issueToken,
+  listSessionAgents,
+  listSessionTokens,
+  revokeToken,
+  setAgentTrustTier,
+} from './agents.ts';
 import {
   createInvite,
   describeInvite,
@@ -48,12 +58,14 @@ import {
   listMembers,
   listMessages,
   listParticipants,
+  getSessionContext,
   listSessionsForUser,
   removeMember,
   renameParticipant,
   renameSession,
   resolveSessionForUser,
   setSessionStatus,
+  updateSessionContext,
 } from './sessions.ts';
 
 const PORT = Number(process.env.PORT ?? 9090);
@@ -333,6 +345,140 @@ sessionRoutes.delete('/members/:userId', async (c) => {
   return c.json({ ok: true });
 });
 
+/* ---- agents ---- */
+
+sessionRoutes.get('/agents', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  return c.json(await listSessionAgents(db, s.id));
+});
+
+/**
+ * Add an agent and issue its token in one step.
+ *
+ * Returns the plaintext token exactly once, plus a ready-to-paste
+ * `claude mcp add` command — the point of M3 is that connecting an agent is one
+ * copy-paste, not a configuration exercise.
+ */
+sessionRoutes.post('/agents', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+
+  type Body = { displayName?: string; provider?: string; label?: string };
+  const body: Body = await c.req.json<Body>().catch(() => ({}));
+  const displayName = body.displayName?.trim();
+  if (!displayName) return c.json({ error: 'displayName is required' }, 400);
+
+  const result = await addAgentToSession(db, {
+    sessionId: s.id,
+    ownerUserId: c.get('user').id,
+    displayName,
+    provider: body.provider?.trim() || 'other',
+    label: body.label,
+    publicUrl: PUBLIC_URL,
+    ownerSlug: s.view.ownerSlug,
+    sessionPublicId: s.view.publicId,
+  });
+  if (!result.ok) return c.json({ error: result.error }, 409);
+
+  const { agent, token, mcpUrl } = result.created;
+  publish(s.id, {
+    type: 'participant.updated',
+    participant: {
+      id: agent.participantId,
+      sessionId: s.id,
+      kind: 'agent',
+      displayName: agent.displayName,
+    },
+  });
+
+  return c.json(
+    {
+      agent,
+      token,
+      mcpUrl,
+      claudeCommand: `claude mcp add --transport http fabrikka ${mcpUrl} --header "Authorization: Bearer ${token}"`,
+    },
+    201,
+  );
+});
+
+sessionRoutes.patch('/agents/:sessionAgentId/trust', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+
+  const { trustTier } = await c.req.json<{ trustTier?: string }>();
+  if (trustTier !== 'owner_only' && trustTier !== 'session_trusted') {
+    return c.json({ error: 'trustTier must be owner_only or session_trusted' }, 400);
+  }
+
+  const done = await setAgentTrustTier(db, s.id, c.req.param('sessionAgentId'), trustTier);
+  if (!done) return c.notFound();
+  return c.json({ ok: true });
+});
+
+/* ---- tokens ---- */
+
+sessionRoutes.get('/tokens', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+  return c.json(await listSessionTokens(db, s.id));
+});
+
+sessionRoutes.post('/tokens', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+
+  const body = await c.req
+    .json<{ participantId?: string; label?: string }>()
+    .catch(() => ({}) as { participantId?: string; label?: string });
+  if (!body.participantId) return c.json({ error: 'participantId is required' }, 400);
+
+  const token = await issueToken(db, {
+    sessionId: s.id,
+    participantId: body.participantId,
+    createdByUserId: c.get('user').id,
+    label: body.label,
+  });
+  if (!token) return c.notFound();
+
+  const mcpUrl = `${PUBLIC_URL}/mcp/o/${s.view.ownerSlug}/s/${s.view.publicId}`;
+  return c.json(
+    {
+      token,
+      mcpUrl,
+      claudeCommand: `claude mcp add --transport http fabrikka ${mcpUrl} --header "Authorization: Bearer ${token}"`,
+    },
+    201,
+  );
+});
+
+sessionRoutes.post('/tokens/:id/revoke', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+  const done = await revokeToken(db, s.id, c.req.param('id'));
+  if (!done) return c.notFound();
+  return c.json({ ok: true });
+});
+
+/* ---- context ---- */
+
+sessionRoutes.get('/context', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  return c.json(await getSessionContext(db, s.id));
+});
+
+sessionRoutes.patch('/context', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+
+  const body = await c.req.json<Partial<SessionContext>>();
+  const updated = await updateSessionContext(db, s.id, body);
+  publish(s.id, { type: 'context.updated', context: updated });
+  return c.json(updated);
+});
+
 /* ---- invites ---- */
 
 sessionRoutes.get('/invites', async (c) => {
@@ -379,6 +525,18 @@ sessionRoutes.post('/invites/:id/revoke', async (c) => {
   if (!revoked) return c.notFound();
   return c.json({ ok: true });
 });
+
+/**
+ * The MCP endpoint — lane A. Its own auth (participant-scoped bearer tokens),
+ * so it is mounted outside the cookie-authenticated web API entirely.
+ * See docs/protocol.md and ADR 0009.
+ */
+const mcp = createMcpApp({
+  db,
+  publicUrl: PUBLIC_URL,
+  allowedHosts: process.env.MCP_ALLOWED_HOSTS?.split(',').map((h) => h.trim()).filter(Boolean),
+});
+app.route('/', mcp.app);
 
 /*
  * IMPORTANT: this must be registered BEFORE app.route() mounts the session

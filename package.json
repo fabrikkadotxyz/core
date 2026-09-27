@@ -21,6 +21,7 @@
     "test": "pnpm -r --if-present test"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.1.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

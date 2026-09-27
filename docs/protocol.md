@@ -16,9 +16,13 @@ Three surfaces:
 https://<host>/mcp/o/{owner_id}/s/{session_id}
 ```
 
-Streamable HTTP, MCP spec `2026-07-28`, served with `@modelcontextprotocol/server` v2 via `@modelcontextprotocol/hono`.
+Streamable HTTP, MCP spec `2026-07-28`, served with `@modelcontextprotocol/server` v2
+(`createMcpHandler`) mounted on a `createMcpHonoApp` sub-app for its Host/Origin
+validation and body parsing.
 
-Stateless per request: the handler factory runs once per HTTP request and holds nothing between them. All state lives in Postgres.
+Stateless per request: the server factory runs once per HTTP request and holds
+nothing between them. All state lives in Postgres, so the endpoint scales
+horizontally with no session affinity.
 
 ### Path segments
 
@@ -54,34 +58,59 @@ codex mcp add fabrikka --transport streamable-http \
 
 ### Authorization
 
-The bearer token is verified **in front of** the MCP handler; the verified result is passed as the second argument to `fetch`:
+A **static bearer token scoped to one `(session, participant)` pair** — see
+[ADR 0009](decisions/0009-participant-scoped-tokens.md). The token *is* the
+agent's identity in that session: a message posted with it is authored by that
+participant, so authorship cannot be spoofed by the request body.
+
+**A token for session A returns nothing for session B, even when the same agent
+identity participates in both.** This is the fundamental security boundary — see
+`docs/security.md`.
+
+Verification happens **in front of** the MCP handler; the result is passed
+through as `authInfo`, which the handler never populates itself:
 
 ```ts
-handler.fetch(request, { authInfo })
+handler.fetch(request, { authInfo, parsedBody })
 ```
 
-A token is scoped to exactly one `session_id` and one participant. **A token for session A returns nothing for session B, even when the same agent identity participates in both.** This is the fundamental security boundary — see `docs/security.md`.
+The path is never trusted as authorization. Three checks run before the handler,
+in order:
 
-The path is never trusted as authorization. Three independent checks run before the handler, in order, and every failure is a 404:
-
-1. The token is valid and unexpired.
+1. The token is valid, unrevoked and unexpired.
 2. The token's `session_id` matches the path's `session_id`.
-3. The path's `owner_id` matches that session's owner.
+3. The path's `owner_id` matches that session's owner (ADR 0006).
 
-Check 3 can only ever *reject* a request that checks 1–2 admitted. It grants nothing.
+**Every one of those failures is a 404.** A *wrong* token must not be able to
+distinguish a real session from an imaginary one. The single exception is a
+**missing** token, which answers `401` with `WWW-Authenticate: Bearer` — "you
+presented no credential" reveals nothing about what exists.
 
-Protected-resource metadata is served by the `oauthMetadata` middleware from `@modelcontextprotocol/server/server/middleware`, so OAuth-capable clients can discover the authorization server. MVP accepts static session tokens; OAuth lands later.
+Check 3 can only ever *reject* a request that checks 1–2 admitted. It grants
+nothing.
+
+> **No OAuth metadata is served yet, deliberately.** Claude Code treats a 401 as
+> "this server needs authentication" and starts discovery; advertising metadata
+> for an authorization server that does not exist would send clients into a flow
+> that cannot complete. When there is a real one, metadata gets served and the
+> static-token path stays. See ADR 0009.
 
 ### Tools
 
 | Tool | Args | Returns |
 | --- | --- | --- |
-| `get_session_context` | — | Objective, facts, decisions, open questions, constraints |
+| `whoami` | — | Which participant this token speaks as, and in which session |
+| `get_session_context` | — | Title, status, objective, facts, decisions, open questions, constraints |
+| `update_session_context` | any context field | The updated context |
 | `list_participants` | — | Participants with `kind`, `display_name`, `status` |
-| `read_messages` | `limit?`, `before?` | Recent messages, newest last, with resolved mention handles |
-| `post_message` | `content`, `mentions?` | The created message id |
+| `read_messages` | `limit?` (≤200, default 50), `before?` | Messages oldest-first, mention markers expanded |
+| `post_message` | `content`, `mentions?` | The created message |
 
-Added at M7: `update_session_context`, `list_artifacts`, `read_artifact`.
+`whoami` exists because an agent joining a shared room should be able to state
+who it is without guessing from a config file, and because it makes a
+misconfigured token obvious in one call rather than after a confusing write.
+
+Added at M7: `list_artifacts`, `read_artifact`.
 Added at M8: aggregated external tools, namespaced `<server>__<tool>` (e.g. `github__create_issue`).
 
 ### Message shape

@@ -17,7 +17,8 @@
     "db:migrate": "pnpm --filter @fabrikka/db migrate",
     "db:seed": "pnpm --filter @fabrikka/db seed",
     "acceptance": "for f in scripts/acceptance/*.mjs; do echo \"--- $f\"; node \"$f\" || exit 1; done",
-    "admin": "pnpm --filter @fabrikka/server --silent admin"
+    "admin": "pnpm --filter @fabrikka/server --silent admin",
+    "test": "pnpm -r --if-present test"
   },
   "devDependencies": {
     "tsx": "^4.23.15",

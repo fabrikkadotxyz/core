@@ -38,6 +38,16 @@ export interface Participant {
   status?: ConnectionStatus;
 }
 
+/**
+ * A resolved mention. `displayName` is looked up at read time, so a rename is
+ * reflected in messages written before it.
+ */
+export interface Mention {
+  participantId: string;
+  displayName: string;
+  kind: ParticipantKind;
+}
+
 export interface Message {
   id: string;
   sessionId: string;
@@ -46,9 +56,16 @@ export interface Message {
     kind: ParticipantKind;
     displayName: string;
   };
+  /**
+   * Content in canonical form, containing `<@participant_id>` markers.
+   *
+   * NOT directly displayable — render the markers using `mentions`. The MCP
+   * projection expands them to `@display_name` instead; same storage, different
+   * rendering. See docs/decisions/0008-mentions-as-stable-markers.md.
+   */
   content: string;
-  /** Participant ids, resolved at compose time — never re-parsed from content. */
-  mentions: string[];
+  /** Derived from the markers in `content`, never supplied alongside it. */
+  mentions: Mention[];
   createdAt: string;
 }
 
@@ -89,9 +106,17 @@ export type ClientEvent = { type: 'ping' };
 /* -------------------------------------------------------------------------- */
 
 export interface PostMessageBody {
-  /** Composer-resolved participant ids. */
-  mentions?: string[];
   content: string;
+  /**
+   * Participant ids the composer resolved by autocomplete. Optional: bare
+   * `@name` tokens in `content` are resolved server-side, which is how agents
+   * posting prose over MCP produce real mentions without knowing ids.
+   */
+  mentions?: string[];
+}
+
+export interface RenameParticipantBody {
+  displayName: string;
 }
 
 export interface SessionView {

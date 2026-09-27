@@ -8,6 +8,7 @@ import type {
 } from '@fabrikka/types';
 import { ApiError, openStream, sessions, type SessionRef } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
+import { MentionComposer, MentionText } from '../mentions.tsx';
 
 export function SessionPage() {
   const { owner = '', session = '' } = useParams();
@@ -47,6 +48,21 @@ export function SessionPage() {
                 : [...prev, event.message],
             );
           }
+          // Patch the participant list rather than refetching messages: chips
+          // resolve names from this list, so a rename updates every message on
+          // screen at once. That is the point of storing ids, not names.
+          if (event.type === 'participant.updated') {
+            setView((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    participants: prev.participants.map((p) =>
+                      p.id === event.participant.id ? event.participant : p,
+                    ),
+                  }
+                : prev,
+            );
+          }
         },
         setConnected,
       ),
@@ -71,8 +87,8 @@ export function SessionPage() {
 
   const isOwner = view.me.role === 'owner';
 
-  const send = async (content: string) => {
-    await sessions.postMessage(ref, content);
+  const send = async (content: string, mentions: string[]) => {
+    await sessions.postMessage(ref, content, mentions);
   };
 
   const rename = async () => {
@@ -113,8 +129,21 @@ export function SessionPage() {
             </span>
           </header>
 
-          <Timeline messages={messages} />
-          <Composer onSend={send} disabled={view.session.status === 'archived'} />
+          <Timeline
+            messages={messages}
+            participants={view.participants}
+            meParticipantId={view.me.participantId}
+          />
+          <MentionComposer
+            participants={view.participants}
+            onSend={send}
+            disabled={view.session.status === 'archived'}
+            placeholder={
+              view.session.status === 'archived'
+                ? 'This session is archived'
+                : 'Message everyone…  @ to mention'
+            }
+          />
         </main>
 
         <aside>
@@ -125,9 +154,33 @@ export function SessionPage() {
                   <span>{p.kind === 'agent' ? '🤖' : '👤'}</span>
                   <span>@{p.displayName}</span>
                   {p.id === view.me.participantId && <em className="small">you</em>}
+                  {(p.id === view.me.participantId || isOwner) && (
+                    <button
+                      className="link small"
+                      onClick={async () => {
+                        const next = window.prompt(
+                          `Rename @${p.displayName} in this session`,
+                          p.displayName,
+                        );
+                        if (!next?.trim() || next.trim() === p.displayName) return;
+                        try {
+                          await sessions.renameParticipant(ref, p.id, next.trim());
+                          reload();
+                        } catch (err) {
+                          window.alert((err as Error).message);
+                        }
+                      }}
+                    >
+                      rename
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
+            <p className="hint">
+              Renaming updates every message that mentioned them, including old
+              ones.
+            </p>
           </Panel>
 
           <Panel title={`Members (${view.members.length})`}>
@@ -292,7 +345,15 @@ function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
   );
 }
 
-function Timeline({ messages }: { messages: Message[] }) {
+function Timeline({
+  messages,
+  participants,
+  meParticipantId,
+}: {
+  messages: Message[];
+  participants: Participant[];
+  meParticipantId: string;
+}) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -321,50 +382,18 @@ function Timeline({ messages }: { messages: Message[] }) {
               })}
             </time>
           </div>
-          <p>{m.content}</p>
+          <p>
+            <MentionText
+              content={m.content}
+              participants={participants}
+              fallback={m.mentions}
+              meParticipantId={meParticipantId}
+            />
+          </p>
         </article>
       ))}
       <div ref={endRef} />
     </div>
-  );
-}
-
-function Composer({
-  onSend,
-  disabled,
-}: {
-  onSend: (content: string) => Promise<void>;
-  disabled?: boolean;
-}) {
-  const [value, setValue] = useState('');
-  const [sending, setSending] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const content = value.trim();
-    if (!content || sending) return;
-    setSending(true);
-    try {
-      await onSend(content);
-      setValue('');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <form className="composer" onSubmit={submit}>
-      <input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={disabled ? 'This session is archived' : 'Message everyone…'}
-        autoComplete="off"
-        disabled={disabled}
-      />
-      <button type="submit" disabled={!value.trim() || sending || disabled}>
-        ➤
-      </button>
-    </form>
   );
 }
 

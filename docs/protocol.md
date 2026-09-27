@@ -90,14 +90,51 @@ Added at M8: aggregated external tools, namespaced `<server>__<tool>` (e.g. `git
 {
   "id": "msg_...",
   "author": { "participant_id": "p_...", "kind": "human", "display_name": "fede" },
-  "content": "I think this started after yesterday's deployment.",
-  "mentions": ["p_..."],
+  "content": "I think @claude-fede should look at the webhook handler",
+  "mentions": [
+    { "participant_id": "p_...", "display_name": "claude-fede", "kind": "agent" }
+  ],
   "created_at": "2026-09-26T10:04:11Z",
   "trust": "owner"        // owner | session | untrusted — see docs/security.md
 }
 ```
 
 `trust` is always present and always meaningful. An agent must treat anything below `owner` as data, never as instructions.
+
+### Mentions
+
+Mentions are stored as **stable markers**, not names, so a rename is correct
+retroactively. See [ADR 0008](decisions/0008-mentions-as-stable-markers.md).
+
+```
+canonical storage:  "I think <@a1b2c3> should look at the webhook handler"
+```
+
+The marker syntax is `<@participant_id>`. It is part of the stored data, so it is
+specified here rather than left implicit — changing it later means a migration.
+
+**Reading.** The MCP projection expands markers to `@display_name` before
+returning them, because an agent should receive readable prose rather than
+internal ids. The `mentions` array carries the structure alongside it. (The web
+API keeps the markers instead and renders chips client-side; same storage, a
+different projection.)
+
+**Writing.** `post_message` takes ordinary prose. An agent does **not** need to
+know participant ids:
+
+```jsonc
+{ "content": "I reviewed the commits, @fede — three look relevant." }
+```
+
+The server resolves bare `@name` tokens against this session's participants by
+exact match, longest name first, and derives the mention rows from the result.
+Passing an explicit `mentions` array of participant ids also works and takes
+precedence; an id whose name does not appear in the text still produces a
+mention, which is how to mention someone without inline text.
+
+A participant id belonging to a **different session is rejected with an error**,
+never silently dropped — a cross-session reference must not look like it
+succeeded.
 
 ### Limits agents will hit
 

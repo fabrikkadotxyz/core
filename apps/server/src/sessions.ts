@@ -12,13 +12,21 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import {
+  messageMentions,
   messages,
   participants,
   sessionMembers,
   sessions,
   users,
 } from '@fabrikka/db';
-import type { Message, Participant, Session, SessionSummary } from '@fabrikka/types';
+import type {
+  Mention,
+  Message,
+  Participant,
+  Session,
+  SessionSummary,
+} from '@fabrikka/types';
+import { resolveMentions } from './mentions.ts';
 
 export type SessionRole = 'owner' | 'member';
 
@@ -330,35 +338,195 @@ export async function listMessages(
     .orderBy(asc(messages.createdAt))
     .limit(limit);
 
-  return rows.map(toMessage);
+  const mentions = await mentionsForSession(db, sessionId);
+  return rows.map((r) => toMessage(r, mentions.get(r.id) ?? []));
 }
 
+/**
+ * Mentions per message, with display names resolved NOW.
+ *
+ * Resolving at read time is what makes a rename correct retroactively — the
+ * stored content holds ids, never names. See ADR 0008.
+ */
+async function mentionsForSession(
+  db: Database,
+  sessionId: string,
+): Promise<Map<string, Mention[]>> {
+  const rows = await db
+    .select({
+      messageId: messageMentions.messageId,
+      participantId: participants.id,
+      displayName: participants.displayName,
+      kind: participants.kind,
+    })
+    .from(messageMentions)
+    .innerJoin(messages, eq(messages.id, messageMentions.messageId))
+    .innerJoin(participants, eq(participants.id, messageMentions.participantId))
+    .where(eq(messages.sessionId, sessionId));
+
+  const byMessage = new Map<string, Mention[]>();
+  for (const r of rows) {
+    const list = byMessage.get(r.messageId) ?? [];
+    list.push({
+      participantId: r.participantId,
+      displayName: r.displayName,
+      kind: r.kind as Participant['kind'],
+    });
+    byMessage.set(r.messageId, list);
+  }
+  return byMessage;
+}
+
+export type CreateMessageResult =
+  | { ok: true; message: Message }
+  | { ok: false; error: string };
+
+/**
+ * Store a message in canonical form and derive its mention rows.
+ *
+ * Content is rewritten to `<@participant_id>` markers and the rows come FROM
+ * those markers, so content and rows cannot disagree. See ADR 0008.
+ */
 export async function createMessage(
   db: Database,
   sessionId: string,
   authorParticipantId: string,
   content: string,
-): Promise<Message> {
-  const [inserted] = await db
-    .insert(messages)
-    .values({ sessionId, authorParticipantId, content })
-    .returning();
+  mentions?: string[],
+): Promise<CreateMessageResult> {
+  const sessionParticipants = await listParticipants(db, sessionId);
 
-  const [author] = await db
-    .select()
+  const resolved = resolveMentions({ content, mentions, participants: sessionParticipants });
+  // A foreign participant id is an error, not something to drop silently.
+  if (!resolved.ok) return { ok: false, error: resolved.error };
+
+  const author = sessionParticipants.find((p) => p.id === authorParticipantId);
+  if (!author) return { ok: false, error: 'author is not a participant in this session' };
+
+  const created = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(messages)
+      .values({ sessionId, authorParticipantId, content: resolved.content })
+      .returning();
+
+    if (resolved.mentionedParticipantIds.length > 0) {
+      await tx.insert(messageMentions).values(
+        resolved.mentionedParticipantIds.map((participantId) => ({
+          messageId: row!.id,
+          participantId,
+        })),
+      );
+    }
+    return row!;
+  });
+
+  const byId = new Map(sessionParticipants.map((p) => [p.id, p]));
+  const resolvedMentions: Mention[] = resolved.mentionedParticipantIds.map((id) => {
+    const p = byId.get(id)!;
+    return { participantId: p.id, displayName: p.displayName, kind: p.kind };
+  });
+
+  return {
+    ok: true,
+    message: toMessage(
+      {
+        id: created.id,
+        sessionId: created.sessionId,
+        content: created.content,
+        createdAt: created.createdAt,
+        authorId: author.id,
+        authorKind: author.kind,
+        authorName: author.displayName,
+      },
+      resolvedMentions,
+    ),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Participant renaming                                                       */
+/* -------------------------------------------------------------------------- */
+
+export type RenameResult =
+  | { ok: true; participant: Participant }
+  | { ok: false; error: string; conflict?: boolean };
+
+/**
+ * Rename a participant within a session.
+ *
+ * Display names are per-session on purpose: you may be `@fede` in one session
+ * and `@fede-oncall` in another. Renaming never touches stored message content,
+ * because content holds ids — the change is visible in old messages immediately.
+ */
+export async function renameParticipant(
+  db: Database,
+  sessionId: string,
+  participantId: string,
+  displayName: string,
+): Promise<RenameResult> {
+  const trimmed = displayName.trim();
+  if (!trimmed) return { ok: false, error: 'display name is required' };
+  // Mention resolution matches names in prose, so a name has to be a single
+  // token that the handle pattern can actually match.
+  if (!/^[A-Za-z0-9._-]+$/.test(trimmed)) {
+    return {
+      ok: false,
+      error: 'display name may contain only letters, digits, dot, hyphen and underscore',
+    };
+  }
+
+  const [existing] = await db
+    .select({ id: participants.id })
     .from(participants)
-    .where(eq(participants.id, authorParticipantId))
+    .where(
+      and(eq(participants.sessionId, sessionId), eq(participants.displayName, trimmed)),
+    )
     .limit(1);
 
-  return toMessage({
-    id: inserted!.id,
-    sessionId: inserted!.sessionId,
-    content: inserted!.content,
-    createdAt: inserted!.createdAt,
-    authorId: author!.id,
-    authorKind: author!.kind,
-    authorName: author!.displayName,
-  });
+  if (existing && existing.id !== participantId) {
+    return { ok: false, error: 'that name is already taken in this session', conflict: true };
+  }
+
+  const [updated] = await db
+    .update(participants)
+    .set({ displayName: trimmed })
+    .where(
+      and(eq(participants.id, participantId), eq(participants.sessionId, sessionId)),
+    )
+    .returning();
+
+  if (!updated) return { ok: false, error: 'no such participant in this session' };
+
+  return {
+    ok: true,
+    participant: {
+      id: updated.id,
+      sessionId: updated.sessionId,
+      kind: updated.kind as Participant['kind'],
+      displayName: updated.displayName,
+    },
+  };
+}
+
+/** The participant row for a given user in a session, if any. */
+export async function participantForUser(
+  db: Database,
+  sessionId: string,
+  userId: string,
+): Promise<Participant | null> {
+  const [row] = await db
+    .select()
+    .from(participants)
+    .where(and(eq(participants.sessionId, sessionId), eq(participants.userId, userId)))
+    .limit(1);
+
+  if (!row) return null;
+  return {
+    id: row.id,
+    sessionId: row.sessionId,
+    kind: row.kind as Participant['kind'],
+    displayName: row.displayName,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -419,7 +587,7 @@ interface MessageRow {
   authorName: string;
 }
 
-function toMessage(r: MessageRow): Message {
+function toMessage(r: MessageRow, mentions: Mention[]): Message {
   return {
     id: r.id,
     sessionId: r.sessionId,
@@ -428,9 +596,9 @@ function toMessage(r: MessageRow): Message {
       kind: r.authorKind as Participant['kind'],
       displayName: r.authorName,
     },
+    // Canonical form, with `<@id>` markers. Consumers render them.
     content: r.content,
-    // Mentions become real rows at M2 (docs/data-model.md).
-    mentions: [],
+    mentions,
     createdAt: r.createdAt.toISOString(),
   };
 }

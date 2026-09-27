@@ -125,7 +125,29 @@ message_mentions
   primary key (message_id, participant_id)
 ```
 
-Mentions are resolved **at compose time** and stored as rows. They are never re-derived by parsing message text at read time — that would break the moment a display name changes.
+`messages.content` stores **stable markers** — `<@participant_id>` — not display
+names, and these rows are **derived from those markers at write time**. See
+[ADR 0008](decisions/0008-mentions-as-stable-markers.md).
+
+```
+stored content:  "I think <@a1b2c3> should look at the webhook handler"
+derived rows:    message_mentions(message_id, a1b2c3)
+```
+
+Two properties follow, and both matter:
+
+- **A rename is correct retroactively.** Display names resolve at read time, so
+  renaming a participant fixes every message that ever mentioned them, with no
+  backfill.
+- **Content and mention rows cannot disagree**, because the rows are computed
+  from the content rather than supplied next to it. A message whose text says
+  `@alice` while its rows point at Bob is not a representable state.
+
+Mentions are never re-derived by parsing display names at read time — that breaks
+the moment a name changes, and it is what the product spec explicitly rules out.
+
+A mention must reference a participant **of the same session**. A foreign id is
+rejected at write time, not dropped; see `docs/security.md`.
 
 ### M3–M5 — agents and connections
 

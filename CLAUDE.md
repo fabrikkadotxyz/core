@@ -52,8 +52,9 @@ Milestones are defined in `docs/roadmap.md` and are **sequential**. For each one
 
 ```bash
 pnpm typecheck
-node scripts/acceptance/m0.mjs     # and every earlier milestone's check
-git commit -m "M0: ..." && git tag m0
+pnpm test          # unit tests (pure logic)
+pnpm acceptance    # every milestone's check, in order
+git commit -m "M<N>: ..." && git tag m<N>
 ```
 
 Run **every** existing acceptance check before committing a milestone, not just the current one.

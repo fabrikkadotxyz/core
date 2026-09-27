@@ -46,9 +46,33 @@ Email is a transport for links the system already generates, never a prerequisit
 
 ## M2 — Participants and mentions as first-class
 
-Unify humans and agents behind `participants`. Mention autocomplete resolving to a `participant_id` and writing `message_mentions` — **not** text parsing at read time.
+Humans and agents already share the `participants` id space (M0). This milestone
+makes **mentions** first-class, per
+[ADR 0008](decisions/0008-mentions-as-stable-markers.md).
 
-**Test:** Type `@ali`, pick Alice, send. A `message_mentions` row exists in the DB. Rename Alice's display name — the old message still resolves to her.
+- `messages.content` stores stable `<@participant_id>` markers; display names
+  resolve at read time, so renames are correct retroactively.
+- `message_mentions` rows are **derived from the markers** at write time, so
+  content and rows cannot drift apart.
+- Composer autocomplete on `@`, resolving to a participant id — never a name.
+- The write path also resolves bare `@name` in prose, so an agent posting plain
+  text over MCP (M3) produces real mentions without knowing internal ids.
+- Mentioning a participant from another session is **rejected**, not ignored.
+- Participants can be renamed: your own in any session you're in, anyone's if
+  you own the session. Per-session display names stay unique.
+
+**Test:**
+1. Type `@ali`, pick alice from the dropdown, send. The message renders her as a
+   chip.
+2. Confirm a `message_mentions` row exists, and that `messages.content` holds a
+   `<@…>` marker rather than the literal text `@alice`.
+3. **Rename alice to `alicia`. The old message now reads `@alicia`** — the
+   mention still resolves to her, retroactively.
+4. Post `hey @alicia` as plain text over the API with no `mentions` array; a
+   mention row is still created (this is the path agents will use).
+5. Try to mention a participant id from a different session — rejected with 400,
+   not silently dropped.
+6. Rename a participant to a name already taken in that session — rejected.
 
 ## M3 — Remote session MCP endpoint (lane A) — *first real payoff*
 

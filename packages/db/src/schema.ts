@@ -2,7 +2,8 @@
  * Database schema. Documented in docs/data-model.md — update that first.
  *
  * Tables are introduced by the milestone that needs them (docs/roadmap.md).
- * Currently covers M0 (messaging core) and M1 (auth, membership, invites).
+ * Currently covers M0 (messaging core), M1 (auth, membership, invites) and
+ * M2 (mentions).
  */
 import {
   boolean,
@@ -187,4 +188,34 @@ export const sessionInvites = pgTable(
       .defaultNow(),
   },
   (t) => [index('session_invites_session_idx').on(t.sessionId)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* M2 — mentions                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Derived from the `<@participant_id>` markers in messages.content at write
+ * time — never supplied alongside it, and never re-parsed from display names at
+ * read time. See docs/decisions/0008-mentions-as-stable-markers.md.
+ *
+ * Because these rows are computed from the content, a message whose text says
+ * "@alice" while its rows point at Bob is not a representable state.
+ */
+export const messageMentions = pgTable(
+  'message_mentions',
+  {
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.messageId, t.participantId] }),
+    // Delivery (M4-M6) asks "what was this participant mentioned in?", so the
+    // participant-first index is the one that matters, not the PK's order.
+    index('message_mentions_participant_idx').on(t.participantId),
+  ],
 );

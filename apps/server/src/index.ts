@@ -16,6 +16,7 @@ import { createClient } from '@fabrikka/db';
 import type {
   LoginBody,
   PostMessageBody,
+  RenameParticipantBody,
   SessionView,
   SignupBody,
 } from '@fabrikka/types';
@@ -49,6 +50,7 @@ import {
   listParticipants,
   listSessionsForUser,
   removeMember,
+  renameParticipant,
   renameSession,
   resolveSessionForUser,
   setSessionStatus,
@@ -253,10 +255,55 @@ sessionRoutes.post('/messages', async (c) => {
   if (!content) return c.json({ error: 'content is required' }, 400);
 
   // The author is the caller's own participant row — never client-supplied.
-  const message = await createMessage(db, s.id, s.participantId, content);
-  publish(s.id, { type: 'message.created', message });
+  const result = await createMessage(
+    db,
+    s.id,
+    s.participantId,
+    content,
+    body.mentions,
+  );
+  // A mention referencing another session's participant is refused, not dropped.
+  if (!result.ok) return c.json({ error: result.error }, 400);
 
-  return c.json(message, 201);
+  publish(s.id, { type: 'message.created', message: result.message });
+  return c.json(result.message, 201);
+});
+
+/* ---- participants ---- */
+
+sessionRoutes.get('/participants', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  return c.json(await listParticipants(db, s.id));
+});
+
+/**
+ * Rename a participant.
+ *
+ * You may rename yourself in any session you're in; a session owner may rename
+ * anyone, which is what agents will need at M3. Stored message content holds
+ * ids, so old messages pick up the new name immediately (ADR 0008).
+ */
+sessionRoutes.patch('/participants/:id', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+
+  const targetId = c.req.param('id');
+  const isSelf = targetId === s.participantId;
+  // Not your participant and not your session: as far as you're concerned it
+  // isn't there.
+  if (!isSelf && s.role !== 'owner') return c.notFound();
+
+  const body = await c.req.json<RenameParticipantBody>();
+  const result = await renameParticipant(db, s.id, targetId, body.displayName ?? '');
+
+  if (!result.ok) {
+    if (result.error === 'no such participant in this session') return c.notFound();
+    return c.json({ error: result.error }, result.conflict ? 409 : 400);
+  }
+
+  publish(s.id, { type: 'participant.updated', participant: result.participant });
+  return c.json(result.participant);
 });
 
 /* ---- members ---- */

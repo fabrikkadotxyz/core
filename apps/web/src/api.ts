@@ -11,6 +11,7 @@ import type {
   LoginBody,
   Member,
   Message,
+  Participant,
   ServerEvent,
   SessionSummary,
   SessionView,
@@ -95,8 +96,18 @@ export const sessions = {
   remove: (ref: SessionRef) => call<{ ok: true }>(base(ref), { method: 'DELETE' }),
 
   messages: (ref: SessionRef) => call<Message[]>(`${base(ref)}/messages`),
-  postMessage: (ref: SessionRef, content: string) =>
-    call<Message>(`${base(ref)}/messages`, { method: 'POST', body: { content } }),
+  postMessage: (ref: SessionRef, content: string, mentions: string[] = []) =>
+    call<Message>(`${base(ref)}/messages`, {
+      method: 'POST',
+      body: { content, mentions },
+    }),
+
+  participants: (ref: SessionRef) => call<Participant[]>(`${base(ref)}/participants`),
+  renameParticipant: (ref: SessionRef, participantId: string, displayName: string) =>
+    call<Participant>(`${base(ref)}/participants/${participantId}`, {
+      method: 'PATCH',
+      body: { displayName },
+    }),
 
   members: (ref: SessionRef) => call<Member[]>(`${base(ref)}/members`),
   removeMember: (ref: SessionRef, userId: string) =>

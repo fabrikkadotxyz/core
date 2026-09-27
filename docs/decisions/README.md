@@ -40,3 +40,4 @@ What we rejected and why.
 | [0005](0005-two-sdk-generations.md) | Two MCP SDK generations in one repo | Accepted |
 | [0006](0006-owner-scoped-endpoint-path.md) | Owner-scoped MCP endpoint path | Accepted |
 | [0007](0007-email-is-a-transport.md) | Email is a transport, not a mechanism | Accepted |
+| [0008](0008-mentions-as-stable-markers.md) | Mentions are stable markers, and mention rows are derived | Accepted |

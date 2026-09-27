@@ -15,6 +15,13 @@
       "when": 1790464061216,
       "tag": "0001_kind_ozymandias",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790479147218,
+      "tag": "0002_mute_warlock",
+      "breakpoints": true
     }
   ]
 }

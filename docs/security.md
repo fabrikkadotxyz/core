@@ -79,6 +79,18 @@ into a public channel admits anyone who reads it. Mitigations:
 
 The UI states plainly that the link grants access to that session.
 
+### Mentions cannot cross a session boundary
+
+A mention references a `participant_id`, and participant ids are opaque. A write
+that mentions a participant belonging to another session is **rejected with a
+400**, not silently dropped.
+
+Dropping it would be worse than refusing it: the write would appear to succeed,
+and a caller probing ids could use the difference between "accepted" and
+"accepted but dropped" to confirm that an id exists somewhere. Refusing every
+foreign id uniformly leaks nothing, and the same rule keeps a session's
+participant graph from ever referencing outside itself.
+
 ### Existence is private
 
 Every session route returns **404, never 403**, to a non-member. A 403

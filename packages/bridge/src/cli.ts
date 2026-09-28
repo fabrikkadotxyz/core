@@ -97,7 +97,7 @@ async function main(): Promise<void> {
       // meta keys MUST be [A-Za-z0-9_]+ or Claude Code drops them silently.
       // pushToChannel enforces that rather than trusting this call site.
       void pushToChannel(mcp, {
-        content: formatMention(frame.message),
+        content: formatMention(frame.message, frame.trust),
         meta: {
           author: frame.message.author.displayName,
           trust: frame.trust,

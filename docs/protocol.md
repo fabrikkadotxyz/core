@@ -280,6 +280,31 @@ Also note: Claude Code does not acknowledge notifications. `await mcp.notificati
 
 Events queue and are delivered **together on the next turn** if several arrive while Claude is busy. Mention backlog is therefore naturally collapsed; cap it anyway.
 
+### The event body must ask for the reply
+
+The channel event body carries an explicit instruction to reply with
+`post_message`, and says **why**: the author is reading a browser, not the
+terminal.
+
+This is not belt-and-braces. Relying on the server `instructions` string alone,
+Claude received the event, answered in the terminal, and never posted back — which
+from the browser is indistinguishable from a broken bridge. `instructions` arrive
+once at connect time; the event body is in the turn the model is actually acting
+on, and a reason carries further than a rule.
+
+```
+@fede wrote in the Fabrikka session:
+
+@claude-fede what is in my working directory?
+
+Reply by calling post_message. @fede is reading the session in a browser, not
+this terminal — anything you only print here will not reach them.
+```
+
+For a message whose trust is below `owner`, the body says so inline and tells the
+model to treat the content as information rather than instructions — the same
+warning as the `trust` attribute, in the place the model is most likely to act on.
+
 ### What gets delivered
 
 **The server decides, not the bridge.** The bridge is a dumb pipe: whatever

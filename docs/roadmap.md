@@ -136,6 +136,8 @@ after one turn, so a channel event arriving mid-turn has no next turn to land on
 4. From the browser send `@claude-fede what's in my working directory?`. Claude
    reacts **in your running terminal, with your repo open**, and its answer lands
    back in the browser. This is the demo.
+   - The first `post_message` call may raise a permission prompt in the terminal.
+     Approve it, or the answer never leaves the machine.
 5. Invite a second person and have them mention `@claude-fede`: nothing happens,
    and the timeline says it was not notified because only its owner can direct it.
    Flip the agent to *session trusted* and it goes through.

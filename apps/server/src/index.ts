@@ -42,8 +42,10 @@ import {
 } from './delivery.ts';
 import {
   addAgentToSession,
+  issueRunToken,
   issueToken,
   resolveSessionToken,
+  revokeOwnToken,
   listSessionAgents,
   listSessionTokens,
   revokeToken,
@@ -552,6 +554,12 @@ app.get(
 
     let unsubscribe: (() => void) | undefined;
     let actorRef: { sessionId: string; participantId: string } | undefined;
+    /**
+     * `bridge` pushes into a live agent session; `runner` spawns a headless run.
+     * Defaults to bridge so an older client keeps working, and is re-registered
+     * when a `hello` frame declares otherwise.
+     */
+    let kind: 'bridge' | 'runner' = 'bridge';
 
     return {
       async onOpen(_evt, ws) {
@@ -589,25 +597,50 @@ app.get(
           }),
         );
 
-        unsubscribe = listenForMentions(actor.participantId, ({ message, trust }) => {
-          ws.send(JSON.stringify({ type: 'mention', message, trust }));
-        });
+        unsubscribe = listenForMentions(
+          actor.participantId,
+          kind,
+          ({ message, trust }) => {
+            ws.send(JSON.stringify({ type: 'mention', message, trust }));
+          },
+        );
 
         await setConnectionStatus(db, {
           sessionId: actor.sessionId,
           participantId: actor.participantId,
-          kind: 'bridge',
+          kind,
           status: 'connected',
         });
       },
 
-      async onMessage(evt, _ws) {
+      async onMessage(evt, ws) {
         if (!actorRef) return;
         try {
           const frame = JSON.parse(String(evt.data)) as {
             type?: string;
             status?: string;
+            kind?: string;
           };
+
+          // Declaring `runner` re-registers the listener under that kind, so a
+          // live bridge elsewhere still wins the mention (ADR 0011).
+          if (frame.type === 'hello') {
+            if (frame.kind !== 'runner' && frame.kind !== 'bridge') return;
+            if (frame.kind === kind) return;
+
+            kind = frame.kind;
+            unsubscribe?.();
+            unsubscribe = listenForMentions(
+              actorRef.participantId,
+              kind,
+              ({ message, trust }) => {
+                ws.send(JSON.stringify({ type: 'mention', message, trust }));
+              },
+            );
+            await setConnectionStatus(db, { ...actorRef, kind, status: 'connected' });
+            return;
+          }
+
           if (frame.type !== 'status') return;
           if (
             frame.status !== 'working' &&
@@ -616,11 +649,7 @@ app.get(
           ) {
             return;
           }
-          await setConnectionStatus(db, {
-            ...actorRef,
-            kind: 'bridge',
-            status: frame.status,
-          });
+          await setConnectionStatus(db, { ...actorRef, kind, status: frame.status });
         } catch {
           // Ignore a malformed frame rather than dropping the connection.
         }
@@ -629,11 +658,9 @@ app.get(
       async onClose() {
         unsubscribe?.();
         if (actorRef) {
-          await setConnectionStatus(db, {
-            ...actorRef,
-            kind: 'bridge',
-            status: 'offline',
-          }).catch(() => {});
+          await setConnectionStatus(db, { ...actorRef, kind, status: 'offline' }).catch(
+            () => {},
+          );
         }
       },
       onError() {
@@ -642,6 +669,69 @@ app.get(
     };
   }),
 );
+
+/**
+ * Mint a run-scoped token.
+ *
+ * Same session, same participant, short TTL, one run. A runner cannot mint a
+ * token for anyone else — the participant comes from its own credential, never
+ * from the request. See ADR 0011.
+ */
+app.post('/bridge/o/:owner/s/:session/run-token', async (c) => {
+  const bearer = c.req.header('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  if (!bearer) {
+    return c.json({ error: 'unauthorized' }, 401, {
+      'WWW-Authenticate': 'Bearer realm="fabrikka"',
+    });
+  }
+
+  const actor = await resolveSessionToken(db, bearer);
+  if (
+    !actor ||
+    actor.sessionPublicId !== c.req.param('session') ||
+    actor.ownerSlug !== c.req.param('owner') ||
+    actor.participantKind !== 'agent'
+  ) {
+    return c.notFound();
+  }
+
+  const minted = await issueRunToken(db, {
+    sessionId: actor.sessionId,
+    participantId: actor.participantId,
+    createdByUserId: actor.agent?.ownerUserId ?? '',
+  });
+  if (!minted) return c.notFound();
+
+  return c.json(minted, 201);
+});
+
+/**
+ * Revoke a run token when the run ends.
+ *
+ * A runner may only revoke tokens for its OWN participant, so possessing a
+ * runner credential does not let you cut another agent's access.
+ */
+app.delete('/bridge/o/:owner/s/:session/run-token/:tokenId', async (c) => {
+  const bearer = c.req.header('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  if (!bearer) return c.json({ error: 'unauthorized' }, 401);
+
+  const actor = await resolveSessionToken(db, bearer);
+  if (
+    !actor ||
+    actor.sessionPublicId !== c.req.param('session') ||
+    actor.ownerSlug !== c.req.param('owner')
+  ) {
+    return c.notFound();
+  }
+
+  const done = await revokeOwnToken(db, {
+    sessionId: actor.sessionId,
+    participantId: actor.participantId,
+    tokenId: c.req.param('tokenId'),
+  });
+  if (!done) return c.notFound();
+  return c.json({ ok: true });
+});
 
 /**
  * The MCP endpoint — lane A. Its own auth (participant-scoped bearer tokens),
@@ -762,6 +852,13 @@ function agentSetup(mcpUrl: string, token: string) {
     // Claude Code is started with the channel opted in.
     bridgeMcpJson,
     bridgeCommand: 'claude --dangerously-load-development-channels server:fabrikka',
+    // Lane B, unattended: spawn a headless run per mention (ADR 0011). The env
+    // vars are inline because this is a shell command, not a config file.
+    runnerCommand:
+      `FABRIKKA_URL=${mcpUrl} \\
+  FABRIKKA_TOKEN=${token} \\
+  ` +
+      `${BRIDGE_COMMAND.join(' ')} watch --dir .`,
   };
 }
 

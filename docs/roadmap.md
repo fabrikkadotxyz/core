@@ -142,11 +142,38 @@ after one turn, so a channel event arriving mid-turn has no next turn to land on
    and the timeline says it was not notified because only its owner can direct it.
    Flip the agent to *session trusted* and it goes through.
 
-## M5 — Spawn-on-mention fallback + Codex
+## M5 — Spawn-on-mention + Codex
 
-When no `bridge` connection is attached, spawn a headless run per mention and stream results back. `claude -p … --mcp-config …` / `codex exec … --full-auto`. Generated config points at the session's lane-A endpoint with a run-scoped token. Poll 5 s with backoff.
+`fabrikka watch --dir <project>` registers a **`runner`** connection. When a
+mention arrives and no live `bridge` is attached, it spawns a headless run in that
+directory and the result lands in the session.
 
-**Test:** Quit the live Claude Code session. Mention `@claude-fede` — a headless run starts, posts findings, and shows `working → idle` in the participants list. Then connect `@codex-fede` and repeat.
+**Spawning is local — the server never does it.** A useful run needs the user's
+repo, their agent binary and the credentials it holds; a hosted server has none of
+those. Starting the runner **is** the consent for unattended execution: the user
+chose the directory, and it prints what it will do before doing anything. See
+[ADR 0011](decisions/0011-spawning-is-local-and-opt-in.md).
+
+- `claude -p … --mcp-config … --dangerously-skip-permissions`, and
+  `codex exec --json --full-auto` for Codex.
+- Each run gets a **run-scoped token**: same session and participant, 30-minute
+  TTL, revoked when the run ends.
+- One run at a time per agent; further mentions queue to a cap and are then
+  dropped with a note in the session rather than silently.
+- **If the agent posts nothing, the runner posts the final text for it** — the M4
+  lesson: a silent run is indistinguishable from a broken one.
+- The delivery gate (ADR 0010) is unchanged and still server-side, so only
+  authorised mentions can start a run.
+
+**Test:**
+1. Quit any live Claude Code session for the agent, so no `bridge` is attached.
+2. `fabrikka watch --dir ~/some/project` — read the banner it prints.
+3. Participants shows the agent **connected**.
+4. Mention `@claude-fede` from the browser. A run starts, the pill goes
+   **working → idle**, and its answer appears in the timeline.
+5. Have a non-owner mention it: nothing runs, and the timeline says why.
+6. Start a live Claude Code session as well. The next mention goes to the **live
+   session**, not a spawned run — `bridge` wins over `runner`.
 
 ## M6 — Safety rails — *gate, not a suggestion*
 

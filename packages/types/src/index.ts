@@ -162,6 +162,11 @@ export interface CreatedAgentView {
   bridgeMcpJson: string;
   /** Lane B: the command that starts Claude Code with the channel opted in. */
   bridgeCommand: string;
+  /**
+   * Lane B, unattended: starts a runner that spawns a headless agent per mention.
+   * Running it is the consent for that (ADR 0011).
+   */
+  runnerCommand: string;
 }
 
 export interface SessionContext {

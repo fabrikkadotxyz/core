@@ -348,7 +348,22 @@ Bridge → server frames:
 
 | Frame | Meaning |
 | --- | --- |
-| `{ type: 'status', status }` | `working` while a turn is in flight, `idle` after |
+| `{ type: 'hello', kind }` | Declares `bridge` or `runner`; sent immediately after `ready` |
+| `{ type: 'status', status }` | `working` while a turn or run is in flight, `idle` after |
+
+`kind` decides delivery when both are present: a live `bridge` wins, because
+pushing into a session that already has the user's context beats starting a fresh
+one. Presence is reported to the browser as `connected / working / idle / offline`.
+
+### Minting a run token
+
+```
+POST /bridge/o/{owner_id}/s/{session_id}/run-token
+Authorization: Bearer <the runner's own token>
+```
+
+Returns a short-lived token for the **same participant**, for one run. A runner
+cannot mint a token for anyone else.
 
 Presence is reported to the browser as `connected / working / idle / offline`.
 
@@ -362,7 +377,18 @@ A two-way channel may declare `experimental['claude/channel/permission'] = {}` t
 
 ## 3. Spawn invocations
 
-Used when a mention targets an agent with no live bridge connection. The bridge daemon shells out to a binary **the user already installed and authenticated**. Fabrikka never installs or manages these.
+Used when a mention targets an agent with a `runner` connection and no live
+`bridge`. **Spawning is local** — the server never does it, because a useful run
+needs the user's repo, their agent binary and the credentials it already holds.
+See [ADR 0011](decisions/0011-spawning-is-local-and-opt-in.md).
+
+```bash
+fabrikka watch --dir ~/code/myrepo
+```
+
+Starting that process **is** the consent for unattended execution: the user chose
+the directory, and the runner prints what it will do before doing anything. The
+delivery gate (ADR 0010) still decides who may trigger a run, server-side.
 
 ### Claude Code
 
@@ -370,7 +396,9 @@ Used when a mention targets an agent with no live bridge connection. The bridge 
 claude -p "<prompt>" \
   --output-format stream-json --verbose \
   --append-system-prompt "<session preamble>" \
+  --allowedTools <…> \
   --mcp-config <generated>.json \
+  --dangerously-skip-permissions \
   --resume <thread_id>            # when continuing
 ```
 
@@ -379,6 +407,20 @@ claude -p "<prompt>" \
 ```bash
 codex exec [resume <thread_id>] --json --full-auto "<prompt>"
 ```
+
+`codex exec` takes its MCP servers from its own config file rather than a flag, so
+a Codex run has no session endpoint and relies on the relay below. This is a real
+vendor asymmetry, not something to paper over.
+
+### If the agent posts nothing, the runner posts for it
+
+The prompt asks the agent to reply with `post_message`. If a run ends and the agent
+posted nothing, the runner posts the final assistant text itself, as the same
+participant.
+
+This is the M4 lesson applied: a model that answers in its own terminal and posts
+nothing is indistinguishable, from the browser, from a broken bridge. A run must
+never be silent.
 
 ### Generated MCP config
 
@@ -396,7 +438,10 @@ The spawned agent gets the session's own lane-A endpoint, so it can read context
 }
 ```
 
-The run token is scoped to one session, one participant, and one run. It expires when the run ends.
+The run token is scoped to one session, one participant and one run, with a
+30-minute TTL, and is revoked when the run ends. A spawned agent's config path is
+visible to the model and its transcript may be logged, so a long-lived token in
+that position is a standing liability.
 
 ### Unattended execution
 

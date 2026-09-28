@@ -537,7 +537,7 @@ function AgentSetup({
   created: CreatedAgentView;
   onError: (msg: string) => void;
 }) {
-  const [lane, setLane] = useState<'bridge' | 'remote'>('bridge');
+  const [lane, setLane] = useState<'bridge' | 'runner' | 'remote'>('bridge');
   const [copied, setCopied] = useState<string | null>(null);
 
   const copy = async (label: string, value: string) => {
@@ -566,6 +566,14 @@ function AgentSetup({
         </button>
         <button
           role="tab"
+          aria-selected={lane === 'runner'}
+          className={lane === 'runner' ? 'active' : undefined}
+          onClick={() => setLane('runner')}
+        >
+          While away
+        </button>
+        <button
+          role="tab"
           aria-selected={lane === 'remote'}
           className={lane === 'remote' ? 'active' : undefined}
           onClick={() => setLane('remote')}
@@ -574,7 +582,23 @@ function AgentSetup({
         </button>
       </div>
 
-      {lane === 'bridge' ? (
+      {lane === 'runner' ? (
+        <>
+          <p className="hint">
+            Spawns a fresh headless agent for each mention, in whichever directory
+            you run this from. Use it when you're away from the terminal.
+          </p>
+          <code className="endpoint">{created.runnerCommand}</code>
+          <button onClick={() => copy('runner', created.runnerCommand)}>
+            {copied === 'runner' ? 'Copied ✓' : 'Copy command'}
+          </button>
+          <p className="hint danger-hint">
+            <strong>Runs start without permission prompts.</strong> Only mentions
+            from you can trigger them. The command prints what it will do before it
+            does anything — read it.
+          </p>
+        </>
+      ) : lane === 'bridge' ? (
         <>
           <p className="hint">
             Pushes into a Claude Code session you already have open, with your repo

@@ -592,3 +592,7 @@ a {
   border-left: 2px solid #7c5e16;
   padding-left: 0.5rem;
 }
+
+.danger-hint {
+  color: #fcd34d;
+}

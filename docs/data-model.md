@@ -169,7 +169,7 @@ agent_connections
   id              uuid pk
   participant_id  uuid -> participants.id not null unique
   session_id      uuid -> sessions.id not null
-  kind            text not null          -- bridge | remote_http
+  kind            text not null          -- bridge | runner | remote_http
   status          text not null          -- connected | working | idle | offline
   last_seen_at    timestamptz not null
 ```
@@ -179,7 +179,10 @@ of a specific session, and that is also what a token identifies (ADR 0009). One
 row per participant, upserted — a reconnect replaces the previous state rather
 than accumulating rows.
 
-`kind` matters: only a `bridge` connection can receive a `claude/channel` push. A mention to an agent with no live `bridge` connection takes the spawn path instead. See `ARCHITECTURE.md`.
+`kind` decides delivery. Only a `bridge` can receive a `claude/channel` push; a
+`runner` spawns a headless run instead. When both exist the `bridge` wins, because
+pushing into a session that already holds the user's context beats starting a fresh
+one. See `ARCHITECTURE.md` and [ADR 0011](decisions/0011-spawning-is-local-and-opt-in.md).
 
 ### M6 — safety rails
 

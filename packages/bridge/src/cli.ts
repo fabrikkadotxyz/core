@@ -18,6 +18,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { loadConfig } from './config.ts';
+import { watch } from './watch.ts';
 import { createChannelServer, formatMention, pushToChannel } from './channel.ts';
 import { BridgeSocket } from './socket.ts';
 import { Upstream } from './upstream.ts';
@@ -36,19 +37,34 @@ async function main(): Promise<void> {
 
   if (command === 'help' || command === '--help') {
     console.error(
-      'fabrikka connect   Bridge a Fabrikka session into this agent session.\n' +
-        '\nRequires FABRIKKA_URL and FABRIKKA_TOKEN. Copy the .mcp.json block\n' +
-        "from your session's Agents panel.",
+      'fabrikka connect\n' +
+        '    Bridge a Fabrikka session into THIS agent session. Claude Code\n' +
+        '    spawns this from .mcp.json; mentions arrive as channel events.\n' +
+        '\n' +
+        'fabrikka watch --dir <project> [--provider claude-code|codex]\n' +
+        '    Spawn a headless run for each mention, in <project>. Runs start\n' +
+        '    WITHOUT permission prompts — see the banner it prints.\n' +
+        '\n' +
+        'Both need FABRIKKA_URL and FABRIKKA_TOKEN. Copy the block from your\n' +
+        "session's Agents panel.",
     );
     return;
   }
-  if (command !== 'connect') {
-    log(`unknown command: ${command}`);
+  if (command !== 'connect' && command !== 'watch') {
+    log(`unknown command: ${command}. Try: fabrikka help`);
     process.exitCode = 1;
     return;
   }
 
   const config = loadConfig(argv);
+
+  if (command === 'watch') {
+    const dir = flag(argv, 'dir') ?? process.cwd();
+    const provider = flag(argv, 'provider') ?? 'claude-code';
+    const allowedTools = flag(argv, 'allowed-tools')?.split(',').filter(Boolean);
+    await watch({ config, dir, provider, allowedTools, log });
+    return;
+  }
   const mcp = createChannelServer(VERSION);
   const upstream = new Upstream(config.mcpUrl, config.token);
 
@@ -138,3 +154,11 @@ main().catch((err) => {
   log((err as Error).message);
   process.exit(1);
 });
+
+/** Shared with config.ts's parser; kept local to avoid exporting a helper. */
+function flag(argv: string[], name: string): string | undefined {
+  const i = argv.indexOf(`--${name}`);
+  if (i === -1) return undefined;
+  const value = argv[i + 1];
+  return value && !value.startsWith('--') ? value : undefined;
+}

@@ -72,6 +72,28 @@ different code path and there is no deployment-mode flag.
 
 Not implemented yet; tracked in `docs/roadmap.md` under Phase I.
 
+## Running agents unattended
+
+`fabrikka watch --dir <project>` spawns a headless agent run for each mention it
+is given. **Runs start without permission prompts** — a headless agent cannot stop
+to ask. Starting the process is the consent: you chose the directory, and it prints
+what it will do before doing anything. See
+[ADR 0011](decisions/0011-spawning-is-local-and-opt-in.md).
+
+The session UI generates the command under *Agents → While away*.
+
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Spawn | `claude -p … --dangerously-skip-permissions` | `codex exec --json --full-auto` |
+| Session tools during the run | yes, via `--mcp-config` | **no** — `codex exec` reads MCP servers from its own config file |
+| How the answer gets posted | the agent calls `post_message` itself | the runner relays its output |
+
+If an agent posts nothing, the runner posts the final text for it. A run is never
+silent, because from the browser silence is indistinguishable from a failure.
+
+`--allowed-tools a,b,c` narrows what a spawned run may use. Unset means the
+provider's own default.
+
 ## Backups
 
 All durable state is in Postgres. Artifacts (M7) add object storage.

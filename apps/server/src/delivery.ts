@@ -31,26 +31,54 @@ export interface Blocked {
   trust: TrustTier;
 }
 
+/** How a connection wants to act on a mention. */
+export type ConnectionKind = 'bridge' | 'runner';
+
 /** Callbacks a transport registers to receive pushes for one participant. */
 type Listener = (delivery: { message: Message; trust: TrustTier }) => void;
 
-const listeners = new Map<string, Set<Listener>>();
+interface Registration {
+  kind: ConnectionKind;
+  fn: Listener;
+}
+
+const listeners = new Map<string, Set<Registration>>();
 
 /** Returns an unsubscribe function. */
-export function listenForMentions(participantId: string, fn: Listener): () => void {
+export function listenForMentions(
+  participantId: string,
+  kind: ConnectionKind,
+  fn: Listener,
+): () => void {
   let set = listeners.get(participantId);
   if (!set) {
     set = new Set();
     listeners.set(participantId, set);
   }
-  set.add(fn);
+  const registration: Registration = { kind, fn };
+  set.add(registration);
   return () => {
-    set!.delete(fn);
+    set!.delete(registration);
     if (set!.size === 0) listeners.delete(participantId);
   };
 }
 
-export function hasLiveBridge(participantId: string): boolean {
+/**
+ * Pick who gets the mention.
+ *
+ * A live `bridge` wins over a `runner`: pushing into a session that already holds
+ * the user's context and repo beats starting a fresh headless agent. Only when no
+ * bridge is attached does the spawn path get it. See ADR 0011.
+ */
+function chooseTargets(participantId: string): Registration[] {
+  const set = listeners.get(participantId);
+  if (!set || set.size === 0) return [];
+
+  const bridges = [...set].filter((r) => r.kind === 'bridge');
+  return bridges.length > 0 ? bridges : [...set];
+}
+
+export function hasLiveConnection(participantId: string): boolean {
   return (listeners.get(participantId)?.size ?? 0) > 0;
 }
 
@@ -106,16 +134,16 @@ export async function deliverMentions(
       continue;
     }
 
-    const set = listeners.get(mention.participantId);
-    if (!set || set.size === 0) {
-      // Nothing is listening. At M5 this is where the spawn path picks it up.
+    const targets = chooseTargets(mention.participantId);
+    if (targets.length === 0) {
+      // Neither a live session nor a runner. Nothing to do but say so.
       blocked.push({ ...describe(mention), reason: 'no_connection', trust });
       continue;
     }
 
-    for (const fn of set) {
+    for (const target of targets) {
       try {
-        fn({ message: delivered_message, trust });
+        target.fn({ message: delivered_message, trust });
       } catch (err) {
         console.error('[delivery] listener threw', err);
       }
@@ -198,7 +226,7 @@ export async function setConnectionStatus(
   opts: {
     sessionId: string;
     participantId: string;
-    kind: 'bridge' | 'remote_http';
+    kind: ConnectionKind | 'remote_http';
     status: 'connected' | 'working' | 'idle' | 'offline';
   },
 ): Promise<void> {

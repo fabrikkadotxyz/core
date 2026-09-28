@@ -30,6 +30,13 @@ export interface SocketHandlers {
   onDisconnected: () => void;
 }
 
+/** Frames the client sends upstream. */
+export type ClientFrame =
+  /** Declares how this connection wants to act, so the server can prefer a live
+   *  bridge over a runner (ADR 0011). */
+  | { type: 'hello'; kind: 'bridge' | 'runner' }
+  | { type: 'status'; status: 'working' | 'idle' };
+
 export class BridgeSocket {
   private ws: WebSocket | undefined;
   private retry: NodeJS.Timeout | undefined;
@@ -87,8 +94,8 @@ export class BridgeSocket {
     });
   }
 
-  /** Report presence. Best-effort: losing a status update must not be fatal. */
-  send(frame: { type: 'status'; status: 'working' | 'idle' }): void {
+  /** Best-effort: losing a status or hello frame must not be fatal. */
+  send(frame: ClientFrame): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       try {
         this.ws.send(JSON.stringify(frame));

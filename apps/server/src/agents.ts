@@ -5,7 +5,7 @@
  * is the middle term — a named identity owned by a user, addable to any number
  * of sessions. See ARCHITECTURE.md and ADR 0009.
  */
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, or } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import {
   agents,
@@ -299,7 +299,15 @@ export async function listSessionTokens(
     })
     .from(sessionTokens)
     .innerJoin(participants, eq(participants.id, sessionTokens.participantId))
-    .where(and(eq(sessionTokens.sessionId, sessionId), isNull(sessionTokens.revokedAt)))
+    // Exclude expired ones: short-lived run tokens (ADR 0011) would otherwise
+    // accumulate in the UI as dead rows a human has to mentally filter out.
+    .where(
+      and(
+        eq(sessionTokens.sessionId, sessionId),
+        isNull(sessionTokens.revokedAt),
+        or(isNull(sessionTokens.expiresAt), gt(sessionTokens.expiresAt, new Date())),
+      ),
+    )
     .orderBy(desc(sessionTokens.createdAt));
 
   return rows.map((r) => ({
@@ -392,3 +400,62 @@ export function trustOf(
   return 'untrusted';
 }
 
+
+/**
+ * A token for exactly one spawned run.
+ *
+ * Same session and participant as the runner that asked for it, short TTL, and
+ * revoked when the run ends. A spawned agent's config path is visible to the
+ * model and its transcript may be logged, so a long-lived token in that position
+ * is a standing liability. See ADR 0011.
+ */
+const RUN_TOKEN_TTL_MS = 30 * 60 * 1000;
+
+export async function issueRunToken(
+  db: Database,
+  opts: { sessionId: string; participantId: string; createdByUserId: string },
+): Promise<{ token: string; tokenId: string; expiresAt: string } | null> {
+  if (!opts.createdByUserId) return null;
+
+  const token = generateToken();
+  const expiresAt = new Date(Date.now() + RUN_TOKEN_TTL_MS);
+
+  const [row] = await db
+    .insert(sessionTokens)
+    .values({
+      sessionId: opts.sessionId,
+      participantId: opts.participantId,
+      tokenHash: hashToken(token),
+      label: 'spawned run',
+      createdByUserId: opts.createdByUserId,
+      expiresAt,
+    })
+    .returning({ id: sessionTokens.id });
+
+  return { token, tokenId: row!.id, expiresAt: expiresAt.toISOString() };
+}
+
+/**
+ * Revoke a token belonging to a specific participant.
+ *
+ * Scoped to the participant, not just the session: holding one agent's runner
+ * credential must not let you revoke another agent's access.
+ */
+export async function revokeOwnToken(
+  db: Database,
+  opts: { sessionId: string; participantId: string; tokenId: string },
+): Promise<boolean> {
+  const updated = await db
+    .update(sessionTokens)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(sessionTokens.id, opts.tokenId),
+        eq(sessionTokens.sessionId, opts.sessionId),
+        eq(sessionTokens.participantId, opts.participantId),
+        isNull(sessionTokens.revokedAt),
+      ),
+    )
+    .returning({ id: sessionTokens.id });
+  return updated.length > 0;
+}

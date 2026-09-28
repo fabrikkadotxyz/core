@@ -57,6 +57,13 @@ pnpm acceptance    # every milestone's check, in order
 git commit -m "M<N>: ..." && git tag m<N>
 ```
 
+Some checks are gated behind an env var because they cost a real model call.
+Run them before tagging a milestone that touches their area:
+
+```bash
+FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m5.mjs   # spawns an actual claude -p
+```
+
 Run **every** existing acceptance check before committing a milestone, not just the current one.
 
 `docs/roadmap.md` also marks one hard ordering gate: **M6 (safety rails) must land before a second human is ever put in a session with a spawn-enabled agent.** See `docs/security.md`.

@@ -8,9 +8,21 @@ importers:
 
   .:
     devDependencies:
+      '@hono/node-server':
+        specifier: ^1.19.17
+        version: 1.19.17(hono@4.13.9)
       '@modelcontextprotocol/client':
         specifier: 2.1.0
         version: 2.1.0
+      '@modelcontextprotocol/hono':
+        specifier: 2.0.1
+        version: 2.0.1(@modelcontextprotocol/server@2.1.0)(hono@4.13.9)
+      '@modelcontextprotocol/server':
+        specifier: 2.1.0
+        version: 2.1.0
+      hono:
+        specifier: ^4.13.9
+        version: 4.13.9
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
@@ -20,6 +32,9 @@ importers:
       ws:
         specifier: ^8.21.3
         version: 8.21.3
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
 
   apps/server:
     dependencies:

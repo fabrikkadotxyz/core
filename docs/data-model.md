@@ -258,22 +258,41 @@ Context is **not** over-normalized. Facts and decisions are lists of text with t
 mcp_servers                               -- a user's own external connection
   id              uuid pk
   owner_id        uuid -> users.id not null
-  name            text not null
-  transport       text not null          -- http | stdio
-  configuration   jsonb not null         -- credentials encrypted at rest
+  slug            text not null           -- the integration: "github", "sentry"
+  label           text not null
+  url             text not null           -- streamable HTTP only
+  sealed_credential text                  -- AES-256-GCM; never returned by any API
+  created_at      timestamptz not null
+  unique (owner_id, slug)
 
 session_mcp_servers
-  session_id      uuid -> sessions.id
-  mcp_server_id   uuid -> mcp_servers.id
+  session_id       uuid -> sessions.id
+  mcp_server_id    uuid -> mcp_servers.id
   added_by_user_id uuid -> users.id not null
   primary key (session_id, mcp_server_id)
 
 session_mcp_tool_grants
   session_id      uuid -> sessions.id
-  mcp_server_id   uuid -> mcp_servers.id
+  server_slug     text not null           -- the integration, NOT a specific row
   tool_name       text not null
   allowed         boolean not null default false
-  primary key (session_id, mcp_server_id, tool_name)
+  primary key (session_id, server_slug, tool_name)
 ```
+
+**There is no `transport` column: HTTP only.** A command-launched stdio server
+would mean this server executing arbitrary commands from a database row. Local
+servers belong to the bridge, on the user's own machine. See
+[ADR 0014](decisions/0014-aggregation-is-http-only-and-credentials-are-encrypted.md).
+
+**`sealed_credential` is encrypted, not hashed.** Unlike a session token, an
+upstream credential has to be recoverable because the server presents it. Sealed
+with AES-256-GCM under `FABRIKKA_ENCRYPTION_KEY`; without that key configured,
+attaching a credentialed server **fails** rather than storing plaintext.
+
+**Grants are keyed by `server_slug`, not `mcp_server_id`** — a correction to the
+shape sketched at M0. Fede and Alice each attach their own GitHub with their own
+token: two rows, one integration. What the *session* permits is a property of the
+session, not of whose token is behind it. Keying by row would mean re-granting per
+member, and a session where Alice can merge because nobody denied it on her row.
 
 Credentials belong to a **user**, not a session. A tool call routes to the *calling participant's* credential; a server a participant hasn't attached is absent from their tool list entirely. Grants are **tool-level and default-deny** — server-level granularity cannot express "GitHub read but not merge", which is the actual requirement. See `docs/security.md`.

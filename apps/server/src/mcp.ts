@@ -10,12 +10,14 @@
  * The contract here is consumed by software we do not control. Change it with
  * the care that implies.
  */
-import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
+import type { StandardSchemaWithJSON } from '@modelcontextprotocol/server';
+import { createMcpHandler, fromJsonSchema, McpServer } from '@modelcontextprotocol/server';
 import { createMcpHonoApp } from '@modelcontextprotocol/hono';
 import { z } from 'zod';
 import type { Database } from '@fabrikka/db';
 import type { Mention, TrustTier } from '@fabrikka/types';
 import { resolveSessionToken, trustOf, type TokenActor } from './agents.ts';
+import { callAggregatedTool, toolsForParticipant } from './aggregation.ts';
 import { publish } from './bus.ts';
 import { deliverMentions } from './delivery.ts';
 import { renderMentions } from './mentions.ts';
@@ -60,14 +62,17 @@ export function createMcpApp(opts: {
    * so all state lives in Postgres and the endpoint scales with no session
    * affinity. The actor comes from `authInfo`, resolved before we get here.
    */
-  const handler = createMcpHandler((ctx) => {
+  const handler = createMcpHandler(async (ctx) => {
     const actor = ctx.authInfo?.extra?.actor as TokenActor | undefined;
     if (!actor) {
       // Unreachable: the route below refuses the request before constructing a
       // server. Guarding anyway so a future refactor fails loudly, not silently.
       throw new Error('MCP server constructed without an authenticated actor');
     }
-    return buildServer(db, actor, opts.publicUrl);
+
+    const server = buildServer(db, actor, opts.publicUrl);
+    await registerAggregatedTools(db, server, actor);
+    return server;
   });
 
   app.all('/mcp/o/:owner/s/:session', async (c) => {
@@ -486,4 +491,62 @@ function guessContentType(name: string): string {
     js: 'text/javascript',
   };
   return types[ext] ?? 'text/plain';
+}
+
+/* -------------------------------------------------------------------------- */
+/* Aggregated tools                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Add the external tools this participant may use.
+ *
+ * Built per request rather than cached, because the answer depends on who is
+ * asking and on grants that may have changed a second ago. A participant who has
+ * attached nothing gets nothing added, and cannot tell that anyone else has.
+ *
+ * See ADR 0004 and ADR 0014.
+ */
+async function registerAggregatedTools(
+  db: Database,
+  server: McpServer,
+  actor: TokenActor,
+): Promise<void> {
+  let tools: Awaited<ReturnType<typeof toolsForParticipant>>;
+  try {
+    tools = await toolsForParticipant(db, actor.sessionId, actor.participantId);
+  } catch (err) {
+    // Aggregation failing must never take the session's own tools down with it.
+    console.error('[mcp] aggregation failed:', (err as Error).message);
+    return;
+  }
+
+  for (const tool of tools) {
+    // Explicit type arguments: registerTool's JSON-schema overload infers
+    // OutputArgs first, and with no outputSchema to infer from it falls through
+    // to the Zod-shape overload and rejects a StandardSchema.
+    server.registerTool<StandardSchemaWithJSON, StandardSchemaWithJSON>(
+      tool.name,
+      {
+        title: tool.name,
+        description:
+          (tool.description ?? `${tool.upstreamName} on ${tool.slug}`) +
+          `\n\n(via ${tool.slug}, using your own credential)`,
+        // Forwarded as-is: re-deriving a schema would drift from upstream.
+        inputSchema: fromJsonSchema(tool.inputSchema as never),
+      },
+      // `unknown` because the schema came from upstream at runtime: we forward
+      // whatever the model sent and let the upstream server validate it, which is
+      // the only party that actually knows the contract.
+      async (args: unknown) => {
+        const result = await callAggregatedTool(db, {
+          sessionId: actor.sessionId,
+          participantId: actor.participantId,
+          toolName: tool.name,
+          args: (args as Record<string, unknown>) ?? {},
+        });
+        if (!result.ok) throw new Error(result.error);
+        return { content: result.content as { type: 'text'; text: string }[] };
+      },
+    );
+  }
 }

@@ -46,3 +46,4 @@ What we rejected and why.
 | [0011](0011-spawning-is-local-and-opt-in.md) | Spawning happens on the user's machine, and running the runner is the consent | Accepted |
 | [0012](0012-halt-is-server-side-termination-is-cooperative.md) | Halting is server-side; terminating a run is cooperative | Accepted |
 | [0013](0013-context-is-append-only-with-explicit-removal.md) | Session context is append-first, and artifacts are content-addressed | Accepted |
+| [0014](0014-aggregation-is-http-only-and-credentials-are-encrypted.md) | Aggregated servers are HTTP-only, and credentials are encrypted or refused | Accepted |

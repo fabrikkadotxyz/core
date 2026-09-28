@@ -12,7 +12,7 @@ import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { createClient } from '@fabrikka/db';
+import { createClient, isEncryptionConfigured } from '@fabrikka/db';
 import type {
   LoginBody,
   PostMessageBody,
@@ -35,6 +35,15 @@ import {
 import { publish, subscribe } from './bus.ts';
 import { createMcpApp } from './mcp.ts';
 import { broadcastAbort, onAbort, pauseState, setPaused } from './rails.ts';
+import {
+  attachServer,
+  detachServer,
+  discoverTools,
+  listGrants,
+  serversForUser,
+  setGrant,
+  slugsInSession,
+} from './aggregation.ts';
 import {
   createFileArtifact,
   createLinkArtifact,
@@ -403,7 +412,11 @@ sessionRoutes.get('/agents', async (c) => {
  */
 sessionRoutes.post('/agents', async (c) => {
   const s = await resolve(c);
-  if (!s || s.role !== 'owner') return c.notFound();
+  // ANY member may add their OWN agent. Agents are per-user (agents.owner_id),
+  // and the multi-participant story requires @claude-fede and @claude-alice to
+  // coexist — if only the session owner could add one, Alice could never bring
+  // an agent or, by ADR 0004, her own credentials.
+  if (!s) return c.notFound();
 
   type Body = { displayName?: string; provider?: string; label?: string };
   const body: Body = await c.req.json<Body>().catch(() => ({}));
@@ -438,12 +451,20 @@ sessionRoutes.post('/agents', async (c) => {
 
 sessionRoutes.patch('/agents/:sessionAgentId/trust', async (c) => {
   const s = await resolve(c);
-  if (!s || s.role !== 'owner') return c.notFound();
+  if (!s) return c.notFound();
 
   const { trustTier } = await c.req.json<{ trustTier?: string }>();
   if (trustTier !== 'owner_only' && trustTier !== 'session_trusted') {
     return c.json({ error: 'trustTier must be owner_only or session_trusted' }, 400);
   }
+
+  // Elevating an agent decides who may drive something that holds ITS OWNER's
+  // filesystem and tokens. That is the agent owner's call, not the session
+  // owner's — a session owner must not be able to open up someone else's agent.
+  const agents = await listSessionAgents(db, s.id);
+  const target = agents.find((a) => a.sessionAgentId === c.req.param('sessionAgentId'));
+  if (!target) return c.notFound();
+  if (target.ownerUserId !== c.get('user').id) return c.notFound();
 
   const done = await setAgentTrustTier(db, s.id, c.req.param('sessionAgentId'), trustTier);
   if (!done) return c.notFound();
@@ -550,6 +571,89 @@ sessionRoutes.patch('/context', async (c) => {
 
   publish(s.id, { type: 'context.updated', context: result.context });
   return c.json(result.context);
+});
+
+/* ---- integrations (MCP aggregation) ---- */
+
+/**
+ * What THIS member has attached, plus which integrations exist in the session.
+ *
+ * Deliberately two lists: you see your own credentials' servers, and you see that
+ * an integration exists so grants make sense — but never whose credential is
+ * behind someone else's.
+ */
+sessionRoutes.get('/integrations', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+
+  return c.json({
+    mine: await serversForUser(db, s.id, c.get('user').id),
+    inSession: await slugsInSession(db, s.id),
+    grants: await listGrants(db, s.id),
+    encryptionConfigured: isEncryptionConfigured(),
+  });
+});
+
+sessionRoutes.post('/integrations', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+
+  const body = await c.req.json<{
+    slug?: string;
+    label?: string;
+    url?: string;
+    credential?: string;
+  }>();
+  if (!body.slug || !body.url) {
+    return c.json({ error: 'slug and url are required' }, 400);
+  }
+
+  const result = await attachServer(db, {
+    sessionId: s.id,
+    userId: c.get('user').id,
+    slug: body.slug,
+    label: body.label,
+    url: body.url,
+    credential: body.credential,
+  });
+  if (!result.ok) return c.json({ error: result.error }, 400);
+
+  return c.json(result.server, 201);
+});
+
+sessionRoutes.delete('/integrations/:slug', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const done = await detachServer(db, s.id, c.get('user').id, c.req.param('slug'));
+  if (!done) return c.notFound();
+  return c.json({ ok: true });
+});
+
+/** Tools an integration offers, so an owner can choose what to permit. */
+sessionRoutes.get('/integrations/:slug/tools', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+
+  const mine = await serversForUser(db, s.id, c.get('user').id);
+  const server = mine.find((m) => m.slug === c.req.param('slug'));
+  if (!server) return c.notFound();
+
+  return c.json(await discoverTools(db, server.id));
+});
+
+/**
+ * Grant or revoke one tool for the whole session.
+ *
+ * Owner-only, and keyed by the integration's slug rather than by whose row it is:
+ * what the session permits is a property of the session (ADR 0014).
+ */
+sessionRoutes.put('/integrations/:slug/tools/:tool', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+
+  const { allowed } = await c.req.json<{ allowed?: boolean }>();
+  await setGrant(db, s.id, c.req.param('slug'), c.req.param('tool'), allowed === true);
+  return c.json({ ok: true });
 });
 
 /* ---- artifacts ---- */

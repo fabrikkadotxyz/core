@@ -132,6 +132,41 @@ What pausing does and does not guarantee, precisely
 
 Resuming clears the pause and starts a fresh budget window.
 
+## Integrations (MCP aggregation)
+
+A session can attach external MCP servers — GitHub, Sentry — and expose them to
+agents as `github__list_issues`. Three rules make this safe, and all three are
+enforced, not advisory:
+
+1. **Credentials are per-participant.** Each member attaches their own; a call
+   goes upstream with the *caller's* token, so external audit logs attribute
+   actions to the right person ([ADR 0004](decisions/0004-per-participant-credentials.md)).
+2. **Tools are default-deny.** Attaching an integration grants nothing until the
+   session owner permits specific tools. "GitHub read but not merge" is the actual
+   requirement, so grants are per tool, not per server.
+3. **HTTP servers only.** A command-launched stdio server would make this process
+   an arbitrary-command executor driven by database rows; local servers belong to
+   the bridge ([ADR 0014](decisions/0014-aggregation-is-http-only-and-credentials-are-encrypted.md)).
+
+### The encryption key
+
+Credentials are sealed with AES-256-GCM under `FABRIKKA_ENCRYPTION_KEY`:
+
+```bash
+openssl rand -base64 32
+```
+
+**Without it, attaching a credentialed integration is refused** — the feature is
+unavailable rather than storing tokens in plaintext.
+
+Losing the key makes stored credentials unrecoverable. That is the intended
+failure: re-attaching takes a minute, and a key that can be lost without
+consequence was not protecting anything. Back it up with the same care as the
+database, and separately from it.
+
+A credential is never returned by any API and never logged; the UI shows only
+whether one is set.
+
 ## Artifacts
 
 Uploaded files are stored on local disk — a self-hoster should not have to

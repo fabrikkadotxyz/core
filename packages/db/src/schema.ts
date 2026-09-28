@@ -4,7 +4,7 @@
  * Tables are introduced by the milestone that needs them (docs/roadmap.md).
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
- * M6 (safety rails) and M7 (artifacts).
+ * M6 (safety rails), M7 (artifacts) and M8 (MCP aggregation).
  */
 import {
   boolean,
@@ -428,3 +428,73 @@ export const sessionTurnBudget = pgTable('session_turn_budget', {
     .defaultNow(),
   agentTurnsUsed: integer('agent_turns_used').notNull().default(0),
 });
+
+/* -------------------------------------------------------------------------- */
+/* M8 — MCP aggregation                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A user's own connection to an external MCP server.
+ *
+ * HTTP only, deliberately: a command-launched stdio server would make this
+ * process an arbitrary-command executor driven by database rows. Local servers
+ * belong to the bridge, on the user's machine. See ADR 0014.
+ *
+ * `sealedCredential` is ENCRYPTED, not hashed — unlike a session token it has to
+ * be recoverable, because the server presents it upstream.
+ */
+export const mcpServers = pgTable(
+  'mcp_servers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The integration: "github", "sentry". Grants key on this, not on the row. */
+    slug: text('slug').notNull(),
+    label: text('label').notNull(),
+    url: text('url').notNull(),
+    /** AES-256-GCM. Never returned by any read API, never logged. */
+    sealedCredential: text('sealed_credential'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('mcp_servers_owner_slug').on(t.ownerId, t.slug)],
+);
+
+export const sessionMcpServers = pgTable(
+  'session_mcp_servers',
+  {
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    mcpServerId: uuid('mcp_server_id')
+      .notNull()
+      .references(() => mcpServers.id, { onDelete: 'cascade' }),
+    addedByUserId: uuid('added_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.mcpServerId] })],
+);
+
+/**
+ * What a session permits, per tool. Absent means DENIED.
+ *
+ * Keyed by the integration's slug rather than by whose row it is: two members
+ * each attach their own GitHub, but what the session allows is a property of the
+ * session. Keying by row would mean re-granting per member, and a session where
+ * one person can merge because nobody denied it on their row.
+ */
+export const sessionMcpToolGrants = pgTable(
+  'session_mcp_tool_grants',
+  {
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    serverSlug: text('server_slug').notNull(),
+    toolName: text('tool_name').notNull(),
+    allowed: boolean('allowed').notNull().default(false),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.serverSlug, t.toolName] })],
+);

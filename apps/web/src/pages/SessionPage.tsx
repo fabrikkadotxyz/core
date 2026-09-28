@@ -322,6 +322,7 @@ export function SessionPage() {
 
           {isOwner && <InvitesPanel ref_={ref} />}
 
+          <IntegrationsPanel ref_={ref} isOwner={isOwner} />
           <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
           <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} />
           {isOwner && <AgentsPanel ref_={ref} onChanged={reload} />}
@@ -897,6 +898,172 @@ function ArtifactsPanel({ ref_ }: { ref_: SessionRef }) {
             </li>
           ))}
         </ul>
+      )}
+    </Panel>
+  );
+}
+
+/**
+ * External MCP servers.
+ *
+ * Two lists on purpose: the integrations YOU have attached (with your own
+ * credential), and which integrations exist in the session so grants are
+ * comprehensible. You never see whose credential is behind someone else's —
+ * ADR 0004.
+ */
+function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boolean }) {
+  const [state, setState] = useState<Awaited<
+    ReturnType<typeof sessions.integrations>
+  > | null>(null);
+  const [slug, setSlug] = useState('');
+  const [url, setUrl] = useState('');
+  const [credential, setCredential] = useState('');
+  const [tools, setTools] = useState<Record<string, { name: string }[]>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    sessions.integrations(ref_).then(setState).catch(() => {});
+  }, [ref_]);
+
+  useEffect(load, [load]);
+
+  if (!state) return null;
+
+  const attach = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      await sessions.attachIntegration(ref_, {
+        slug: slug.trim(),
+        url: url.trim(),
+        credential: credential.trim() || undefined,
+      });
+      setSlug('');
+      setUrl('');
+      setCredential('');
+      load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const granted = (s: string, t: string) =>
+    state.grants.some((g) => g.serverSlug === s && g.toolName === t && g.allowed);
+
+  return (
+    <Panel title="Integrations">
+      {!state.encryptionConfigured && (
+        <p className="hint danger-hint">
+          <code>FABRIKKA_ENCRYPTION_KEY</code> is not set, so credentials cannot be
+          stored. Attaching one will be refused rather than saved in plaintext.
+        </p>
+      )}
+
+      <form className="stack" onSubmit={attach}>
+        <input
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          placeholder="slug, e.g. github"
+          aria-label="Integration slug"
+        />
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://…/mcp"
+          aria-label="Server URL"
+        />
+        <input
+          type="password"
+          value={credential}
+          onChange={(e) => setCredential(e.target.value)}
+          placeholder="bearer token (yours)"
+          aria-label="Credential"
+          autoComplete="off"
+        />
+        <button type="submit" disabled={!slug.trim() || !url.trim()}>
+          Attach
+        </button>
+      </form>
+
+      {error && <p className="error small">{error}</p>}
+
+      {state.mine.length > 0 && (
+        <>
+          <h3 className="subhead">Yours</h3>
+          <ul className="participants">
+            {state.mine.map((m) => (
+              <li key={m.slug}>
+                <span>{m.label}</span>
+                <span className="muted small">
+                  {m.hasCredential ? 'credential set' : 'no credential'}
+                </span>
+                <button
+                  className="link small"
+                  onClick={async () => {
+                    const list = await sessions.integrationTools(ref_, m.slug);
+                    setTools((t) => ({ ...t, [m.slug]: list }));
+                  }}
+                >
+                  tools
+                </button>
+                <button
+                  className="link small"
+                  onClick={async () => {
+                    await sessions.detachIntegration(ref_, m.slug);
+                    load();
+                  }}
+                >
+                  detach
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {Object.entries(tools).map(([s, list]) => (
+        <div key={s}>
+          <h3 className="subhead">{s} — what this session allows</h3>
+          <p className="hint">
+            Nothing is permitted until you allow it, and a grant applies to everyone
+            in the session — each person still uses their own credential.
+          </p>
+          <ul className="participants">
+            {list.map((t) => (
+              <li key={t.name}>
+                <label className="grant">
+                  <input
+                    type="checkbox"
+                    checked={granted(s, t.name)}
+                    disabled={!isOwner}
+                    onChange={async (e) => {
+                      await sessions.setToolGrant(ref_, s, t.name, e.target.checked);
+                      load();
+                    }}
+                  />
+                  <span className="small">{t.name}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          {!isOwner && <p className="hint">Only the session owner can change grants.</p>}
+        </div>
+      ))}
+
+      {state.inSession.length > 0 && (
+        <>
+          <h3 className="subhead">In this session</h3>
+          <ul className="participants">
+            {state.inSession.map((i) => (
+              <li key={i.slug}>
+                <span className="small">{i.label}</span>
+                <span className="muted small">
+                  attached by {i.attachedBy} member{i.attachedBy === 1 ? '' : 's'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </Panel>
   );

@@ -681,3 +681,17 @@ aside input[type='file'] {
   font-size: 0.72rem;
   padding: 0.3rem;
 }
+
+.grant {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-direction: row;
+  font-size: 0.75rem;
+  color: var(--text);
+}
+
+.grant input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+}

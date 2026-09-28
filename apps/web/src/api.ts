@@ -168,6 +168,29 @@ export const sessions = {
     },
   ) => call<SessionContext>(`${base(ref)}/context`, { method: 'PATCH', body: update }),
 
+  integrations: (ref: SessionRef) =>
+    call<{
+      mine: { id: string; slug: string; label: string; url: string; hasCredential: boolean }[];
+      inSession: { slug: string; label: string; attachedBy: number }[];
+      grants: { serverSlug: string; toolName: string; allowed: boolean }[];
+      encryptionConfigured: boolean;
+    }>(`${base(ref)}/integrations`),
+  attachIntegration: (
+    ref: SessionRef,
+    body: { slug: string; label?: string; url: string; credential?: string },
+  ) => call<unknown>(`${base(ref)}/integrations`, { method: 'POST', body }),
+  detachIntegration: (ref: SessionRef, slug: string) =>
+    call<{ ok: true }>(`${base(ref)}/integrations/${slug}`, { method: 'DELETE' }),
+  integrationTools: (ref: SessionRef, slug: string) =>
+    call<{ name: string; description?: string }[]>(
+      `${base(ref)}/integrations/${slug}/tools`,
+    ),
+  setToolGrant: (ref: SessionRef, slug: string, tool: string, allowed: boolean) =>
+    call<{ ok: true }>(`${base(ref)}/integrations/${slug}/tools/${tool}`, {
+      method: 'PUT',
+      body: { allowed },
+    }),
+
   artifacts: (ref: SessionRef) => call<Artifact[]>(`${base(ref)}/artifacts`),
   addLink: (ref: SessionRef, name: string, url: string) =>
     call<Artifact>(`${base(ref)}/artifacts`, { method: 'POST', body: { name, url } }),

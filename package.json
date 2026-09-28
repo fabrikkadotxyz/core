@@ -21,9 +21,14 @@
     "test": "pnpm -r --if-present test"
   },
   "devDependencies": {
+    "@hono/node-server": "^1.19.17",
     "@modelcontextprotocol/client": "2.1.0",
+    "@modelcontextprotocol/hono": "2.0.1",
+    "@modelcontextprotocol/server": "2.1.0",
+    "hono": "^4.13.9",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "ws": "^8.21.3"
+    "ws": "^8.21.3",
+    "zod": "^4.6.5"
   }
 }

@@ -237,9 +237,28 @@ artifacts — and one correctness fix that matters more than either.
 
 ## M8 — MCP aggregation (per-participant credentials)
 
-Members attach their own external MCP servers. Session endpoint proxies them with namespaced names (`github__create_issue`). Calls route to the **calling participant's** credential. Unattached servers are absent from that participant's tool list. Tool-level, default-deny grants. Read-only to start.
+Members attach their own external MCP servers; the session endpoint proxies them
+with namespaced names (`github__create_issue`), routing every call to the
+**calling participant's** credential.
 
-**Test:** Fede attaches GitHub, Alice does not — Fede's agent lists GitHub tools, Alice's does not. Alice attaches her own; her calls appear in GitHub's audit log as **Alice**. Deny `create_issue` and confirm it vanishes from the tool list.
+- **HTTP servers only.** A command-launched stdio server would make this server an
+  arbitrary-command executor driven by database rows; local servers belong to the
+  bridge ([ADR 0014](decisions/0014-aggregation-is-http-only-and-credentials-are-encrypted.md)).
+- **Credentials are encrypted at rest** under an operator key, and attaching one
+  **fails** if no key is configured — unavailable beats insecure.
+- **Grants are per session, per tool, default deny**, keyed by the integration's
+  slug rather than by whose row it is.
+- A server a participant has not attached is **absent** from their tool list, not
+  present-and-denied, which would leak the session's topology.
+
+**Test:**
+1. Set `FABRIKKA_ENCRYPTION_KEY`, attach an integration with a token.
+2. Grant one tool. It appears namespaced in the agent's tool list; the ungranted
+   ones do not.
+3. Alice, who has not attached it, does not see the tools at all.
+4. Alice attaches her own credential; her calls go upstream with **her** token.
+5. Revoke the grant — the tool disappears from the list.
+6. Unset the key and try to attach: refused, not stored in plaintext.
 
 ## M9 — Tauri desktop
 

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Connect to Fabrikka</title>
+    <style>
+      :root {
+        --bg: #0e0f13;
+        --panel: #16181f;
+        --border: #262a35;
+        --text: #e6e8ee;
+        --muted: #8b91a3;
+        --accent: #7c9cff;
+        color-scheme: dark;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-content: center;
+        background: var(--bg);
+        color: var(--text);
+        padding: 1.5rem;
+      }
+      form { width: 340px; display: flex; flex-direction: column; gap: 0.75rem; }
+      h1 { margin: 0; font-size: 1.05rem; }
+      p { margin: 0; font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+      input, button {
+        font: inherit;
+        padding: 0.55rem 0.7rem;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+      }
+      button {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #0b0d12;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.45; cursor: default; }
+      .error { color: #f87171; font-size: 0.8rem; }
+    </style>
+  </head>
+  <body>
+    <form id="form">
+      <h1>Connect to Fabrikka</h1>
+      <p>
+        Where is your Fabrikka server? Use the address you'd open in a browser.
+        It is remembered for next time.
+      </p>
+      <input
+        id="url"
+        type="url"
+        value="http://localhost:9090"
+        placeholder="https://fabrikka.example.com"
+        required
+      />
+      <button type="submit" id="go">Connect</button>
+      <p class="error" id="error"></p>
+    </form>
+
+    <script>
+      const form = document.getElementById('form');
+      const urlInput = document.getElementById('url');
+      const button = document.getElementById('go');
+      const error = document.getElementById('error');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        error.textContent = '';
+        button.disabled = true;
+        try {
+          // withGlobalTauri means no npm dependency for a page this small.
+          await window.__TAURI__.core.invoke('connect', { url: urlInput.value });
+        } catch (err) {
+          error.textContent = String(err);
+          button.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

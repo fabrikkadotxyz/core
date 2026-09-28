@@ -8,7 +8,11 @@
  * never a 403. A 403 distinguishes "exists but not yours" from "doesn't exist",
  * which leaks private session ids. See docs/security.md.
  */
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { relative, resolve as resolvePath } from 'node:path';
 import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -1146,6 +1150,35 @@ async function resolve(c: {
   return resolveSessionForUser(db, owner, session, c.get('user').id);
 }
 
+
+/**
+ * Serve the built web app, when there is one.
+ *
+ * In development Vite serves the UI on :5173 and proxies /api here, so this does
+ * nothing. In production — and for the desktop shell, which points at a single
+ * URL — the server has to serve both, or the app is an API with no interface.
+ *
+ * Registered last so it never shadows /api, /mcp or /bridge.
+ */
+const WEB_DIST = resolvePath(import.meta.dirname, '../../web/dist');
+
+if (existsSync(WEB_DIST)) {
+  app.use('/assets/*', serveStatic({ root: relative(process.cwd(), WEB_DIST) }));
+
+  // SPA fallback: every non-API path returns index.html so client-side routes
+  // like /o/fede/s/demo work on a hard refresh.
+  app.get('*', async (c) => {
+    if (c.req.path.startsWith('/api') || c.req.path.startsWith('/mcp')) {
+      return c.notFound();
+    }
+    const html = await readFile(resolvePath(WEB_DIST, 'index.html'), 'utf8');
+    return c.html(html);
+  });
+
+  console.log(`serving the web app from ${WEB_DIST}`);
+} else {
+  console.log('no web build found — run `pnpm --filter @fabrikka/web build` to serve the UI');
+}
 
 const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
   console.log(`fabrikka server on http://localhost:${info.port}`);

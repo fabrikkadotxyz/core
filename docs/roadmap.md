@@ -262,9 +262,24 @@ with namespaced names (`github__create_issue`), routing every call to the
 
 ## M9 — Tauri desktop
 
-Wrap the web app with Tauri 2.11.5; build and sign for macOS / Windows / Linux. No new product surface — this is packaging. Sequenced last deliberately: at MVP a desktop build wraps the same web app, and the things desktop uniquely enables (local MCPs, local files, local-only sessions) are Phase II.
+A deliberately thin shell around the same web app. Sequenced last because at MVP
+it adds no product surface, and the things desktop uniquely enables — local MCP
+servers, local files, local-only sessions — are Phase II.
 
-**Test:** Install the macOS build, sign in, join a session, confirm realtime and MCP behave identically to the browser.
+- Tauri 2 shell that remembers which server to talk to (`FABRIKKA_URL` wins, else
+  a first-run page, else a saved config file). Only `http(s)` is accepted.
+- **The server now serves the built web app**, so one origin carries the UI, the
+  API, the MCP endpoint and the bridge. Without that the desktop app points at an
+  API with no interface — which is exactly how this gap was found.
+- macOS `.app` built and verified here. Windows and Linux targets are configured
+  but **not built or signed on this machine**; that needs CI on each platform.
+
+**Test:**
+1. `pnpm --filter @fabrikka/web build`, then open `http://localhost:9090` — the
+   UI is served by the server itself, not Vite.
+2. Launch `Fabrikka.app`. First run asks for the server; enter it once.
+3. Sign in, open a session, confirm realtime messaging behaves as in the browser.
+4. Relaunch — it goes straight to the session, remembering the server.
 
 ---
 

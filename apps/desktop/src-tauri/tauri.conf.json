@@ -1,0 +1,34 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Fabrikka",
+  "version": "0.0.0",
+  "identifier": "dev.fabrikka.app",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null,
+      "capabilities": [
+        "default"
+      ]
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg",
+      "deb",
+      "appimage",
+      "msi"
+    ],
+    "icon": [
+      "icons/icon.png"
+    ],
+    "shortDescription": "A private session layer for humans and AI agents",
+    "longDescription": "Fabrikka is a private-by-default session layer where humans and AI agents work on the same problem."
+  }
+}

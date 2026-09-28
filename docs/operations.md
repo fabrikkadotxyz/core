@@ -183,6 +183,29 @@ do not collect that garbage, and say so rather than letting you discover it.
 
 Back up `ARTIFACT_DIR` alongside the database — the rows are useless without it.
 
+## Desktop app
+
+A thin Tauri shell around the same web app. It adds no product surface — the
+things desktop uniquely enables (local MCP servers, local files, local-only
+sessions) are Phase II.
+
+```bash
+pnpm --filter @fabrikka/web build     # the server serves this
+pnpm --filter @fabrikka/desktop build
+```
+
+The bundle lands in `apps/desktop/src-tauri/target/release/bundle/`. On first run
+it asks for the server URL and remembers it; `FABRIKKA_URL` overrides, so a
+managed deployment can pin it.
+
+**Serving the UI is the server's job in production.** `pnpm dev` uses Vite on
+:5173, but a deployed instance (and the desktop app) needs one origin for the UI,
+the API, the MCP endpoint and the bridge. The server serves `apps/web/dist` when
+it exists, with an SPA fallback so deep links survive a refresh.
+
+Windows and Linux targets are configured but must be built on their own
+platforms; there is no cross-compilation here, and nothing is code-signed yet.
+
 ## Backups
 
 All durable state is in Postgres. Artifacts (M7) add object storage.

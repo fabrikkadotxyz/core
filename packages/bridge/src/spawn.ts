@@ -17,6 +17,14 @@ import { join } from 'node:path';
 
 export type Provider = 'claude-code' | 'codex' | string;
 
+/**
+ * The name the session endpoint is registered under inside a Codex run.
+ *
+ * Deliberately not plain "fabrikka": `-c` merges into the user's existing
+ * config, so a name they might already have used would corrupt their entry.
+ */
+const CODEX_MCP_KEY = 'fabrikka_session';
+
 export interface SpawnRequest {
   provider: Provider;
   /** Working directory the run executes in. Chosen by the user, not the server. */
@@ -193,18 +201,26 @@ async function runCodex(req: SpawnRequest): Promise<SpawnResult> {
     ];
 
     if (req.mcp) {
+      // A distinct key, because `-c` MERGES into whatever the user already has
+      // under that name. If they have a stdio `mcp_servers.fabrikka` (adding the
+      // bridge to Codex by hand does exactly that), adding a `url` to it fails the
+      // whole run with "url is not supported for stdio" — before the model starts,
+      // with an error that points at us rather than at the collision.
       options.push(
         '-c',
-        `mcp_servers.fabrikka.url="${req.mcp.url}"`,
+        `mcp_servers.${CODEX_MCP_KEY}.url="${req.mcp.url}"`,
         '-c',
-        'mcp_servers.fabrikka.bearer_token_env_var="FABRIKKA_RUN_TOKEN"',
+        `mcp_servers.${CODEX_MCP_KEY}.bearer_token_env_var="FABRIKKA_RUN_TOKEN"`,
       );
     }
 
     const prompt = `${req.systemPreamble}\n\n${req.prompt}`;
-    const args = req.resumeId
-      ? ['exec', 'resume', ...options, req.resumeId, prompt]
-      : ['exec', ...options, prompt];
+
+    // No resume for Codex: `codex exec resume` REJECTS --approve-for-me
+    // ("unexpected argument"), so a resumed run would stall on the first approval
+    // with nobody to answer it. Every Codex run is therefore a fresh thread. The
+    // session timeline is the continuity, which is the point of the product.
+    const args = ['exec', ...options, prompt];
 
     const out = await execute('codex', args, req, {
       // Passed in the environment, not on the command line or in a file: it is
@@ -240,6 +256,7 @@ async function runCodex(req: SpawnRequest): Promise<SpawnResult> {
     return {
       ok: true,
       text: (finalText || fallback.join('\n')).trim(),
+      // Reported for logging, but never fed back in: see the resume note above.
       resumeId: threadId,
     };
   } finally {

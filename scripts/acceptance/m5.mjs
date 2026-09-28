@@ -397,8 +397,10 @@ if (!DEEP) {
       await new Promise((r) => setTimeout(r, 2000));
     }
     check(/run done/.test(clog), 'the Codex run completed');
+    // `fabrikka_session`, not `fabrikka`: -c merges into the user's own config,
+    // so a plain name would corrupt an entry they already have.
     check(
-      /fabrikka\/post_message/.test(clog),
+      /fabrikka_session\/post_message/.test(clog),
       'CODEX REACHED THE SESSION ENDPOINT — -c mcp_servers injection works',
     );
 

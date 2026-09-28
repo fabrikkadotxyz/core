@@ -97,6 +97,17 @@ The Codex desktop app bundles its CLI outside `PATH`, at
 `~/.codex/plugins/.plugin-appserver/codex-cli/bin/codex`. The runner finds it
 there automatically; `CODEX_BIN` overrides the choice.
 
+Two Codex-specific details, both found by running it:
+
+- The session is registered inside a run as **`fabrikka_session`**, not
+  `fabrikka`. `-c` *merges* into your existing config, so if you have added the
+  bridge to Codex by hand as `mcp_servers.fabrikka` (a stdio entry), injecting a
+  `url` into it fails the whole run with *"url is not supported for stdio"* before
+  the model even starts.
+- **Codex runs do not resume.** `codex exec resume` rejects `--approve-for-me`, so
+  a resumed run would stall on the first approval with nobody to answer. Each
+  mention starts a fresh thread; the session timeline is the continuity.
+
 If an agent posts nothing, the runner posts the final text for it. A run is never
 silent, because from the browser silence is indistinguishable from a failure.
 

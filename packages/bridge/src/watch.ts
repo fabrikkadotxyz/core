@@ -126,7 +126,8 @@ export async function watch(opts: WatchOptions): Promise<void> {
       // Codex via -c overrides. The relay below stays as the fallback for a run
       // that answers without posting.
       mcp: runToken ? { url: config.mcpUrl, token: runToken.token } : undefined,
-      resumeId,
+      // Codex ignores this (it cannot resume with auto-approval); Claude uses it.
+      resumeId: opts.provider === 'codex' ? undefined : resumeId,
       allowedTools: opts.allowedTools,
       onLog: (line) => log(`  ${line}`),
     });

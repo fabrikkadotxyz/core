@@ -143,9 +143,10 @@ const created = await req(`${baseA}/agents`, {
 });
 check(created.status === 201, 'agent created in session A');
 check(!!created.json.token, 'token returned once at creation');
+// Setup instructions moved under `setup` at M5, when they became per-provider.
 check(
-  created.json.claudeCommand.includes('claude mcp add --transport http') &&
-    created.json.claudeCommand.includes(created.json.token),
+  created.json.setup.remoteCommand.includes('claude mcp add --transport http') &&
+    created.json.setup.remoteCommand.includes(created.json.token),
   'a ready-to-paste `claude mcp add` command is returned',
 );
 check(

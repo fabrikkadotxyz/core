@@ -147,26 +147,40 @@ export interface AgentSummary {
 }
 
 /**
- * Returned once, at creation. The token is never recoverable afterwards.
+ * How an agent can be attached.
  *
- * Carries both ways to connect: lane A (pull, any MCP client) and lane B
- * (real-time push into a running Claude Code session). See docs/protocol.md.
+ * - `bridge` — real-time push into a session that is already running. Claude Code
+ *   only: `claude/channel` is proprietary and stdio-only.
+ * - `runner`  — spawn a headless run per mention. Claude Code and Codex.
+ * - `remote`  — plain MCP client, pull-only. Anything that speaks MCP.
  */
+export type SetupLane = 'bridge' | 'runner' | 'remote';
+
+/**
+ * Setup instructions, generated per provider.
+ *
+ * `lanes` lists only what actually works for this agent's provider, best first.
+ * Showing a lane a provider cannot use is worse than showing nothing: it sends
+ * someone to debug a setup that was never going to work.
+ */
+export interface AgentSetupView {
+  lanes: SetupLane[];
+  /** Pull-only. Phrased for this provider's own CLI. */
+  remoteCommand: string;
+  /** `.mcp.json` for the agent's project directory. Null unless `bridge`. */
+  bridgeMcpJson: string | null;
+  /** Starts the agent with the channel opted in. Null unless `bridge`. */
+  bridgeCommand: string | null;
+  /** Starts a runner. Null unless `runner`. Running it is the consent (ADR 0011). */
+  runnerCommand: string | null;
+}
+
+/** Returned once, at creation. The token is never recoverable afterwards. */
 export interface CreatedAgentView {
   agent: AgentSummary;
   token: string;
   mcpUrl: string;
-  /** Lane A: ready-to-paste `claude mcp add` command. */
-  claudeCommand: string;
-  /** Lane B: `.mcp.json` contents for the agent's project directory. */
-  bridgeMcpJson: string;
-  /** Lane B: the command that starts Claude Code with the channel opted in. */
-  bridgeCommand: string;
-  /**
-   * Lane B, unattended: starts a runner that spawns a headless agent per mention.
-   * Running it is the consent for that (ADR 0011).
-   */
-  runnerCommand: string;
+  setup: AgentSetupView;
 }
 
 export interface SessionContext {

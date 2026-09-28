@@ -431,6 +431,66 @@ async function findCodex() {
   return existsSync(bundled) ? bundled : null;
 }
 
+/* ------------- 6b. setup instructions match the provider */
+
+for (const [provider, expected] of [
+  ['claude-code', ['bridge', 'runner', 'remote']],
+  ['codex', ['runner', 'remote']],
+  ['other', ['remote']],
+]) {
+  const made = (
+    await req(`${base}/agents`, {
+      method: 'POST',
+      body: { displayName: `setup-${provider}-${stamp}`.slice(0, 40), provider },
+      jar: fede,
+    })
+  ).json;
+
+  const setup = made.setup;
+  check(
+    JSON.stringify(setup.lanes) === JSON.stringify(expected),
+    `${provider}: offered lanes are ${expected.join(', ')}`,
+  );
+  check(
+    (setup.bridgeMcpJson !== null) === expected.includes('bridge'),
+    `${provider}: a channel setup is ${expected.includes('bridge') ? 'offered' : 'NOT offered'}`,
+  );
+  check(
+    (setup.runnerCommand !== null) === expected.includes('runner'),
+    `${provider}: a runner command is ${expected.includes('runner') ? 'offered' : 'NOT offered'}`,
+  );
+}
+
+const codexSetup = (
+  await req(`${base}/agents`, {
+    method: 'POST',
+    body: { displayName: `cxsetup-${stamp}`.slice(0, 40), provider: 'codex' },
+    jar: fede,
+  })
+).json.setup;
+check(
+  codexSetup.remoteCommand.includes('codex mcp add') &&
+    !codexSetup.remoteCommand.includes('claude mcp add'),
+  'A CODEX AGENT GETS CODEX INSTRUCTIONS, never a claude command',
+);
+check(
+  codexSetup.runnerCommand.includes('--provider codex'),
+  "the codex runner command names its provider",
+);
+
+const otherSetup = (
+  await req(`${base}/agents`, {
+    method: 'POST',
+    body: { displayName: `otsetup-${stamp}`.slice(0, 40), provider: 'cursor' },
+    jar: fede,
+  })
+).json.setup;
+check(
+  !otherSetup.remoteCommand.includes('claude mcp add') &&
+    !otherSetup.remoteCommand.includes('codex mcp add'),
+  'an unknown provider gets the endpoint, not another CLI\'s command',
+);
+
 /* --------------------------- 7. presence returns to offline */
 
 runner.ws.close();

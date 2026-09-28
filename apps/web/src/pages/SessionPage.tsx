@@ -5,6 +5,7 @@ import type {
   CreatedAgentView,
   InviteSummary,
   ServerEvent,
+  SetupLane,
   Message,
   Participant,
   SessionView,
@@ -523,13 +524,19 @@ function AgentsPanel({
 }
 
 /**
- * The two ways to connect, with the trade-off stated rather than buried.
+ * How to attach this agent.
  *
- * Lane A works with any MCP client but is pull-only — an idle agent never wakes.
- * Lane B pushes into a session that is already running, which is what makes the
- * product feel alive, at the cost of a local process and a research-preview flag.
- * See ARCHITECTURE.md.
+ * Only the lanes its provider can actually use are shown, best first — a Codex
+ * agent must never be offered a Claude Code channel setup, because that setup
+ * cannot work and sends someone off to debug a dead end. The trade-off for each
+ * is stated rather than buried. See ARCHITECTURE.md.
  */
+const LANE_LABELS: Record<SetupLane, string> = {
+  bridge: 'Live session',
+  runner: 'While away',
+  remote: 'Any MCP client',
+};
+
 function AgentSetup({
   created,
   onError,
@@ -537,7 +544,8 @@ function AgentSetup({
   created: CreatedAgentView;
   onError: (msg: string) => void;
 }) {
-  const [lane, setLane] = useState<'bridge' | 'runner' | 'remote'>('bridge');
+  const { setup, agent } = created;
+  const [lane, setLane] = useState<SetupLane>(setup.lanes[0] ?? 'remote');
   const [copied, setCopied] = useState<string | null>(null);
 
   const copy = async (label: string, value: string) => {
@@ -549,88 +557,98 @@ function AgentSetup({
     }
   };
 
+  const block = (key: string, label: string, value: string) => (
+    <>
+      <code className="endpoint">{value}</code>
+      <button onClick={() => copy(key, value)}>
+        {copied === key ? 'Copied ✓' : label}
+      </button>
+    </>
+  );
+
   return (
     <div className="fresh-invite">
       <p className="hint">
         <strong>Copy this now — the token is shown only once.</strong>
       </p>
 
-      <div className="lane-tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={lane === 'bridge'}
-          className={lane === 'bridge' ? 'active' : undefined}
-          onClick={() => setLane('bridge')}
-        >
-          Live session
-        </button>
-        <button
-          role="tab"
-          aria-selected={lane === 'runner'}
-          className={lane === 'runner' ? 'active' : undefined}
-          onClick={() => setLane('runner')}
-        >
-          While away
-        </button>
-        <button
-          role="tab"
-          aria-selected={lane === 'remote'}
-          className={lane === 'remote' ? 'active' : undefined}
-          onClick={() => setLane('remote')}
-        >
-          Any MCP client
-        </button>
-      </div>
+      {setup.lanes.length > 1 && (
+        <div className="lane-tabs" role="tablist">
+          {setup.lanes.map((l) => (
+            <button
+              key={l}
+              role="tab"
+              aria-selected={lane === l}
+              className={lane === l ? 'active' : undefined}
+              onClick={() => setLane(l)}
+            >
+              {LANE_LABELS[l]}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {lane === 'runner' ? (
-        <>
-          <p className="hint">
-            Spawns a fresh headless agent for each mention, in whichever directory
-            you run this from. Use it when you're away from the terminal.
-          </p>
-          <code className="endpoint">{created.runnerCommand}</code>
-          <button onClick={() => copy('runner', created.runnerCommand)}>
-            {copied === 'runner' ? 'Copied ✓' : 'Copy command'}
-          </button>
-          <p className="hint danger-hint">
-            <strong>Runs start without permission prompts.</strong> Only mentions
-            from you can trigger them. The command prints what it will do before it
-            does anything — read it.
-          </p>
-        </>
-      ) : lane === 'bridge' ? (
+      {lane === 'bridge' && setup.bridgeMcpJson && setup.bridgeCommand && (
         <>
           <p className="hint">
             Pushes into a Claude Code session you already have open, with your repo
             loaded. Save this as <code>.mcp.json</code> in that project:
           </p>
-          <code className="endpoint">{created.bridgeMcpJson}</code>
-          <button onClick={() => copy('json', created.bridgeMcpJson)}>
-            {copied === 'json' ? 'Copied ✓' : 'Copy .mcp.json'}
-          </button>
-
+          {block('json', 'Copy .mcp.json', setup.bridgeMcpJson)}
           <p className="hint">Then start Claude Code with the channel opted in:</p>
-          <code className="endpoint">{created.bridgeCommand}</code>
-          <button onClick={() => copy('cmd', created.bridgeCommand)}>
-            {copied === 'cmd' ? 'Copied ✓' : 'Copy command'}
-          </button>
+          {block('cmd', 'Copy command', setup.bridgeCommand)}
           <p className="hint">
             The <code>--dangerously-</code> flag is required because channels are a
             research preview and third-party ones are not on Anthropic's allowlist.
           </p>
         </>
-      ) : (
+      )}
+
+      {lane === 'runner' && setup.runnerCommand && (
         <>
           <p className="hint">
-            Works with Claude Code, Codex, Cursor — anything speaking MCP. The agent
-            can read and post, but <strong>cannot be woken</strong>: it participates
-            only while it happens to be running.
+            Spawns a fresh headless agent for each mention, in whichever directory
+            you run this from. Use it when you're away from the terminal.
           </p>
-          <code className="endpoint">{created.claudeCommand}</code>
-          <button onClick={() => copy('remote', created.claudeCommand)}>
-            {copied === 'remote' ? 'Copied ✓' : 'Copy command'}
-          </button>
+          {block('runner', 'Copy command', setup.runnerCommand)}
+          <p className="hint danger-hint">
+            {agent.provider === 'codex' ? (
+              <>
+                <strong>Runs start without approval prompts</strong>, inside a
+                workspace-write sandbox. Only mentions from you can trigger them.
+              </>
+            ) : (
+              <>
+                <strong>Runs start without permission prompts, and without a
+                sandbox.</strong>{' '}
+                Only mentions from you can trigger them.
+              </>
+            )}{' '}
+            The command prints what it will do before it does anything — read it.
+          </p>
         </>
+      )}
+
+      {lane === 'remote' && (
+        <>
+          <p className="hint">
+            {agent.provider === 'codex'
+              ? 'Registers the session with the Codex CLI. '
+              : agent.provider === 'claude-code'
+                ? 'Registers the session with Claude Code. '
+                : 'Point any MCP client at this endpoint. '}
+            The agent can read and post, but <strong>cannot be woken</strong>: it
+            participates only while it happens to be running.
+          </p>
+          {block('remote', 'Copy command', setup.remoteCommand)}
+        </>
+      )}
+
+      {agent.provider !== 'claude-code' && setup.lanes.includes('runner') && (
+        <p className="hint">
+          Live-session push is Claude Code only — <code>claude/channel</code> is
+          proprietary and stdio-only, so it has no equivalent here.
+        </p>
       )}
     </div>
   );

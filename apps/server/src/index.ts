@@ -18,6 +18,7 @@ import type {
   PostMessageBody,
   RenameParticipantBody,
   SessionContext,
+  SetupLane,
   SessionView,
   SignupBody,
 } from '@fabrikka/types';
@@ -418,7 +419,7 @@ sessionRoutes.post('/agents', async (c) => {
     },
   });
 
-  return c.json({ ...agentSetup(mcpUrl, token), agent }, 201);
+  return c.json({ ...agentSetup(mcpUrl, token, agent.provider), agent }, 201);
 });
 
 sessionRoutes.patch('/agents/:sessionAgentId/trust', async (c) => {
@@ -461,7 +462,12 @@ sessionRoutes.post('/tokens', async (c) => {
   if (!token) return c.notFound();
 
   const mcpUrl = `${PUBLIC_URL}/mcp/o/${s.view.ownerSlug}/s/${s.view.publicId}`;
-  return c.json(agentSetup(mcpUrl, token), 201);
+  // The lane set depends on the provider, so it comes from the participant's
+  // agent record rather than being guessed.
+  const agents = await listSessionAgents(db, s.id);
+  const provider =
+    agents.find((a) => a.participantId === body.participantId)?.provider ?? 'other';
+  return c.json(agentSetup(mcpUrl, token, provider), 201);
 });
 
 sessionRoutes.post('/tokens/:id/revoke', async (c) => {
@@ -822,13 +828,15 @@ app.get(
 app.route('/api/o/:owner/s/:session', sessionRoutes);
 
 /**
- * Both ways to connect an agent, generated with the token already in place.
+ * Setup instructions for one agent, generated per provider.
  *
- * Lane A is pull-only and works with any MCP client. Lane B adds real-time push
- * into a running Claude Code session, which needs a local process and a
- * research-preview flag. See docs/protocol.md.
+ * Only the lanes that actually work for that provider are offered. Channels are
+ * Claude Code-specific and stdio-only, and spawning only knows how to launch
+ * `claude` and `codex` — so a Codex agent must not be shown a channel setup, and
+ * an unknown provider gets the plain MCP endpoint and nothing else.
+ * See docs/protocol.md.
  */
-function agentSetup(mcpUrl: string, token: string) {
+function agentSetup(mcpUrl: string, token: string, provider: string) {
   const bridgeMcpJson = JSON.stringify(
     {
       mcpServers: {
@@ -843,22 +851,46 @@ function agentSetup(mcpUrl: string, token: string) {
     2,
   );
 
+  const runnerCommand =
+    `FABRIKKA_URL=${mcpUrl} \\
+  FABRIKKA_TOKEN=${token} \\
+  ` +
+    `${BRIDGE_COMMAND.join(' ')} watch --dir .` +
+    (provider === 'codex' ? ' --provider codex' : '');
+
+  // Phrased for the provider's own CLI. Codex takes the token from the
+  // environment because it rejects a literal `bearer_token`, which conveniently
+  // keeps it out of config.toml. An unknown provider gets the endpoint and header
+  // rather than a command for a client it may not be: telling someone to run
+  // `claude mcp add` for a Cursor agent is worse than telling them nothing.
+  const remoteCommand =
+    provider === 'codex'
+      ? `FABRIKKA_TOKEN=${token} \\
+  codex mcp add fabrikka --url ${mcpUrl} \\
+    --bearer-token-env-var FABRIKKA_TOKEN`
+      : provider === 'claude-code'
+        ? `claude mcp add --transport http fabrikka ${mcpUrl} --header "Authorization: Bearer ${token}"`
+        : `Streamable HTTP MCP endpoint:\n  ${mcpUrl}\n\nAuthorization: Bearer ${token}`;
+
+  const lanes: SetupLane[] =
+    provider === 'claude-code'
+      ? ['bridge', 'runner', 'remote']
+      : provider === 'codex'
+        ? ['runner', 'remote']
+        : ['remote'];
+
   return {
     token,
     mcpUrl,
-    // Lane A: any MCP client, pull only.
-    claudeCommand: `claude mcp add --transport http fabrikka ${mcpUrl} --header "Authorization: Bearer ${token}"`,
-    // Lane B: real-time push. The .mcp.json goes in the project directory, then
-    // Claude Code is started with the channel opted in.
-    bridgeMcpJson,
-    bridgeCommand: 'claude --dangerously-load-development-channels server:fabrikka',
-    // Lane B, unattended: spawn a headless run per mention (ADR 0011). The env
-    // vars are inline because this is a shell command, not a config file.
-    runnerCommand:
-      `FABRIKKA_URL=${mcpUrl} \\
-  FABRIKKA_TOKEN=${token} \\
-  ` +
-      `${BRIDGE_COMMAND.join(' ')} watch --dir .`,
+    setup: {
+      lanes,
+      remoteCommand,
+      bridgeMcpJson: lanes.includes('bridge') ? bridgeMcpJson : null,
+      bridgeCommand: lanes.includes('bridge')
+        ? 'claude --dangerously-load-development-channels server:fabrikka'
+        : null,
+      runnerCommand: lanes.includes('runner') ? runnerCommand : null,
+    },
   };
 }
 

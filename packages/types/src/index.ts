@@ -85,6 +85,7 @@ export type ServerEvent =
   | { type: 'message.created'; message: Message }
   | { type: 'participant.updated'; participant: Participant }
   | { type: 'context.updated'; context: SessionContext }
+  | { type: 'artifact.created'; artifact: Artifact }
   | {
       /**
        * A mention that did NOT reach an agent, and why. Emitted so a human can
@@ -214,7 +215,23 @@ export interface SessionContext {
   decisions: string[];
   questions: string[];
   constraints: string[];
+  /** Increments on every write. Send it back to replace a list safely. */
+  version: number;
   updatedAt: string | null;
+}
+
+export type ArtifactType = 'file' | 'link';
+
+export interface Artifact {
+  id: string;
+  type: ArtifactType;
+  name: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+  /** Present for links; a file is fetched through the artifact endpoint. */
+  url: string | null;
+  createdBy: { participantId: string; displayName: string };
+  createdAt: string;
 }
 
 export interface SessionView {

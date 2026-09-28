@@ -101,7 +101,7 @@ nothing.
 | --- | --- | --- |
 | `whoami` | — | Which participant this token speaks as, and in which session |
 | `get_session_context` | — | Title, status, objective, facts, decisions, open questions, constraints |
-| `update_session_context` | any context field | The updated context |
+| `update_session_context` | `add_*` / `remove_*` / replace + `if_version` | The updated context |
 | `list_participants` | — | Participants with `kind`, `display_name`, `status` |
 | `read_messages` | `limit?` (≤200, default 50), `before?` | Messages oldest-first, mention markers expanded |
 | `post_message` | `content`, `mentions?` | The created message |
@@ -110,7 +110,28 @@ nothing.
 who it is without guessing from a config file, and because it makes a
 misconfigured token obvious in one call rather than after a confusing write.
 
-Added at M7: `list_artifacts`, `read_artifact`.
+Added at M7: `list_artifacts`, `read_artifact`, `create_artifact`.
+
+#### Updating context without destroying someone else's work
+
+`update_session_context` is **append-first**. An agent that has learned something
+should add it, not rewrite the list:
+
+```jsonc
+{ "add_facts": ["access tokens are unavailable for removed items"] }
+```
+
+| Form | Use |
+| --- | --- |
+| `add_facts` / `add_decisions` / … | Append, skipping exact duplicates. **This is the one to use.** |
+| `remove_facts` / … | Remove by exact value. Never by index — an index means nothing once anyone else appends. |
+| `facts: [...]` + `if_version` | Replace wholesale. Rejected if the version moved. |
+| `objective` | Plain replacement; it is one sentence. |
+
+Passing a whole list **without** `if_version` is refused. The read that gave you
+the list also gave you its `version`; sending it back is how the server knows you
+are not about to overwrite an edit you never saw. See
+[ADR 0013](decisions/0013-context-is-append-only-with-explicit-removal.md).
 Added at M8: aggregated external tools, namespaced `<server>__<tool>` (e.g. `github__create_issue`).
 
 ### Message shape

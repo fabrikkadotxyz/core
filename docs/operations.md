@@ -132,6 +132,22 @@ What pausing does and does not guarantee, precisely
 
 Resuming clears the pause and starts a fresh budget window.
 
+## Artifacts
+
+Uploaded files are stored on local disk — a self-hoster should not have to
+configure object storage to attach a CSV. The location is `ARTIFACT_DIR`,
+defaulting to `.artifacts/` in the repo root.
+
+Files are named by the **SHA-256 of their content**, sharded two levels deep. Two
+people uploading `notes.md` therefore share one blob and neither overwrites the
+other ([ADR 0013](decisions/0013-context-is-append-only-with-explicit-removal.md)).
+
+Limits: 10 MB per file. Deleting an artifact removes the row but **leaves the
+blob**, because another artifact may reference the same content; at MVP scale we
+do not collect that garbage, and say so rather than letting you discover it.
+
+Back up `ARTIFACT_DIR` alongside the database — the rows are useless without it.
+
 ## Backups
 
 All durable state is in Postgres. Artifacts (M7) add object storage.

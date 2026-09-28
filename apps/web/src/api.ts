@@ -6,6 +6,7 @@
  */
 import type {
   AgentSummary,
+  Artifact,
   AgentTrustPolicy,
   AuthUser,
   CreatedAgentView,
@@ -151,8 +152,42 @@ export const sessions = {
     call<PauseState>(`${base(ref)}/pause`, { method: 'DELETE' }),
 
   context: (ref: SessionRef) => call<SessionContext>(`${base(ref)}/context`),
-  updateContext: (ref: SessionRef, patch: Partial<SessionContext>) =>
-    call<SessionContext>(`${base(ref)}/context`, { method: 'PATCH', body: patch }),
+  /**
+   * Append-first. `add`/`remove` never need a version; replacing a whole list
+   * requires the one you read, so a stale write is rejected rather than winning
+   * silently (ADR 0013).
+   */
+  updateContext: (
+    ref: SessionRef,
+    update: {
+      objective?: string;
+      add?: Record<string, string[]>;
+      remove?: Record<string, string[]>;
+      replace?: Record<string, string[]>;
+      ifVersion?: number;
+    },
+  ) => call<SessionContext>(`${base(ref)}/context`, { method: 'PATCH', body: update }),
+
+  artifacts: (ref: SessionRef) => call<Artifact[]>(`${base(ref)}/artifacts`),
+  addLink: (ref: SessionRef, name: string, url: string) =>
+    call<Artifact>(`${base(ref)}/artifacts`, { method: 'POST', body: { name, url } }),
+  deleteArtifact: (ref: SessionRef, id: string) =>
+    call<{ ok: true }>(`${base(ref)}/artifacts/${id}`, { method: 'DELETE' }),
+  artifactUrl: (ref: SessionRef, id: string) =>
+    `/api${base(ref)}/artifacts/${id}/content`,
+  uploadFile: async (ref: SessionRef, file: File): Promise<Artifact> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`/api${base(ref)}/artifacts`, {
+      method: 'POST',
+      body: form,
+      credentials: 'same-origin',
+    });
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : undefined;
+    if (!res.ok) throw new ApiError(res.status, json?.error ?? 'upload failed');
+    return json as Artifact;
+  },
 
   invites: (ref: SessionRef) => call<InviteSummary[]>(`${base(ref)}/invites`),
   createInvite: (ref: SessionRef, body: { invitedEmail?: string } = {}) =>

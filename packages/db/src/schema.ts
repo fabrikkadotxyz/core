@@ -3,8 +3,8 @@
  *
  * Tables are introduced by the milestone that needs them (docs/roadmap.md).
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
- * M2 (mentions), M3 (agents, tokens, session context), M4 (presence) and
- * M6 (safety rails).
+ * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
+ * M6 (safety rails) and M7 (artifacts).
  */
 import {
   boolean,
@@ -324,8 +324,43 @@ export const sessionContext = pgTable('session_context', {
   decisions: jsonb('decisions').$type<string[]>().notNull().default([]),
   questions: jsonb('questions').$type<string[]>().notNull().default([]),
   constraints: jsonb('constraints').$type<string[]>().notNull().default([]),
+  /**
+   * Increments on every write, so a wholesale replace can be rejected when the
+   * caller is working from a stale read. Append operations do not need it.
+   * See docs/decisions/0013-context-is-append-only-with-explicit-removal.md.
+   */
+  version: integer('version').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Files and links attached to a session.
+ *
+ * `storageKey` is the SHA-256 of the content, not the filename: two participants
+ * uploading `notes.md` get two rows sharing one blob, and neither overwrites the
+ * other. The display name lives here, so a collision is a non-event.
+ */
+export const artifacts = pgTable(
+  'artifacts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    /** file | link */
+    type: text('type').notNull(),
+    name: text('name').notNull(),
+    /** sha256 of the content for a file; the URL for a link. */
+    storageKey: text('storage_key').notNull(),
+    contentType: text('content_type'),
+    sizeBytes: integer('size_bytes'),
+    createdByParticipantId: uuid('created_by_participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('artifacts_session_idx').on(t.sessionId)],
+);
 
 /* -------------------------------------------------------------------------- */
 /* M4 — agent connections (presence)                                          */

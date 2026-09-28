@@ -45,3 +45,4 @@ What we rejected and why.
 | [0010](0010-bridge-proxies-and-gates-at-source.md) | The bridge proxies upstream, and delivery is gated at the source | Accepted |
 | [0011](0011-spawning-is-local-and-opt-in.md) | Spawning happens on the user's machine, and running the runner is the consent | Accepted |
 | [0012](0012-halt-is-server-side-termination-is-cooperative.md) | Halting is server-side; terminating a run is cooperative | Accepted |
+| [0013](0013-context-is-append-only-with-explicit-removal.md) | Session context is append-first, and artifacts are content-addressed | Accepted |

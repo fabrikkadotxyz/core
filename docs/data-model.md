@@ -223,16 +223,32 @@ session_context                           -- deliberately denormalized
   decisions       jsonb
   questions       jsonb
   constraints     jsonb
+  version         int not null default 0  -- increments on every write
   updated_at      timestamptz
 
 artifacts
   id              uuid pk
   session_id      uuid -> sessions.id not null
-  type            text not null          -- file | link | document
-  storage_key     text not null
+  type            text not null          -- file | link
+  name            text not null          -- display name; collisions are fine
+  storage_key     text not null          -- sha256 of content, or the URL for a link
+  content_type    text
+  size_bytes      int
   created_by_participant_id uuid -> participants.id not null
   created_at      timestamptz not null
+  index (session_id)
 ```
+
+**`version` exists so a wholesale replace can be rejected.** Lists are
+append-first (`add_facts` / `remove_facts`), and the replace form requires the
+version the caller last read — otherwise an agent writing back "the complete list"
+silently deletes what a human typed a minute earlier. See
+[ADR 0013](decisions/0013-context-is-append-only-with-explicit-removal.md).
+
+**`storage_key` is the SHA-256 of the file's content**, not its name. Two people
+uploading `notes.md` get two artifact rows sharing one blob, and neither
+overwrites the other. The display name lives on the row, so collisions are a
+non-event rather than data loss.
 
 Context is **not** over-normalized. Facts and decisions are lists of text with timestamps, not an entity graph. If this needs to become relational later, that will be obvious from use — it is not obvious now.
 

@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type {
   AgentSummary,
+  Artifact,
   CreatedAgentView,
   InviteSummary,
   ServerEvent,
+  SessionContext,
   SetupLane,
   Message,
   Participant,
@@ -33,6 +35,8 @@ export function SessionPage() {
   const [blocked, setBlocked] = useState<
     Extract<ServerEvent, { type: 'mention.blocked' }>[]
   >([]);
+  /** Bumped when context or artifacts change elsewhere, to refetch the panels. */
+  const [panelsVersion, setPanelsVersion] = useState(0);
 
   const reload = useCallback(() => {
     sessions
@@ -64,6 +68,10 @@ export function SessionPage() {
           // Patch the participant list rather than refetching messages: chips
           // resolve names from this list, so a rename updates every message on
           // screen at once. That is the point of storing ids, not names.
+          if (event.type === 'context.updated' || event.type === 'artifact.created') {
+            // Panels own their own state; a bump is enough to make them refetch.
+            setPanelsVersion((v) => v + 1);
+          }
           if (event.type === 'agents.paused') {
             setView((prev) =>
               prev
@@ -314,6 +322,8 @@ export function SessionPage() {
 
           {isOwner && <InvitesPanel ref_={ref} />}
 
+          <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
+          <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} />
           {isOwner && <AgentsPanel ref_={ref} onChanged={reload} />}
 
           {isOwner && (
@@ -708,6 +718,187 @@ function AgentSetup({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Session context.
+ *
+ * Adds are appends, so typing here cannot delete what an agent recorded while you
+ * were typing — and vice versa. See ADR 0013.
+ */
+function ContextPanel({ ref_ }: { ref_: SessionRef }) {
+  const [context, setContext] = useState<SessionContext | null>(null);
+  const [objective, setObjective] = useState('');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    sessions
+      .context(ref_)
+      .then((c) => {
+        setContext(c);
+        setObjective(c.objective ?? '');
+      })
+      .catch(() => {});
+  }, [ref_]);
+
+  useEffect(load, [load]);
+
+  const lists = [
+    ['facts', 'Facts'],
+    ['decisions', 'Decisions'],
+    ['questions', 'Open questions'],
+    ['constraints', 'Constraints'],
+  ] as const;
+
+  const apply = async (update: Parameters<typeof sessions.updateContext>[1]) => {
+    setError(null);
+    try {
+      setContext(await sessions.updateContext(ref_, update));
+    } catch (err) {
+      // A 409 means someone else wrote first. Reload rather than insist.
+      setError((err as Error).message);
+      load();
+    }
+  };
+
+  if (!context) return null;
+
+  return (
+    <Panel title="Context">
+      <label className="ctx-objective">
+        Objective
+        <textarea
+          value={objective}
+          rows={2}
+          placeholder="What is this session for?"
+          onChange={(e) => setObjective(e.target.value)}
+          onBlur={() => {
+            if (objective !== (context.objective ?? '')) void apply({ objective });
+          }}
+        />
+      </label>
+
+      {lists.map(([key, label]) => (
+        <div key={key} className="ctx-list">
+          <h3 className="subhead">{label}</h3>
+          {context[key].length > 0 && (
+            <ul>
+              {context[key].map((item) => (
+                <li key={item}>
+                  <span>{item}</span>
+                  <button
+                    className="link small"
+                    title="Remove"
+                    onClick={() => void apply({ remove: { [key]: [item] } })}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <input
+            value={drafts[key] ?? ''}
+            placeholder={`Add a ${label.toLowerCase().replace(/s$/, '')}…`}
+            onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              const value = (drafts[key] ?? '').trim();
+              if (!value) return;
+              setDrafts((d) => ({ ...d, [key]: '' }));
+              void apply({ add: { [key]: [value] } });
+            }}
+          />
+        </div>
+      ))}
+
+      {error && <p className="error small">{error}</p>}
+    </Panel>
+  );
+}
+
+function ArtifactsPanel({ ref_ }: { ref_: SessionRef }) {
+  const [list, setList] = useState<Artifact[]>([]);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(() => {
+    sessions.artifacts(ref_).then(setList).catch(() => {});
+  }, [ref_]);
+
+  useEffect(load, [load]);
+
+  return (
+    <Panel title="Artifacts">
+      <div className="stack">
+        <input
+          ref={fileRef}
+          type="file"
+          aria-label="Upload a file"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setError(null);
+            try {
+              await sessions.uploadFile(ref_, file);
+              load();
+            } catch (err) {
+              setError((err as Error).message);
+            } finally {
+              if (fileRef.current) fileRef.current.value = '';
+            }
+          }}
+        />
+        <input
+          value={linkUrl}
+          placeholder="…or paste a link and press Enter"
+          onChange={(e) => setLinkUrl(e.target.value)}
+          onKeyDown={async (e) => {
+            if (e.key !== 'Enter' || !linkUrl.trim()) return;
+            setError(null);
+            try {
+              await sessions.addLink(ref_, linkUrl.trim(), linkUrl.trim());
+              setLinkUrl('');
+              load();
+            } catch (err) {
+              setError((err as Error).message);
+            }
+          }}
+        />
+      </div>
+
+      {error && <p className="error small">{error}</p>}
+
+      {list.length > 0 && (
+        <ul className="participants">
+          {list.map((a) => (
+            <li key={a.id}>
+              <span>{a.type === 'link' ? '🔗' : '📄'}</span>
+              <a
+                href={a.url ?? sessions.artifactUrl(ref_, a.id)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {a.name}
+              </a>
+              <span className="muted small">@{a.createdBy.displayName}</span>
+              <button
+                className="link small"
+                onClick={async () => {
+                  await sessions.deleteArtifact(ref_, a.id);
+                  load();
+                }}
+              >
+                remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }
 

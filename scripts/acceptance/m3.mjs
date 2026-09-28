@@ -198,9 +198,13 @@ const names = tools.map((t) => t.name).sort();
 check(
   JSON.stringify(names) ===
     JSON.stringify([
+      // Artifact tools joined the surface at M7.
+      'create_artifact',
       'get_session_context',
+      'list_artifacts',
       'list_participants',
       'post_message',
+      'read_artifact',
       'read_messages',
       'update_session_context',
       'whoami',
@@ -397,9 +401,11 @@ check(rejected, 'an over-large limit is rejected rather than silently clamped');
 
 /* ------------------------------------------ 10. session context */
 
+// add_* rather than a bare list: M7 made replacement require if_version, so an
+// append is both the documented path and the one that cannot lose an edit.
 await call(clientA, 'update_session_context', {
   objective: `Investigate ${stamp}`,
-  decisions: ['Ask for the CSV'],
+  add_decisions: ['Ask for the CSV'],
 });
 const ctx = await call(clientA, 'get_session_context');
 check(ctx.objective === `Investigate ${stamp}`, 'an agent can write session context');
@@ -411,7 +417,9 @@ check(
   'context written over MCP is visible to the web API',
 );
 
-await call(clientA, 'update_session_context', { questions: ['Can we share the CSV?'] });
+await call(clientA, 'update_session_context', {
+  add_questions: ['Can we share the CSV?'],
+});
 const patched = await call(clientA, 'get_session_context');
 check(
   patched.objective === `Investigate ${stamp}` && patched.questions.length === 1,

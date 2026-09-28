@@ -210,14 +210,30 @@ M6 adds the rest:
 
 ## M7 — Session context UI + artifacts
 
-The context **tools and storage landed at M3** (`get_session_context` /
-`update_session_context`), so this milestone is the human side plus artifacts:
-context editable in the browser, file upload and link artifacts, listed and
-readable over MCP via `list_artifacts` / `read_artifact`.
+The context tools and storage landed at M3, so this is the human half plus
+artifacts — and one correctness fix that matters more than either.
 
-**Test:** Fede writes an Objective in the browser; Claude reads it via MCP
-without being told. Claude appends a Decision; it renders in the browser. Upload
-a CSV; Claude lists and reads it.
+- **Context is append-first.** `add_facts` / `remove_facts`, with wholesale
+  replacement requiring the `version` you read. Patch semantics as shipped at M3
+  let an agent writing back "the complete list" silently delete what a human typed
+  a minute earlier ([ADR 0013](decisions/0013-context-is-append-only-with-explicit-removal.md)).
+- Context editable in the browser.
+- **Artifacts**: file upload and links, with `list_artifacts`, `read_artifact` and
+  `create_artifact` — an agent producing `investigation.md` is the point.
+- Files are stored by **content hash**, so two people uploading `notes.md` do not
+  overwrite each other.
+
+**Test:**
+1. Write an Objective in the browser; an agent reads it over MCP without being
+   told it exists.
+2. The agent appends a Decision with `add_decisions`; it appears in the browser
+   without displacing anything.
+3. **The one that matters:** type a fact in the browser, and *while it is
+   unsaved*, have the agent add one. Both survive.
+4. Upload a CSV; the agent lists and reads it.
+5. The agent creates an artifact; it appears in the browser.
+6. Upload two different files both called `notes.md`. Both exist, neither
+   clobbers the other.
 
 ## M8 — MCP aggregation (per-participant credentials)
 

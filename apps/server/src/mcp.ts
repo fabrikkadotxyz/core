@@ -20,6 +20,12 @@ import { publish } from './bus.ts';
 import { deliverMentions } from './delivery.ts';
 import { renderMentions } from './mentions.ts';
 import {
+  createFileArtifact,
+  createLinkArtifact,
+  listArtifacts,
+  readArtifact,
+} from './artifacts.ts';
+import {
   createMessage,
   getSessionContext,
   listMessages,
@@ -175,21 +181,155 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
     {
       title: 'Update session context',
       description:
-        'Replace one or more context fields. Only fields you pass are changed. ' +
-        'Use this to record a decision or an established fact so it survives ' +
-        'outside the conversation.',
+        'Record something in the session context so it survives outside the ' +
+        'conversation. PREFER the add_* fields: they append, so you cannot delete ' +
+        'what someone else wrote. Replacing a whole list requires if_version.',
       inputSchema: z.object({
-        objective: z.string().optional(),
-        facts: z.array(z.string()).optional(),
+        objective: z.string().optional().describe('Replaces the objective outright.'),
+        add_facts: z.array(z.string()).optional().describe('Append facts.'),
+        add_decisions: z.array(z.string()).optional(),
+        add_questions: z.array(z.string()).optional(),
+        add_constraints: z.array(z.string()).optional(),
+        remove_facts: z
+          .array(z.string())
+          .optional()
+          .describe('Remove by exact text, not by position.'),
+        remove_decisions: z.array(z.string()).optional(),
+        remove_questions: z.array(z.string()).optional(),
+        remove_constraints: z.array(z.string()).optional(),
+        facts: z
+          .array(z.string())
+          .optional()
+          .describe('Replace the whole list. Requires if_version.'),
         decisions: z.array(z.string()).optional(),
         questions: z.array(z.string()).optional(),
         constraints: z.array(z.string()).optional(),
+        if_version: z
+          .number()
+          .optional()
+          .describe('The version from get_session_context. Required to replace.'),
       }),
     },
     async (args) => {
-      const updated = await updateSessionContext(db, actor.sessionId, args);
-      publish(actor.sessionId, { type: 'context.updated', context: updated });
-      return text(updated);
+      const result = await updateSessionContext(db, actor.sessionId, {
+        objective: args.objective,
+        add: {
+          facts: args.add_facts,
+          decisions: args.add_decisions,
+          questions: args.add_questions,
+          constraints: args.add_constraints,
+        },
+        remove: {
+          facts: args.remove_facts,
+          decisions: args.remove_decisions,
+          questions: args.remove_questions,
+          constraints: args.remove_constraints,
+        },
+        replace: {
+          facts: args.facts,
+          decisions: args.decisions,
+          questions: args.questions,
+          constraints: args.constraints,
+        },
+        ifVersion: args.if_version,
+      });
+
+      // A conflict is reported, never silently resolved: the caller re-reads and
+      // decides, rather than one of two edits vanishing (ADR 0013).
+      if (!result.ok) throw new Error(result.error);
+
+      publish(actor.sessionId, { type: 'context.updated', context: result.context });
+      return text(result.context);
+    },
+  );
+
+  server.registerTool(
+    'list_artifacts',
+    {
+      title: 'List artifacts',
+      description: 'Files and links attached to this session.',
+      inputSchema: z.object({}),
+    },
+    async () => {
+      const list = await listArtifacts(db, actor.sessionId);
+      return text(
+        list.map((a) => ({
+          id: a.id,
+          name: a.name,
+          type: a.type,
+          content_type: a.contentType,
+          size_bytes: a.sizeBytes,
+          url: a.url,
+          created_by: a.createdBy.displayName,
+          created_at: a.createdAt,
+        })),
+      );
+    },
+  );
+
+  server.registerTool(
+    'read_artifact',
+    {
+      title: 'Read an artifact',
+      description:
+        "Read a file artifact's contents. Text is returned inline; binary files " +
+        'report their type and size instead.',
+      inputSchema: z.object({
+        artifact_id: z.string().describe('From list_artifacts.'),
+      }),
+    },
+    async (args) => {
+      const found = await readArtifact(db, actor.sessionId, args.artifact_id);
+      if (!found) throw new Error('no such file artifact in this session');
+
+      const { artifact, content } = found;
+      // Returning megabytes of base64 would blow the client's output cap for no
+      // benefit; say what it is instead.
+      if (!isProbablyText(artifact.contentType, content)) {
+        return text({
+          id: artifact.id,
+          name: artifact.name,
+          content_type: artifact.contentType,
+          size_bytes: artifact.sizeBytes,
+          note: 'binary artifact — not returned inline',
+        });
+      }
+      return { content: [{ type: 'text' as const, text: content.toString('utf8') }] };
+    },
+  );
+
+  server.registerTool(
+    'create_artifact',
+    {
+      title: 'Create an artifact',
+      description:
+        'Attach a file or a link to the session. Use this for a report or a ' +
+        'document you want to outlive the conversation.',
+      inputSchema: z.object({
+        name: z.string().describe('Display name, e.g. investigation.md'),
+        content: z.string().optional().describe('File contents, for a file.'),
+        url: z.string().optional().describe('An http(s) URL, for a link.'),
+      }),
+    },
+    async (args) => {
+      const result = args.url
+        ? await createLinkArtifact(db, {
+            sessionId: actor.sessionId,
+            participantId: actor.participantId,
+            name: args.name,
+            url: args.url,
+          })
+        : await createFileArtifact(db, {
+            sessionId: actor.sessionId,
+            participantId: actor.participantId,
+            name: args.name,
+            contentType: guessContentType(args.name),
+            content: Buffer.from(args.content ?? '', 'utf8'),
+          });
+
+      if (!result.ok) throw new Error(result.error);
+      publish(actor.sessionId, { type: 'artifact.created', artifact: result.artifact });
+      return text(result.artifact);
     },
   );
 
@@ -321,4 +461,29 @@ function text(value: unknown) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
   };
+}
+
+/** Text is returned inline; binary is described. A cheap check, not a guess. */
+function isProbablyText(contentType: string | null, content: Buffer): boolean {
+  if (contentType?.startsWith('text/')) return true;
+  if (contentType && /json|xml|yaml|javascript|typescript|csv/.test(contentType)) {
+    return true;
+  }
+  // A NUL byte in the first kilobyte is the classic binary tell.
+  return !content.subarray(0, 1024).includes(0);
+}
+
+function guessContentType(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  const types: Record<string, string> = {
+    md: 'text/markdown',
+    txt: 'text/plain',
+    json: 'application/json',
+    csv: 'text/csv',
+    yaml: 'text/yaml',
+    yml: 'text/yaml',
+    ts: 'text/typescript',
+    js: 'text/javascript',
+  };
+  return types[ext] ?? 'text/plain';
 }

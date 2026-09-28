@@ -17,7 +17,6 @@ import type {
   LoginBody,
   PostMessageBody,
   RenameParticipantBody,
-  SessionContext,
   SetupLane,
   SessionView,
   SignupBody,
@@ -36,6 +35,13 @@ import {
 import { publish, subscribe } from './bus.ts';
 import { createMcpApp } from './mcp.ts';
 import { broadcastAbort, onAbort, pauseState, setPaused } from './rails.ts';
+import {
+  createFileArtifact,
+  createLinkArtifact,
+  deleteArtifact,
+  listArtifacts,
+  readArtifact,
+} from './artifacts.ts';
 import {
   connectionStatuses,
   deliverMentions,
@@ -77,6 +83,7 @@ import {
   resolveSessionForUser,
   setSessionStatus,
   updateSessionContext,
+  type ContextUpdate,
 } from './sessions.ts';
 
 const PORT = Number(process.env.PORT ?? 9090);
@@ -529,10 +536,92 @@ sessionRoutes.patch('/context', async (c) => {
   const s = await resolve(c);
   if (!s) return c.notFound();
 
-  const body = await c.req.json<Partial<SessionContext>>();
-  const updated = await updateSessionContext(db, s.id, body);
-  publish(s.id, { type: 'context.updated', context: updated });
-  return c.json(updated);
+  const body = await c.req.json<ContextUpdate>();
+  const result = await updateSessionContext(db, s.id, body);
+
+  // 409 rather than a silent overwrite: the browser reloads and shows what
+  // changed, instead of one of two people's edits disappearing (ADR 0013).
+  if (!result.ok) {
+    return c.json(
+      { error: result.error, currentVersion: result.currentVersion },
+      result.conflict ? 409 : 400,
+    );
+  }
+
+  publish(s.id, { type: 'context.updated', context: result.context });
+  return c.json(result.context);
+});
+
+/* ---- artifacts ---- */
+
+sessionRoutes.get('/artifacts', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  return c.json(await listArtifacts(db, s.id));
+});
+
+sessionRoutes.post('/artifacts', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+
+  const contentType = c.req.header('content-type') ?? '';
+
+  if (contentType.includes('multipart/form-data')) {
+    const form = await c.req.parseBody();
+    const file = form.file;
+    if (!(file instanceof File)) return c.json({ error: 'no file provided' }, 400);
+
+    const result = await createFileArtifact(db, {
+      sessionId: s.id,
+      participantId: s.participantId,
+      name: (form.name as string) || file.name,
+      contentType: file.type || null,
+      content: Buffer.from(await file.arrayBuffer()),
+    });
+    if (!result.ok) return c.json({ error: result.error }, 400);
+
+    publish(s.id, { type: 'artifact.created', artifact: result.artifact });
+    return c.json(result.artifact, 201);
+  }
+
+  const body = await c.req.json<{ name?: string; url?: string }>();
+  if (!body.url) return c.json({ error: 'a url is required for a link' }, 400);
+
+  const result = await createLinkArtifact(db, {
+    sessionId: s.id,
+    participantId: s.participantId,
+    name: body.name ?? body.url,
+    url: body.url,
+  });
+  if (!result.ok) return c.json({ error: result.error }, 400);
+
+  publish(s.id, { type: 'artifact.created', artifact: result.artifact });
+  return c.json(result.artifact, 201);
+});
+
+sessionRoutes.get('/artifacts/:id/content', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+
+  const found = await readArtifact(db, s.id, c.req.param('id'));
+  if (!found) return c.notFound();
+
+  return new Response(new Uint8Array(found.content), {
+    headers: {
+      'Content-Type': found.artifact.contentType ?? 'application/octet-stream',
+      // Always an attachment: a session file is not ours to render inline, and
+      // serving arbitrary uploaded HTML from our origin would be an XSS vector.
+      'Content-Disposition': `attachment; filename="${found.artifact.name.replace(/"/g, '')}"`,
+    },
+  });
+});
+
+sessionRoutes.delete('/artifacts/:id', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const done = await deleteArtifact(db, s.id, c.req.param('id'));
+  if (!done) return c.notFound();
+  return c.json({ ok: true });
 });
 
 /* ---- invites ---- */

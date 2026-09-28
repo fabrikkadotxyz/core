@@ -410,6 +410,7 @@ const EMPTY_CONTEXT: SessionContext = {
   decisions: [],
   questions: [],
   constraints: [],
+  version: 0,
   updatedAt: null,
 };
 
@@ -432,31 +433,145 @@ export async function getSessionContext(
     decisions: row.decisions ?? [],
     questions: row.questions ?? [],
     constraints: row.constraints ?? [],
+    version: row.version,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
-/** Patch semantics: only the fields supplied are changed. */
+/** The four list-valued context fields. */
+const LIST_FIELDS = ['facts', 'decisions', 'questions', 'constraints'] as const;
+type ListField = (typeof LIST_FIELDS)[number];
+
+export interface ContextUpdate {
+  objective?: string;
+  /** Append, skipping exact duplicates. The path agents should take. */
+  add?: Partial<Record<ListField, string[]>>;
+  /** Remove by exact value — never by index, which means nothing after an append. */
+  remove?: Partial<Record<ListField, string[]>>;
+  /** Wholesale replacement. Requires `ifVersion`. */
+  replace?: Partial<Record<ListField, string[]>>;
+  ifVersion?: number;
+}
+
+export type ContextUpdateResult =
+  | { ok: true; context: SessionContext }
+  | { ok: false; error: string; conflict?: boolean; currentVersion?: number };
+
+/**
+ * Update session context without destroying concurrent edits.
+ *
+ * Append-first: `add` merges, so the common case — an agent recording something
+ * it learned — cannot delete what a human typed a minute ago. Wholesale
+ * replacement is still available but must carry the version the caller read, so
+ * a stale writer is rejected rather than silently winning.
+ *
+ * See docs/decisions/0013-context-is-append-only-with-explicit-removal.md.
+ */
 export async function updateSessionContext(
   db: Database,
   sessionId: string,
-  patch: Partial<Omit<SessionContext, 'updatedAt'>>,
-): Promise<SessionContext> {
-  const fields = {
-    ...(patch.objective !== undefined ? { objective: patch.objective } : {}),
-    ...(patch.facts !== undefined ? { facts: patch.facts } : {}),
-    ...(patch.decisions !== undefined ? { decisions: patch.decisions } : {}),
-    ...(patch.questions !== undefined ? { questions: patch.questions } : {}),
-    ...(patch.constraints !== undefined ? { constraints: patch.constraints } : {}),
-    updatedAt: new Date(),
-  };
+  update: ContextUpdate,
+): Promise<ContextUpdateResult> {
+  // Object.keys counts keys whose VALUE is undefined, and callers build this
+  // object with every field present-but-undefined. Checking values means a pure
+  // `add` is not mistaken for a replace and then rejected for lacking ifVersion.
+  const replacing =
+    !!update.replace && Object.values(update.replace).some((v) => v !== undefined);
+  if (replacing && update.ifVersion === undefined) {
+    return {
+      ok: false,
+      error:
+        'replacing a list requires ifVersion — send the version you read, or use add/remove',
+    };
+  }
 
-  await db
-    .insert(sessionContext)
-    .values({ sessionId, ...fields })
-    .onConflictDoUpdate({ target: sessionContext.sessionId, set: fields });
+  return db.transaction(async (tx) => {
+    // Lock the row so two concurrent appends cannot both read the same list and
+    // write back a merge missing the other's addition.
+    const existing = await tx
+      .select()
+      .from(sessionContext)
+      .where(eq(sessionContext.sessionId, sessionId))
+      .limit(1)
+      .for('update');
 
-  return getSessionContext(db, sessionId);
+    const current = existing[0];
+    const version = current?.version ?? 0;
+
+    if (replacing && update.ifVersion !== version) {
+      return {
+        ok: false as const,
+        error: 'context changed since you read it',
+        conflict: true,
+        currentVersion: version,
+      };
+    }
+
+    const next: Record<ListField, string[]> = {
+      facts: current?.facts ?? [],
+      decisions: current?.decisions ?? [],
+      questions: current?.questions ?? [],
+      constraints: current?.constraints ?? [],
+    };
+
+    for (const field of LIST_FIELDS) {
+      if (update.replace?.[field]) next[field] = [...update.replace[field]!];
+
+      const added = update.add?.[field];
+      if (added) {
+        // Deduplicate: an agent that re-reads and re-adds the same fact should
+        // not make the list grow every time.
+        const seen = new Set(next[field]);
+        for (const value of added) {
+          const trimmed = value.trim();
+          if (trimmed && !seen.has(trimmed)) {
+            next[field].push(trimmed);
+            seen.add(trimmed);
+          }
+        }
+      }
+
+      const removed = update.remove?.[field];
+      if (removed) {
+        const drop = new Set(removed.map((v) => v.trim()));
+        next[field] = next[field].filter((v) => !drop.has(v));
+      }
+    }
+
+    const fields = {
+      ...(update.objective !== undefined ? { objective: update.objective } : {}),
+      facts: next.facts,
+      decisions: next.decisions,
+      questions: next.questions,
+      constraints: next.constraints,
+      version: version + 1,
+      updatedAt: new Date(),
+    };
+
+    await tx
+      .insert(sessionContext)
+      .values({ sessionId, ...fields })
+      .onConflictDoUpdate({ target: sessionContext.sessionId, set: fields });
+
+    const [row] = await tx
+      .select()
+      .from(sessionContext)
+      .where(eq(sessionContext.sessionId, sessionId))
+      .limit(1);
+
+    return {
+      ok: true as const,
+      context: {
+        objective: row!.objective,
+        facts: row!.facts ?? [],
+        decisions: row!.decisions ?? [],
+        questions: row!.questions ?? [],
+        constraints: row!.constraints ?? [],
+        version: row!.version,
+        updatedAt: row!.updatedAt.toISOString(),
+      },
+    };
+  });
 }
 
 /**

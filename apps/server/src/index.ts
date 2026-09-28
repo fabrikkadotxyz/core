@@ -35,6 +35,7 @@ import {
 } from './auth.ts';
 import { publish, subscribe } from './bus.ts';
 import { createMcpApp } from './mcp.ts';
+import { broadcastAbort, onAbort, pauseState, setPaused } from './rails.ts';
 import {
   connectionStatuses,
   deliverMentions,
@@ -233,6 +234,7 @@ sessionRoutes.get('/', async (c) => {
 
   const statuses = await connectionStatuses(db, s.id);
   const view: SessionView = {
+    agents: await pauseState(db, s.id),
     session: s.view,
     participants: (await listParticipants(db, s.id)).map((p) => ({
       ...p,
@@ -302,8 +304,13 @@ sessionRoutes.post('/messages', async (c) => {
   if (!result.ok) return c.json({ error: result.error }, 400);
 
   publish(s.id, { type: 'message.created', message: result.message });
-  // Mentions of agents are evaluated and pushed here, not in the bridge.
-  await deliverMentions(db, s.id, result.message);
+  // Mentions of agents are evaluated and pushed here, not in the bridge. A
+  // failure here must not lose the message that was already stored — but it must
+  // also not be swallowed, because silent non-delivery is the failure mode this
+  // whole subsystem exists to avoid (ADR 0010).
+  await deliverMentions(db, s.id, result.message).catch((err) => {
+    console.error('[delivery] failed for message', result.message.id, err);
+  });
 
   return c.json(result.message, 201);
 });
@@ -478,6 +485,38 @@ sessionRoutes.post('/tokens/:id/revoke', async (c) => {
   return c.json({ ok: true });
 });
 
+/* ---- safety rails ---- */
+
+sessionRoutes.get('/pause', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  return c.json(await pauseState(db, s.id));
+});
+
+/**
+ * The kill switch.
+ *
+ * Any member can pull it: if an agent is misbehaving, waiting for the owner is
+ * the wrong failure mode. Halting delivery is absolute; aborting in-flight runs
+ * is a request the runners may or may not honour (ADR 0012).
+ */
+sessionRoutes.post('/pause', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+
+  await setPaused(db, s.id, true, 'manual');
+  const asked = broadcastAbort(s.id);
+
+  return c.json({ ...(await pauseState(db, s.id)), connectionsAskedToAbort: asked });
+});
+
+sessionRoutes.delete('/pause', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  await setPaused(db, s.id, false);
+  return c.json(await pauseState(db, s.id));
+});
+
 /* ---- context ---- */
 
 sessionRoutes.get('/context', async (c) => {
@@ -559,6 +598,7 @@ app.get(
     const bearer = c.req.header('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
 
     let unsubscribe: (() => void) | undefined;
+    let unsubscribeAbort: (() => void) | undefined;
     let actorRef: { sessionId: string; participantId: string } | undefined;
     /**
      * `bridge` pushes into a live agent session; `runner` spawns a headless run.
@@ -610,6 +650,12 @@ app.get(
             ws.send(JSON.stringify({ type: 'mention', message, trust }));
           },
         );
+
+        // A pause asks connections to drop in-flight work. Cooperative by
+        // necessity: the process is on the user's machine (ADR 0012).
+        unsubscribeAbort = onAbort(actor.sessionId, () => {
+          ws.send(JSON.stringify({ type: 'abort' }));
+        });
 
         await setConnectionStatus(db, {
           sessionId: actor.sessionId,
@@ -663,6 +709,7 @@ app.get(
 
       async onClose() {
         unsubscribe?.();
+        unsubscribeAbort?.();
         if (actorRef) {
           await setConnectionStatus(db, { ...actorRef, kind, status: 'offline' }).catch(
             () => {},
@@ -671,6 +718,7 @@ app.get(
       },
       onError() {
         unsubscribe?.();
+        unsubscribeAbort?.();
       },
     };
   }),

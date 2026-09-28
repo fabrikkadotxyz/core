@@ -15,6 +15,7 @@ import type {
   Member,
   Message,
   Participant,
+  PauseState,
   ServerEvent,
   SessionContext,
   SessionSummary,
@@ -140,6 +141,14 @@ export const sessions = {
   tokens: (ref: SessionRef) => call<TokenSummary[]>(`${base(ref)}/tokens`),
   revokeToken: (ref: SessionRef, id: string) =>
     call<{ ok: true }>(`${base(ref)}/tokens/${id}/revoke`, { method: 'POST' }),
+
+  pauseState: (ref: SessionRef) => call<PauseState>(`${base(ref)}/pause`),
+  pauseAgents: (ref: SessionRef) =>
+    call<PauseState & { connectionsAskedToAbort: number }>(`${base(ref)}/pause`, {
+      method: 'POST',
+    }),
+  resumeAgents: (ref: SessionRef) =>
+    call<PauseState>(`${base(ref)}/pause`, { method: 'DELETE' }),
 
   context: (ref: SessionRef) => call<SessionContext>(`${base(ref)}/context`),
   updateContext: (ref: SessionRef, patch: Partial<SessionContext>) =>

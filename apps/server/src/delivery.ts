@@ -13,10 +13,16 @@ import type { Database } from '@fabrikka/db';
 import { agentConnections, agents, participants, sessionAgents } from '@fabrikka/db';
 import type { Message, TrustTier } from '@fabrikka/types';
 import { publish } from './bus.ts';
+import { claimTurn } from './rails.ts';
 import { renderMentions } from './mentions.ts';
 import { listParticipantsWithUsers } from './sessions.ts';
 
-export type BlockReason = 'own_message' | 'not_trusted' | 'no_connection';
+export type BlockReason =
+  | 'own_message'
+  | 'not_trusted'
+  | 'no_connection'
+  | 'paused'
+  | 'turn_budget';
 
 export interface Delivery {
   participantId: string;
@@ -138,6 +144,19 @@ export async function deliverMentions(
     if (targets.length === 0) {
       // Neither a live session nor a runner. Nothing to do but say so.
       blocked.push({ ...describe(mention), reason: 'no_connection', trust });
+      continue;
+    }
+
+    // Claimed per agent about to be delivered to, immediately before delivery —
+    // so the count matches what actually causes an agent to act, and a paused
+    // session stops here rather than somewhere downstream (ADR 0012).
+    const verdict = await claimTurn(db, sessionId);
+    if (!verdict.allowed) {
+      blocked.push({
+        ...describe(mention),
+        reason: verdict.reason === 'paused' ? 'paused' : 'turn_budget',
+        trust,
+      });
       continue;
     }
 

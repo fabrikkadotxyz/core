@@ -114,6 +114,24 @@ silent, because from the browser silence is indistinguishable from a failure.
 `--allowed-tools a,b,c` narrows what a spawned run may use. Unset means the
 provider's own default.
 
+## Stopping agents
+
+Every session has a **Pause agents** control, and **any member can use it** —
+waiting for the owner is the wrong failure mode when an agent is misbehaving. The
+same state is reached automatically when the turn budget runs out (20 deliveries
+per 10 minutes per session).
+
+What pausing does and does not guarantee, precisely
+([ADR 0012](decisions/0012-halt-is-server-side-termination-is-cooperative.md)):
+
+| | Guarantee |
+| --- | --- |
+| No further work is sent | **Absolute.** The server stops delivering; no local process can override it. |
+| A spawned run stops | **Best-effort.** Runners are asked to kill their child. One that is wedged or offline will not comply. |
+| A live channel turn stops | **Not possible.** The model is mid-turn in the user's own terminal. Pausing stops the *next* push. |
+
+Resuming clears the pause and starts a fresh budget window.
+
 ## Backups
 
 All durable state is in Postgres. Artifacts (M7) add object storage.

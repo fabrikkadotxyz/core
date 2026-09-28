@@ -20,11 +20,14 @@ export interface MentionFrame {
 export type ServerFrame =
   | { type: 'ready'; participant: { id: string; display_name: string }; session: { id: string } }
   | MentionFrame
+  | { type: 'abort' }
   | { type: 'error'; code: 'unauthenticated' | 'not_found' };
 
 export interface SocketHandlers {
   onReady: (frame: Extract<ServerFrame, { type: 'ready' }>) => void;
   onMention: (frame: MentionFrame) => void;
+  /** The server asks for in-flight work to stop. See ADR 0012. */
+  onAbort?: () => void;
   /** Called with a permanent refusal. Reconnecting will not help. */
   onRefused: (code: string) => void;
   onDisconnected: () => void;
@@ -73,6 +76,7 @@ export class BridgeSocket {
 
       if (frame.type === 'ready') this.handlers.onReady(frame);
       else if (frame.type === 'mention') this.handlers.onMention(frame);
+      else if (frame.type === 'abort') this.handlers.onAbort?.();
       else if (frame.type === 'error') {
         // A refusal is permanent — retrying a bad token just loops.
         this.refused = true;

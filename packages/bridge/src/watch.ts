@@ -66,6 +66,9 @@ export async function watch(opts: WatchOptions): Promise<void> {
   let running = false;
   const queue: MentionFrame[] = [];
   let resumeId: string | undefined;
+  let current: AbortController | undefined;
+  /** Collapses repeated "queue full" notices into one per busy period. */
+  let warnedQueueFull = false;
 
   const socket = new BridgeSocket(config.bridgeUrl, config.token, {
     onReady: () => {
@@ -77,13 +80,18 @@ export async function watch(opts: WatchOptions): Promise<void> {
       if (running) {
         if (queue.length >= MAX_QUEUE) {
           log('queue full, dropping a mention');
-          void upstream
-            .callTool('post_message', {
-              content:
-                'I am already working and my queue is full, so I missed a message. ' +
-                'Mention me again when I am idle.',
-            })
-            .catch(() => {});
+          // Once per busy period, not once per dropped mention: ten mentions at a
+          // busy agent should not produce eight near-identical messages.
+          if (!warnedQueueFull) {
+            warnedQueueFull = true;
+            void upstream
+              .callTool('post_message', {
+                content:
+                  'I am already working and my queue is full, so I am missing ' +
+                  'messages. Mention me again when I am idle.',
+              })
+              .catch(() => {});
+          }
           return;
         }
         queue.push(frame);
@@ -91,6 +99,13 @@ export async function watch(opts: WatchOptions): Promise<void> {
         return;
       }
       void handle(frame);
+    },
+    onAbort: () => {
+      // The server paused the session. Drop the queue and stop the child.
+      const dropped = queue.length;
+      queue.length = 0;
+      current?.abort();
+      log(`abort requested — stopped the run${dropped ? ` and dropped ${dropped} queued` : ''}`);
     },
     onRefused: (code) =>
       log(
@@ -103,6 +118,8 @@ export async function watch(opts: WatchOptions): Promise<void> {
 
   async function handle(frame: MentionFrame): Promise<void> {
     running = true;
+    warnedQueueFull = false;
+    current = new AbortController();
     socket.send({ type: 'status', status: 'working' });
     log(`run start — @${frame.message.author.displayName}: ${frame.message.content.slice(0, 60)}`);
 
@@ -130,11 +147,19 @@ export async function watch(opts: WatchOptions): Promise<void> {
       resumeId: opts.provider === 'codex' ? undefined : resumeId,
       allowedTools: opts.allowedTools,
       onLog: (line) => log(`  ${line}`),
+      signal: current.signal,
     });
 
     if (result.resumeId) resumeId = result.resumeId;
 
-    if (!result.ok) {
+    if (result.error === 'run was stopped') {
+      // Deliberately stopped, not broken. Say which, so the timeline does not
+      // report a failure for something a human asked for.
+      log('run stopped');
+      await upstream
+        .callTool('post_message', { content: 'That run was stopped.' })
+        .catch(() => {});
+    } else if (!result.ok) {
       log(`run failed: ${result.error}`);
       // A failed run must still be visible in the session. Silence looks like a
       // broken bridge (the M4 lesson).
@@ -165,6 +190,7 @@ export async function watch(opts: WatchOptions): Promise<void> {
     if (runToken) await revokeRunToken(config, runToken.tokenId).catch(() => {});
 
     running = false;
+    current = undefined;
     socket.send({ type: 'status', status: 'idle' });
 
     const next = queue.shift();

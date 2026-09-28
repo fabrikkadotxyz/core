@@ -64,6 +64,16 @@ export function SessionPage() {
           // Patch the participant list rather than refetching messages: chips
           // resolve names from this list, so a rename updates every message on
           // screen at once. That is the point of storing ids, not names.
+          if (event.type === 'agents.paused') {
+            setView((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    agents: { ...prev.agents, paused: event.paused, reason: event.reason },
+                  }
+                : prev,
+            );
+          }
           if (event.type === 'presence.updated') {
             setView((prev) =>
               prev
@@ -157,7 +167,50 @@ export function SessionPage() {
             <span className={connected ? 'status on' : 'status off'}>
               {connected ? 'live' : 'reconnecting…'}
             </span>
+            {/* Any member can pull it: waiting for the owner is the wrong
+                failure mode when an agent is misbehaving. */}
+            {!view.agents.paused && view.participants.some((p) => p.kind === 'agent') && (
+              <button
+                className="link danger"
+                title="Stop all agent activity in this session"
+                onClick={async () => {
+                  await sessions.pauseAgents(ref);
+                  reload();
+                }}
+              >
+                Pause agents
+              </button>
+            )}
           </header>
+
+          {view.agents.paused && (
+            <div className="paused-banner">
+              <div>
+                <strong>
+                  Agents paused
+                  {view.agents.reason === 'turn_budget' && ' — turn budget reached'}
+                </strong>
+                {/*
+                  State the guarantee precisely. A control that implies more than
+                  it delivers is worse than none, because it gets trusted at
+                  exactly the wrong moment. See ADR 0012.
+                */}
+                <p>
+                  No new work will be sent. Runs already in flight are asked to
+                  stop; one that has lost contact may finish on its own, and a
+                  live Claude Code session will finish the turn it is on.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  await sessions.resumeAgents(ref);
+                  reload();
+                }}
+              >
+                Resume agents
+              </button>
+            </div>
+          )}
 
           {blocked.length > 0 && (
             <ul className="blocked-notices">
@@ -168,7 +221,11 @@ export function SessionPage() {
                     ? 'only its owner can direct it'
                     : b.reason === 'no_connection'
                       ? 'no live connection'
-                      : 'it wrote the message'}
+                      : b.reason === 'paused'
+                        ? 'agents are paused'
+                        : b.reason === 'turn_budget'
+                          ? 'the turn budget ran out'
+                          : 'it wrote the message'}
                 </li>
               ))}
             </ul>

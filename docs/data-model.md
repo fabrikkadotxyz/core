@@ -187,11 +187,29 @@ one. See `ARCHITECTURE.md` and [ADR 0011](decisions/0011-spawning-is-local-and-o
 ### M6 — safety rails
 
 ```
+sessions  (additions)
+  agents_paused_at     timestamptz   -- null = agents active
+  agents_paused_reason text          -- manual | turn_budget
+
 session_turn_budget
-  session_id      uuid -> sessions.id pk
-  window_start    timestamptz not null
+  session_id       uuid -> sessions.id pk
+  window_start     timestamptz not null
   agent_turns_used int not null default 0
 ```
+
+One paused state, two causes — a human hitting the switch, or the budget running
+out. One mechanism means one thing to test and one way to resume, and no way to be
+manually paused and budget-paused at once with unclear precedence.
+
+A *turn* is one **delivery** to one agent: a channel push or a spawn. Deliveries
+are counted rather than messages or tokens because a delivery is precisely the
+thing that makes an agent act, it is the chokepoint every path already funnels
+through, and token usage is not ours to see — the agent runs under the user's own
+credentials, by design.
+
+The window lives in Postgres rather than memory so it survives a restart and works
+with more than one server process. See
+[ADR 0012](decisions/0012-halt-is-server-side-termination-is-cooperative.md).
 
 `trust_tier` on `session_agents` (above) defaults to `owner_only`: only the agent's own owner can cause it to act. Elevation is a deliberate per-session act by the owner. See `docs/security.md`.
 

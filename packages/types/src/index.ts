@@ -95,9 +95,20 @@ export type ServerEvent =
       messageId: string;
       participantId: string;
       displayName: string;
-      reason: 'own_message' | 'not_trusted' | 'no_connection';
+      reason:
+        | 'own_message'
+        | 'not_trusted'
+        | 'no_connection'
+        | 'paused'
+        | 'turn_budget';
     }
   | { type: 'presence.updated'; participantId: string; status: ConnectionStatus }
+  | {
+      /** Agents halted, by a human or by the turn budget. See ADR 0012. */
+      type: 'agents.paused';
+      paused: boolean;
+      reason: 'manual' | 'turn_budget' | null;
+    }
   | { type: 'stream.error'; code: 'unauthenticated' | 'not_found' };
 
 /** Client -> server. M0 posts over HTTP; the socket is read-only for now. */
@@ -183,6 +194,20 @@ export interface CreatedAgentView {
   setup: AgentSetupView;
 }
 
+/**
+ * Whether agents are halted, and how much budget is left.
+ *
+ * `paused` guarantees no further work is SENT. It does not guarantee that work
+ * already running has stopped — see ADR 0012.
+ */
+export interface PauseState {
+  paused: boolean;
+  reason: 'manual' | 'turn_budget' | null;
+  pausedAt: string | null;
+  turnsUsed: number;
+  turnLimit: number;
+}
+
 export interface SessionContext {
   objective: string | null;
   facts: string[];
@@ -194,6 +219,8 @@ export interface SessionContext {
 
 export interface SessionView {
   session: Session;
+  /** Whether agents are halted, and remaining budget. See ADR 0012. */
+  agents: PauseState;
   participants: Participant[];
   members: Member[];
   /** The requesting user's role and participant identity in this session. */

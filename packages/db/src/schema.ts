@@ -3,11 +3,13 @@
  *
  * Tables are introduced by the milestone that needs them (docs/roadmap.md).
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
- * M2 (mentions), M3 (agents, tokens, session context) and M4 (presence).
+ * M2 (mentions), M3 (agents, tokens, session context), M4 (presence) and
+ * M6 (safety rails).
  */
 import {
   boolean,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -56,6 +58,14 @@ export const sessions = pgTable('sessions', {
   title: text('title').notNull(),
   /** active | archived */
   status: text('status').notNull().default('active'),
+  /**
+   * Null means agents are active. Set by a human hitting the kill switch or by
+   * the turn budget running out — one state, two causes, so there is one way to
+   * resume. See docs/decisions/0012-halt-is-server-side-termination-is-cooperative.md.
+   */
+  agentsPausedAt: timestamp('agents_paused_at', { withTimezone: true }),
+  /** manual | turn_budget */
+  agentsPausedReason: text('agents_paused_reason'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -354,3 +364,32 @@ export const agentConnections = pgTable(
   },
   (t) => [index('agent_connections_session_idx').on(t.sessionId)],
 );
+
+/* -------------------------------------------------------------------------- */
+/* M6 — safety rails                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Rolling delivery budget, per session.
+ *
+ * A "turn" is one delivery to one agent — a channel push or a spawn. Deliveries
+ * are counted rather than messages or tokens because a delivery is precisely what
+ * makes an agent act, and token usage is not ours to see: the agent runs under
+ * the user's own credentials.
+ *
+ * Per session rather than per agent, because the failure this prevents is a
+ * conversation BETWEEN agents. Two agents each under their own cap still loop
+ * forever; only a shared budget sees it.
+ *
+ * In Postgres rather than memory so it survives a restart and works across more
+ * than one server process.
+ */
+export const sessionTurnBudget = pgTable('session_turn_budget', {
+  sessionId: uuid('session_id')
+    .primaryKey()
+    .references(() => sessions.id, { onDelete: 'cascade' }),
+  windowStart: timestamp('window_start', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  agentTurnsUsed: integer('agent_turns_used').notNull().default(0),
+});

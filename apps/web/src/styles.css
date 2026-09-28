@@ -596,3 +596,39 @@ a {
 .danger-hint {
   color: #fcd34d;
 }
+
+/* ------------------------------------------------------- M6 safety rails */
+
+.paused-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 0.75rem 1.25rem 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #7c5e16;
+  border-radius: 10px;
+  background: color-mix(in srgb, #fcd34d 10%, transparent);
+}
+
+.paused-banner strong {
+  color: #fcd34d;
+  font-size: 0.85rem;
+}
+
+.paused-banner p {
+  margin: 0.3rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.paused-banner button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.topbar button.link.danger,
+.session > header button.link.danger {
+  color: #f87171;
+  font-size: 0.8rem;
+}

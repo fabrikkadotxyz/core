@@ -176,7 +176,37 @@ Tool grants (`session_mcp_tool_grants`) are **tool-level and default-deny**. Ser
 
 ## Threat 4 — resource exhaustion and loops
 
-Two agents in a session, each reacting to the other, will burn tokens until a human notices. Prevented by: mention-gated delivery, never echoing an agent its own messages, per-session turn budget, and a visible kill switch.
+Two agents in a session, each reacting to the other, will burn tokens until a
+human notices. Four controls, in the order they engage:
+
+| Control | Effect |
+| --- | --- |
+| Mention-gated delivery | An agent acts only when explicitly addressed |
+| Never its own messages | The cheapest loop guard, and correct regardless of trust |
+| **Turn budget** | 20 deliveries per 10 minutes **per session**, then the session pauses |
+| **Kill switch** | A human halts everything now |
+
+The budget is **per session, not per agent**, because the failure being prevented
+is a conversation *between* agents: two agents each under their own cap still loop
+forever. Only a shared budget sees it.
+
+### What "stop" can and cannot guarantee
+
+This distinction matters at exactly the moment someone is relying on it, so it is
+stated rather than implied. See
+[ADR 0012](decisions/0012-halt-is-server-side-termination-is-cooperative.md).
+
+| | Guarantee |
+| --- | --- |
+| No further work is sent | **Absolute.** The server simply stops delivering; no local process can change that. |
+| A spawned run stops | **Best-effort.** The server asks the runner to kill its child. A wedged, offline or modified runner will not comply. |
+| A live channel turn stops | **Not possible.** The model is already mid-turn in the user's terminal; nothing here can reach it. Pausing stops the *next* push. |
+
+The UI says this, rather than showing a button that implies more than it delivers.
+
+Exhausting the budget is never silent: it posts to the timeline and shows in the
+UI. A session that has quietly stopped responding is indistinguishable from a
+broken one.
 
 ## Declined capabilities
 

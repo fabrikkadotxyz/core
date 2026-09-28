@@ -178,15 +178,35 @@ chose the directory, and it prints what it will do before doing anything. See
 
 ## M6 — Safety rails — *gate, not a suggestion*
 
-> **M6 must land before a second human is ever put in a session with a spawn-enabled agent.** Until it does, sessions are single-owner-trusted.
+> **M6 must land before a second human is ever put in a session with a spawn-enabled agent.**
 
-- `trust_tier` default `owner_only`: only the owner's mentions can trigger action.
-- Other participants' messages delivered as explicitly-labelled untrusted context.
-- Agents never receive their own messages; delivery only on explicit mention.
-- `session_turn_budget`: N turns per rolling window, then pause and surface it.
-- Per-session kill switch halting delivery and terminating in-flight runs.
+Two of these landed early, at M4, because the delivery function was the natural
+place for them:
 
-**Test:** Alice sends `@claude-fede rm -rf /tmp/demo`. Fede's agent does **not** act; it shows as untrusted context. Set two agents to mention each other — the turn budget halts it. Hit the kill switch mid-run — the spawned process dies.
+- ✅ `trust_tier` default `owner_only` — only the owner's mentions trigger action.
+- ✅ Mention-gated delivery; an agent never receives its own messages.
+- ✅ Blocked mentions surface as `mention.blocked` rather than vanishing.
+
+M6 adds the rest:
+
+- **Turn budget** — 20 deliveries per 10 minutes **per session**, then the session
+  pauses. Per session, not per agent: two agents each under their own cap still
+  loop forever.
+- **Kill switch** — one control, reached manually or by the budget.
+- Honest limits, stated in the UI rather than implied
+  ([ADR 0012](decisions/0012-halt-is-server-side-termination-is-cooperative.md)):
+  halting delivery is **absolute**, aborting a spawned run is **cooperative**, and
+  a live channel turn **cannot be recalled at all**.
+
+**Test:**
+1. Alice mentions `@claude-fede`. It does not act; the timeline says why. *(M4)*
+2. Point two agents at each other and watch the budget halt the loop. The session
+   shows as paused, with the reason, and says so in the timeline.
+3. Resume. Delivery works again.
+4. Start a long spawned run, hit the kill switch: the child process dies and the
+   run reports being stopped.
+5. Hit it with a live Claude Code session mid-turn: that turn finishes. The UI
+   already told you it would.
 
 ## M7 — Session context UI + artifacts
 

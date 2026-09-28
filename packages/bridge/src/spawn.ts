@@ -38,6 +38,8 @@ export interface SpawnRequest {
   /** Optional narrowing; unset means the provider's own default. */
   allowedTools?: string[];
   onLog?: (line: string) => void;
+  /** Aborts the run. The server asks for this when a session is paused. */
+  signal?: AbortSignal;
 }
 
 export interface SpawnResult {
@@ -300,6 +302,23 @@ function execute(
       });
     }, RUN_TIMEOUT_MS);
 
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.kill('SIGTERM');
+      // SIGKILL shortly after: an agent mid-tool-call may ignore SIGTERM, and a
+      // kill switch that leaves the process running is not a kill switch.
+      setTimeout(() => child.kill('SIGKILL'), 2000).unref?.();
+      resolve({ ok: false, text: stdout, error: 'run was stopped' });
+    };
+
+    // Registered AFTER `timer` exists, since onAbort clears it. And checked
+    // eagerly: addEventListener on an already-aborted signal never fires, so a
+    // run started just after a pause would otherwise run to completion.
+    if (req.signal?.aborted) onAbort();
+    else req.signal?.addEventListener('abort', onAbort, { once: true });
+
     child.stdout.on('data', (d) => {
       stdout += d.toString();
     });
@@ -322,6 +341,7 @@ function execute(
     });
 
     child.on('close', (code) => {
+      req.signal?.removeEventListener('abort', onAbort);
       if (settled) return;
       settled = true;
       clearTimeout(timer);

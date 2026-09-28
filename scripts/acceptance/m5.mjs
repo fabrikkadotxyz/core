@@ -346,6 +346,87 @@ if (!DEEP) {
 
   child.kill();
   await rm(dir, { recursive: true, force: true });
+
+  /* ---- the same, with Codex, when it can be found ---- */
+
+  const codexBin = await findCodex();
+  if (!codexBin) {
+    skip('codex spawn — codex CLI not found on PATH or in the desktop app bundle');
+  } else {
+    const codexAgent = (
+      await req(`${base}/agents`, {
+        method: 'POST',
+        body: { displayName: 'codex-x', provider: 'codex' },
+        jar: fede,
+      })
+    ).json;
+
+    const cdir = await mkdtemp(join(tmpdir(), 'm5-codex-'));
+    await writeFile(join(cdir, 'VALUE.txt'), `the codex number is ${stamp}\n`);
+
+    const cchild = spawn(
+      'node',
+      ['packages/bridge/dist/cli.js', 'watch', '--dir', cdir, '--provider', 'codex'],
+      {
+        env: {
+          ...process.env,
+          FABRIKKA_URL: `http://localhost:9090/mcp/o/${S.ownerSlug}/s/${S.publicId}`,
+          FABRIKKA_TOKEN: codexAgent.token,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    let clog = '';
+    cchild.stdout.on('data', (d) => (clog += d.toString()));
+    cchild.stderr.on('data', (d) => (clog += d.toString()));
+
+    await new Promise((r) => setTimeout(r, 4000));
+    check(
+      clog.includes('workspace-write sandbox'),
+      'the Codex runner states it uses a sandbox (unlike Claude Code headless)',
+    );
+
+    await req(`${base}/messages`, {
+      method: 'POST',
+      body: { content: `@codex-x read VALUE.txt and report the codex number` },
+      jar: fede,
+    });
+
+    const cdeadline = Date.now() + 240_000;
+    while (Date.now() < cdeadline && !/run done|run failed/.test(clog)) {
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    check(/run done/.test(clog), 'the Codex run completed');
+    check(
+      /fabrikka\/post_message/.test(clog),
+      'CODEX REACHED THE SESSION ENDPOINT — -c mcp_servers injection works',
+    );
+
+    const cmessages = (await req(`${base}/messages`, { jar: fede })).json;
+    check(
+      cmessages.some(
+        (m) => m.author.displayName === 'codex-x' && m.content.includes(String(stamp)),
+      ),
+      'the Codex run read a real file and its answer reached the session',
+    );
+
+    cchild.kill();
+    await rm(cdir, { recursive: true, force: true });
+  }
+}
+
+/** Codex's desktop app bundles its CLI outside PATH. */
+async function findCodex() {
+  const bundled = join(
+    process.env.HOME ?? '',
+    '.codex/plugins/.plugin-appserver/codex-cli/bin/codex',
+  );
+  const onPath = await new Promise((r) =>
+    execFileCb('sh', ['-c', 'command -v codex'], (e) => r(!e)),
+  );
+  if (onPath) return 'codex';
+  const { existsSync } = await import('node:fs');
+  return existsSync(bundled) ? bundled : null;
 }
 
 /* --------------------------- 7. presence returns to offline */

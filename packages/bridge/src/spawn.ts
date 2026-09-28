@@ -10,8 +10,9 @@
  * directory they chose, with the risk printed on screen (ADR 0011).
  */
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 export type Provider = 'claude-code' | 'codex' | string;
@@ -158,38 +159,92 @@ function parseClaudeStream(raw: string, onLog?: (l: string) => void): SpawnResul
 /* -------------------------------------------------------------------------- */
 
 /**
- * `codex exec` takes its MCP servers from its own config file rather than a flag,
- * so a Codex run gets no session endpoint and relies on the relay. A real vendor
- * asymmetry, recorded rather than hidden (ADR 0011).
+ * Codex.
+ *
+ * Verified against codex-cli 0.158.0-alpha.2.1. Three things differ from what the
+ * older docs suggested, all found by running it:
+ *
+ * - There is no `--full-auto`. `exec` runs commands without approval by default,
+ *   and `--approve-for-me` auto-approves what does need it, under a
+ *   workspace-write sandbox. That is a *stronger* posture than Claude Code's
+ *   `--dangerously-skip-permissions`, not a weaker one.
+ * - MCP servers CAN be injected per-invocation with `-c` overrides, so a Codex
+ *   run reaches the session endpoint and posts as itself. The token arrives via
+ *   `bearer_token_env_var` — `bearer_token` is rejected — which also keeps it out
+ *   of any file on disk.
+ * - `-o` writes the final assistant message to a file, which beats reconstructing
+ *   it from the event stream.
+ *
+ * `--skip-git-repo-check` matters because a project directory need not be a repo.
  */
 async function runCodex(req: SpawnRequest): Promise<SpawnResult> {
-  const args = ['exec'];
-  if (req.resumeId) args.push('resume', req.resumeId);
-  args.push('--json', '--full-auto', `${req.systemPreamble}\n\n${req.prompt}`);
+  const dir = await mkdtemp(join(tmpdir(), 'fabrikka-run-'));
+  const lastMessagePath = join(dir, 'last.txt');
 
-  const out = await execute('codex', args, req);
-  if (!out.ok) return out;
+  try {
+    const options = [
+      '--json',
+      '--skip-git-repo-check',
+      // Auto-approve under the workspace-write sandbox, so an unattended run
+      // does not stall on a prompt nobody will answer.
+      '--approve-for-me',
+      '-o',
+      lastMessagePath,
+    ];
 
-  let text = '';
-  let threadId: string | undefined;
-
-  for (const line of out.text.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('{')) continue;
-    try {
-      const event = JSON.parse(trimmed) as Record<string, unknown>;
-      if (typeof event.thread_id === 'string') threadId = event.thread_id;
-      const item = event.item as { type?: string; text?: string } | undefined;
-      if (item?.type === 'agent_message' && item.text) text += item.text + '\n';
-      if (typeof event.text === 'string' && event.type === 'agent_message') {
-        text += event.text + '\n';
-      }
-    } catch {
-      continue;
+    if (req.mcp) {
+      options.push(
+        '-c',
+        `mcp_servers.fabrikka.url="${req.mcp.url}"`,
+        '-c',
+        'mcp_servers.fabrikka.bearer_token_env_var="FABRIKKA_RUN_TOKEN"',
+      );
     }
-  }
 
-  return { ok: true, text: text.trim(), resumeId: threadId };
+    const prompt = `${req.systemPreamble}\n\n${req.prompt}`;
+    const args = req.resumeId
+      ? ['exec', 'resume', ...options, req.resumeId, prompt]
+      : ['exec', ...options, prompt];
+
+    const out = await execute('codex', args, req, {
+      // Passed in the environment, not on the command line or in a file: it is
+      // then invisible to `ps` and leaves nothing behind.
+      ...(req.mcp ? { FABRIKKA_RUN_TOKEN: req.mcp.token } : {}),
+    });
+    if (!out.ok) return out;
+
+    let threadId: string | undefined;
+    const fallback: string[] = [];
+
+    for (const line of out.text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('{')) continue;
+      try {
+        const event = JSON.parse(trimmed) as Record<string, unknown>;
+        if (typeof event.thread_id === 'string') threadId = event.thread_id;
+
+        const item = event.item as
+          | { type?: string; text?: string; tool?: string; server?: string }
+          | undefined;
+        if (item?.type === 'agent_message' && item.text) fallback.push(item.text);
+        if (item?.type === 'mcp_tool_call' && item.tool) {
+          req.onLog?.(`tool: ${item.server}/${item.tool}`);
+        }
+        if (item?.type === 'command_execution') req.onLog?.('tool: shell');
+      } catch {
+        continue;
+      }
+    }
+
+    const finalText = await readFile(lastMessagePath, 'utf8').catch(() => '');
+    return {
+      ok: true,
+      text: (finalText || fallback.join('\n')).trim(),
+      resumeId: threadId,
+    };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -202,13 +257,14 @@ function execute(
   bin: string,
   args: string[],
   req: SpawnRequest,
+  extraEnv: Record<string, string> = {},
 ): Promise<{ ok: boolean; text: string; error?: string }> {
   return new Promise((resolve) => {
-    const child = spawn(bin, args, {
+    const child = spawn(resolveBin(bin), args, {
       cwd: req.cwd,
       // Inherit the environment: the binary's own credentials live there, and
       // they are the user's, not ours.
-      env: process.env,
+      env: { ...process.env, ...extraEnv },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -260,4 +316,33 @@ function execute(
       });
     });
   });
+}
+
+/**
+ * Resolve an agent binary.
+ *
+ * `CODEX_BIN` / `CLAUDE_BIN` win, so a user with an unusual install can say so.
+ * Otherwise fall back to PATH — except that the Codex desktop app bundles its CLI
+ * somewhere PATH never sees, and that is a common enough install to be worth
+ * finding rather than failing on.
+ */
+function resolveBin(bin: string): string {
+  const override = process.env[`${bin.toUpperCase().replace(/-/g, '_')}_BIN`];
+  if (override) return override;
+
+  if (bin === 'codex') {
+    const bundled = join(
+      homedir(),
+      '.codex/plugins/.plugin-appserver/codex-cli/bin/codex',
+    );
+    // Only used when the CLI is not on PATH; spawn() would ENOENT otherwise.
+    if (!onPath('codex') && existsSync(bundled)) return bundled;
+  }
+
+  return bin;
+}
+
+function onPath(bin: string): boolean {
+  const dirs = (process.env.PATH ?? '').split(':').filter(Boolean);
+  return dirs.some((d) => existsSync(join(d, bin)));
 }

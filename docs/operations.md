@@ -84,9 +84,18 @@ The session UI generates the command under *Agents → While away*.
 
 | | Claude Code | Codex |
 | --- | --- | --- |
-| Spawn | `claude -p … --dangerously-skip-permissions` | `codex exec --json --full-auto` |
-| Session tools during the run | yes, via `--mcp-config` | **no** — `codex exec` reads MCP servers from its own config file |
-| How the answer gets posted | the agent calls `post_message` itself | the runner relays its output |
+| Spawn | `claude -p … --dangerously-skip-permissions` | `codex exec … --approve-for-me` |
+| Sandbox | **none** | workspace-write |
+| Session tools during the run | yes, via `--mcp-config` | yes, via `-c mcp_servers.…` overrides |
+| How the answer gets posted | the agent calls `post_message` itself | the same |
+
+Codex is the safer of the two here: `--approve-for-me` auto-approves inside a
+workspace-write sandbox, whereas Claude Code's headless mode has no sandbox. If
+that matters for your use, prefer a Codex agent for unattended work.
+
+The Codex desktop app bundles its CLI outside `PATH`, at
+`~/.codex/plugins/.plugin-appserver/codex-cli/bin/codex`. The runner finds it
+there automatically; `CODEX_BIN` overrides the choice.
 
 If an agent posts nothing, the runner posts the final text for it. A run is never
 silent, because from the browser silence is indistinguishable from a failure.

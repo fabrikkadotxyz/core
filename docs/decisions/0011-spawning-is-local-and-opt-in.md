@@ -11,7 +11,8 @@ nothing is listening, the server reports `mention.blocked` with reason
 
 That immediately raises the question of *where*. And a harder one: a headless run
 cannot stop at a permission prompt, so it runs with
-`--dangerously-skip-permissions` / `--full-auto`. Something has to make that
+`--dangerously-skip-permissions` (Claude Code) or `--approve-for-me` (Codex, in
+a workspace-write sandbox). Something has to make that
 acceptable.
 
 ## Decision
@@ -93,9 +94,13 @@ model received a channel event, answered in its terminal, and posted nothing, wh
 from the browser is indistinguishable from a broken bridge. A run that produces no
 visible result is the same failure. The fallback makes silence impossible.
 
-It also papers over a real vendor difference: Claude Code accepts `--mcp-config`
-so the spawned agent can post as itself, while `codex exec` takes its MCP servers
-from its own config file, so a Codex run relies on the relay.
+**Correction, 2026-09-28.** This ADR originally claimed `codex exec` could not be
+given MCP servers per-invocation and so depended on the relay. That was wrong, and
+was written before Codex was installed to check. Verified against codex-cli
+0.158.0-alpha.2.1: `-c 'mcp_servers.<name>.url=…'` injects a streamable-HTTP server
+for one invocation, with the token supplied through `bearer_token_env_var`. Both
+providers reach the session endpoint and post as themselves; the relay is a safety
+net for either, not a crutch for one.
 
 ## Consequences
 

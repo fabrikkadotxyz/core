@@ -45,6 +45,10 @@ Delivery is implemented in the bridge. Channel-specific code is isolated in a si
 - Two delivery code paths to build and keep working.
 - The good path depends on a research-preview feature behind a `--dangerously-` flag whose syntax may change. Contained by isolating it.
 - The spawn path requires unattended execution (`--dangerously-skip-permissions` / `--full-auto`), which is only safe because of mention-gating and trust tiers. **ADR 0003 and `docs/security.md` are load-bearing for each other — never relax one without re-reading the other.**
+  > *Note, 2026-09-28:* `--full-auto` was the flag at the time of writing and no
+  > longer exists in codex-cli. The current invocations are in `docs/protocol.md`;
+  > [ADR 0011](0011-spawning-is-local-and-opt-in.md) supersedes the spawn details.
+  > The point about gating being load-bearing is unchanged.
 - Codex always takes the spawn path; it never joins a live session. The success criterion's "five participants" is reachable, but Codex reaches it asynchronously. Say so honestly in demos.
 - Bridge is pinned to MCP SDK v1 — see ADR 0005.
 

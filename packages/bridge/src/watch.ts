@@ -51,7 +51,11 @@ export async function watch(opts: WatchOptions): Promise<void> {
   log(`  agent     : @${displayName}`);
   log(`  directory : ${cwd}`);
   log(
-    `  on mention: ${opts.provider === 'codex' ? 'codex exec --full-auto' : 'claude -p --dangerously-skip-permissions'}`,
+    `  on mention: ${
+      opts.provider === 'codex'
+        ? 'codex exec --approve-for-me   (workspace-write sandbox)'
+        : 'claude -p --dangerously-skip-permissions   (no sandbox)'
+    }`,
   );
   log('');
   log('  Runs start WITHOUT permission prompts, in the directory above.');
@@ -118,11 +122,10 @@ export async function watch(opts: WatchOptions): Promise<void> {
       cwd,
       prompt: buildPrompt(frame),
       systemPreamble: buildPreamble(displayName, frame),
-      // Codex takes MCP servers from its own config, so it gets none here.
-      mcp:
-        runToken && opts.provider !== 'codex'
-          ? { url: config.mcpUrl, token: runToken.token }
-          : undefined,
+      // Both providers reach the session endpoint: Claude Code via --mcp-config,
+      // Codex via -c overrides. The relay below stays as the fallback for a run
+      // that answers without posting.
+      mcp: runToken ? { url: config.mcpUrl, token: runToken.token } : undefined,
       resumeId,
       allowedTools: opts.allowedTools,
       onLog: (line) => log(`  ${line}`),
@@ -183,13 +186,19 @@ export async function watch(opts: WatchOptions): Promise<void> {
 /* -------------------------------------------------------------------------- */
 
 function buildPreamble(displayName: string, frame: MentionFrame): string {
+  // No escape hatch. An earlier version added "otherwise print your answer and it
+  // will be posted for you", and the model took the easier branch every time —
+  // which meant it never mentioned anyone and never posted progress. The relay
+  // still exists as a safety net, but the agent is not told about it: an
+  // instruction with an opt-out is a suggestion.
   const base =
     `You are @${displayName}, a participant in a shared Fabrikka session where ` +
     'humans and other agents work on one problem together. You were started ' +
     'because someone mentioned you.\n\n' +
-    'Nobody is watching this process. Your answer reaches people ONLY if you post ' +
-    'it to the session. If the fabrikka tools are available, call post_message; ' +
-    'otherwise print your final answer and it will be posted for you.';
+    'Nobody is watching this process and nobody will read your terminal output. ' +
+    'The fabrikka tools are connected: call post_message to say anything you ' +
+    'want the session to see — your conclusion, and any progress or questions ' +
+    'along the way. Mention someone by writing @their-name in the text.';
 
   if (frame.trust === 'owner') return base;
 

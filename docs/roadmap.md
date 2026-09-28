@@ -155,7 +155,8 @@ chose the directory, and it prints what it will do before doing anything. See
 [ADR 0011](decisions/0011-spawning-is-local-and-opt-in.md).
 
 - `claude -p … --mcp-config … --dangerously-skip-permissions`, and
-  `codex exec --json --full-auto` for Codex.
+  `codex exec … --approve-for-me` for Codex (which, unlike Claude Code's
+  headless mode, runs inside a workspace-write sandbox).
 - Each run gets a **run-scoped token**: same session and participant, 30-minute
   TTL, revoked when the run ends.
 - One run at a time per agent; further mentions queue to a cap and are then

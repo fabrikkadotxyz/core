@@ -405,12 +405,30 @@ claude -p "<prompt>" \
 ### Codex
 
 ```bash
-codex exec [resume <thread_id>] --json --full-auto "<prompt>"
+codex exec --json --skip-git-repo-check --approve-for-me \
+  -c 'mcp_servers.fabrikka.url="<session endpoint>"' \
+  -c 'mcp_servers.fabrikka.bearer_token_env_var="FABRIKKA_RUN_TOKEN"' \
+  -o <last-message-file> \
+  "<prompt>"
 ```
 
-`codex exec` takes its MCP servers from its own config file rather than a flag, so
-a Codex run has no session endpoint and relies on the relay below. This is a real
-vendor asymmetry, not something to paper over.
+Verified against codex-cli `0.158.0-alpha.2.1`. Four things differ from what the
+older docs implied, each found by running it rather than reading about it:
+
+- **There is no `--full-auto`.** `exec` runs shell commands without approval by
+  default; `--approve-for-me` auto-approves what does need it, under a
+  **workspace-write sandbox**. That is a *stronger* posture than Claude Code's
+  `--dangerously-skip-permissions`, which has no sandbox at all.
+- **MCP servers can be injected per-invocation** with `-c`, so a Codex run does
+  reach the session endpoint and posts as itself. The token must arrive via
+  `bearer_token_env_var`; `bearer_token` is rejected outright, which conveniently
+  keeps it out of any file.
+- `-o` writes the final assistant message to a file, which beats reconstructing it
+  from the event stream.
+- `--skip-git-repo-check` is required, because a project directory need not be a
+  git repository.
+
+Resume is a subcommand, not a flag: `codex exec resume <options> <id> <prompt>`.
 
 ### If the agent posts nothing, the runner posts for it
 
@@ -445,7 +463,7 @@ that position is a standing liability.
 
 ### Unattended execution
 
-Headless runs cannot stop at permission prompts, so they run with `--dangerously-skip-permissions` / `--full-auto`. **This is only safe because of mention-gating and trust tiers** — a spawn is triggered only by a participant authorized to drive that agent. See `docs/security.md`. Never relax one without re-reading the other.
+Headless runs cannot stop at permission prompts, so Claude Code runs with `--dangerously-skip-permissions` (no sandbox) and Codex with `--approve-for-me` (workspace-write sandbox). **This is only safe because of mention-gating and trust tiers** — a spawn is triggered only by a participant authorized to drive that agent. See `docs/security.md`. Never relax one without re-reading the other.
 
 Poll cadence for pending mentions: 5 s, exponential backoff on failure.
 

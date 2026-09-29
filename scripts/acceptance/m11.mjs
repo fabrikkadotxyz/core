@@ -95,6 +95,33 @@ check(
   styles.includes('.pane-backdrop'),
   'an overlaid rail has a way out on a narrow screen',
 );
+
+/* The output rail is resizable, and the resizer is not mouse-only. */
+check(script.includes('rail-handle'), 'the output rail ships a resize handle');
+check(
+  script.includes('separator') && script.includes('aria-orientation'),
+  'the handle is a real separator, not a bare div',
+);
+check(
+  script.includes('ArrowLeft') && script.includes('Home'),
+  'the handle can be driven from the keyboard, not only dragged',
+);
+check(
+  script.includes('setPointerCapture'),
+  'the drag survives the cursor outrunning the handle',
+);
+check(
+  script.includes('outputWidth'),
+  'the chosen width is remembered beside the collapsed state',
+);
+check(
+  styles.includes('--rail-output-w'),
+  'the remembered width drives the column, with a literal fallback',
+);
+check(
+  styles.includes('col-resize') && styles.includes('touch-action'),
+  'the handle reads as resizable and does not fight touch scrolling',
+);
 /* The pre-M11 shell is gone: dead CSS reads as the layout to the next person. */
 check(
   !/\.app\{[^}]*grid-template-columns/.test(styles),

@@ -42,7 +42,9 @@ body {
 }
 
 .workspace[data-output='open'] {
-  --rail-output: 320px;
+  /* Set inline by the page from the remembered width; the literal is the
+     fallback for a first visit or storage that refused to answer. */
+  --rail-output: var(--rail-output-w, 320px);
 }
 
 .rail {
@@ -61,6 +63,49 @@ body {
 
 .rail.output {
   border-left: 1px solid var(--border);
+}
+
+/*
+ * The resize handle sits ON the output rail's inner edge: 9px of pointer target
+ * over a 1px line, because a border-width hit area is a dexterity test. It is
+ * positioned against the workspace rather than the rail, which scrolls.
+ */
+.rail-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(var(--rail-output, 0px) - 4px);
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 3;
+}
+
+.rail-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 4px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.rail-handle:hover::after,
+.rail-handle:focus-visible::after,
+.rail-handle.dragging::after {
+  background: var(--accent);
+}
+
+.rail-handle:focus-visible {
+  outline: none;
+}
+
+/*
+ * While dragging: kill the column transition, or the rail chases the cursor a
+ * frame behind, and kill selection, or the drag highlights the conversation.
+ */
+.workspace:has(.rail-handle.dragging) {
+  transition: none;
+  user-select: none;
 }
 
 /* A closed rail is gone, not merely narrow: a 0px column still scrolls and
@@ -138,6 +183,12 @@ body {
 
   .rail.output {
     right: 0;
+  }
+
+  /* An overlay is a fixed width by definition; dragging it would resize
+     something that is already covering the conversation. */
+  .rail-handle {
+    display: none;
   }
 
   .workspace[data-setup='open'] .pane-backdrop,

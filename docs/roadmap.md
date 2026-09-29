@@ -354,6 +354,13 @@ Three panes, each answering a different question
 - The left rail **collapses**, because setup is what you do once and conversation
   is what you do for an hour. Collapsed state is remembered per session.
 - The middle pane is the one that grows when either side closes. It is the product.
+- The **right rail is resizable**, by dragging its inner edge. Output is the pane
+  whose content varies most — an objective is two lines, a decision log is thirty —
+  so one fixed width is wrong for somebody. Width is clamped (260–640px, and never
+  past 60% of the window), remembered per session beside the collapsed state, and
+  **adjustable from the keyboard**: the handle is a focusable `separator`, arrow
+  keys move it, Home/End go to the limits, double-click resets. A resizer only a
+  mouse can reach is a control half the users do not have.
 - The right pane is **what the session produced**, which today means context and
   artifacts — both already real (M7). It is deliberately *not* a placeholder for a
   generate button: a pane that exists to be filled later is a pane that teaches
@@ -369,15 +376,18 @@ Three panes, each answering a different question
    output on the right. The conversation is the widest.
 2. Collapse the left rail — the conversation grows. Reload: still collapsed.
    Collapse the right pane too, reload, and both stay as you left them.
-3. Post a message with the rail collapsed; the composer and timeline still work.
-4. Write an Objective in the right pane; it appears there, not in a panel you had
+3. Drag the right rail's inner edge: it resizes, the conversation gives up the
+   width, and the new width survives a reload. Drag it past either limit and it
+   stops. Tab to the handle and use ← →, then Home and End; double-click resets it.
+4. Post a message with the rail collapsed; the composer and timeline still work.
+5. Write an Objective in the right pane; it appears there, not in a panel you had
    to scroll to find.
-5. Sign in as a **member** (not the owner): add an agent named `claude-alice`,
+6. Sign in as a **member** (not the owner): add an agent named `claude-alice`,
    copy its setup block, and connect it. Owner-only controls (invites, tokens,
    delete session) are absent, not broken.
-6. Narrow the window to a phone width: the panes stack, conversation first, and
+7. Narrow the window to a phone width: the panes stack, conversation first, and
    nothing is clipped or unreachable.
-7. Activity still streams into the middle pane while the rail is collapsed.
+8. Activity still streams into the middle pane while the rail is collapsed.
 
 ## M12 — Steering: redirect it
 

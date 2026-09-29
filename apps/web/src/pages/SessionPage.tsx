@@ -27,10 +27,28 @@ import { MentionComposer, MentionText } from '../mentions.tsx';
 interface PaneState {
   setup: boolean;
   output: boolean;
+  /** Width of the output rail, in px. See `clampWidth`. */
+  outputWidth: number;
 }
 
 /** Setup is a one-time job; the conversation is the hour-long one. */
-const PANES_DEFAULT: PaneState = { setup: false, output: true };
+const PANES_DEFAULT: PaneState = { setup: false, output: true, outputWidth: 320 };
+
+/**
+ * Bounds for the output rail.
+ *
+ * A lower bound because the panels below it stop being readable, an upper bound
+ * because the conversation must not become the narrow half again — which is the
+ * whole reason this milestone exists. The viewport term matters on a laptop, where
+ * 640px of rail plus a setup rail leaves very little in between.
+ */
+const RAIL_MIN = 260;
+const RAIL_MAX = 640;
+
+function clampWidth(px: number): number {
+  const ceiling = Math.min(RAIL_MAX, Math.round(window.innerWidth * 0.6));
+  return Math.max(RAIL_MIN, Math.min(Math.round(px), Math.max(RAIL_MIN, ceiling)));
+}
 
 /**
  * Which side panes are open, remembered per session.
@@ -54,6 +72,12 @@ function usePanes(
       return {
         setup: typeof parsed.setup === 'boolean' ? parsed.setup : PANES_DEFAULT.setup,
         output: typeof parsed.output === 'boolean' ? parsed.output : PANES_DEFAULT.output,
+        // Re-clamped on read: a width stored on a wide monitor is not a width
+        // that works on the laptop this tab is open on.
+        outputWidth:
+          typeof parsed.outputWidth === 'number' && Number.isFinite(parsed.outputWidth)
+            ? clampWidth(parsed.outputWidth)
+            : PANES_DEFAULT.outputWidth,
       };
     } catch {
       return PANES_DEFAULT;
@@ -69,6 +93,73 @@ function usePanes(
   }, [storageKey, panes]);
 
   return [panes, setPanes];
+}
+
+/**
+ * The drag handle on the output rail's inner edge.
+ *
+ * Pointer events rather than mouse events, so a trackpad, a touch screen and a
+ * pen all work from one code path, and pointer capture keeps the drag alive when
+ * the cursor outruns the handle.
+ *
+ * It is also a real `separator` with arrow-key support. A resizer only a mouse
+ * can reach is a control that half the people using this do not have — and the
+ * keyboard path is what makes the bounds discoverable at all.
+ */
+function RailHandle({
+  width,
+  onResize,
+}: {
+  width: number;
+  onResize: (px: number) => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+
+  // The rail is on the right, so its width is the distance from the pointer to
+  // the workspace's right edge — measured, not assumed to be the window's.
+  const widthFromPointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    const right =
+      e.currentTarget.parentElement?.getBoundingClientRect().right ?? window.innerWidth;
+    return right - e.clientX;
+  };
+
+  return (
+    <div
+      className={dragging ? 'rail-handle dragging' : 'rail-handle'}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the output pane"
+      aria-valuenow={width}
+      aria-valuemin={RAIL_MIN}
+      aria-valuemax={RAIL_MAX}
+      tabIndex={0}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        setDragging(true);
+      }}
+      onPointerMove={(e) => {
+        if (!dragging) return;
+        onResize(widthFromPointer(e));
+      }}
+      onPointerUp={(e) => {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        setDragging(false);
+      }}
+      onPointerCancel={() => setDragging(false)}
+      onDoubleClick={() => onResize(PANES_DEFAULT.outputWidth)}
+      onKeyDown={(e) => {
+        const step = e.shiftKey ? 64 : 16;
+        if (e.key === 'ArrowLeft') onResize(width + step);
+        else if (e.key === 'ArrowRight') onResize(width - step);
+        else if (e.key === 'Home') onResize(RAIL_MAX);
+        else if (e.key === 'End') onResize(RAIL_MIN);
+        else return;
+        // Arrow keys scroll the pane behind the handle otherwise.
+        e.preventDefault();
+      }}
+    />
+  );
 }
 
 export function SessionPage() {
@@ -96,6 +187,9 @@ export function SessionPage() {
 
   const togglePane = (which: 'setup' | 'output') =>
     setPanes((prev) => ({ ...prev, [which]: !prev[which] }));
+
+  const resizeOutput = (px: number) =>
+    setPanes((prev) => ({ ...prev, outputWidth: clampWidth(px) }));
 
   const reload = useCallback(() => {
     sessions
@@ -248,6 +342,7 @@ export function SessionPage() {
         className="workspace"
         data-setup={panes.setup ? 'open' : 'closed'}
         data-output={panes.output ? 'open' : 'closed'}
+        style={{ '--rail-output-w': `${panes.outputWidth}px` } as React.CSSProperties}
       >
         {/*
           Left — SETUP: everything that CHANGES the session. Collapsible, because
@@ -481,6 +576,10 @@ export function SessionPage() {
           written by agents through MCP, so this pane is already filled by AI;
           it is filled by tool calls rather than by a button (ADR 0018).
         */}
+        {/* A sibling of the rail, not a child: the rail scrolls, and a handle
+            that scrolls away is a handle you cannot reach. */}
+        {panes.output && <RailHandle width={panes.outputWidth} onResize={resizeOutput} />}
+
         <aside className="rail output" aria-label="Session output" aria-hidden={!panes.output}>
           <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
           <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} />
@@ -494,7 +593,7 @@ export function SessionPage() {
           <button
             className="pane-backdrop"
             aria-label="Close panel"
-            onClick={() => setPanes({ setup: false, output: false })}
+            onClick={() => setPanes((prev) => ({ ...prev, setup: false, output: false }))}
           />
         )}
       </div>

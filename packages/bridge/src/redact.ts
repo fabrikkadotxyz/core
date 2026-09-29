@@ -41,6 +41,30 @@ export function redact(value: string): string {
   return out;
 }
 
+/**
+ * `/bin/zsh -lc 'pytest -q'` -> `pytest -q`.
+ *
+ * Codex runs every command through a login shell, so without this the first token
+ * is `/bin/zsh` for everything it ever does — a descriptor that describes nothing.
+ * Only the wrapper is removed; the payload still goes through `firstToken`,
+ * because a wrapped command line is a full command line.
+ */
+function unwrapShell(command: string): string {
+  const match = /^(?:\S*\/)?(?:ba|z|k|)sh\s+(?:-\S+\s+)*-\S*c\s+(.*)$/s.exec(
+    command.trim(),
+  );
+  if (!match?.[1]) return command;
+
+  const payload = match[1].trim();
+  const quoted = /^(['"])([\s\S]*)\1$/.exec(payload);
+  return (quoted?.[2] ?? payload).trim() || command;
+}
+
+/** The program being run, and nothing after it. */
+function firstToken(command: string): string {
+  return command.trim().split(/[\s;|&(]/)[0] ?? '';
+}
+
 function shorten(value: string): string {
   const flat = value.replace(/\s+/g, ' ').trim();
   if (flat.length <= MAX_DETAIL) return flat;
@@ -96,7 +120,7 @@ export function summarise(call: ToolCall): ActivityLine {
     case 'BashOutput': {
       const command = str('command');
       if (!command) return { tool: 'Bash', detail: null };
-      const program = command.trim().split(/[\s;|&]/)[0] ?? '';
+      const program = firstToken(unwrapShell(command));
       return { tool: 'Bash', detail: program ? shorten(redact(program)) : null };
     }
 

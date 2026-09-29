@@ -131,6 +131,15 @@ Two things were wrong in a way only the running system showed:
 Both failures are the same shape: the events were all present and the *sequence*
 was wrong, which reads as the agent having done something it did not do.
 
+> *Note, 2026-09-29, from testing the Codex lane:* Codex reports each item twice —
+> once `item.started`, once `item.completed` with the same `id` — so every step
+> appeared twice until the runner learned to read only the first. Its
+> `item.completed` also carries `aggregated_output`, the command's real stdout: the
+> "never stream output" rule is not abstract, it is a field sitting in the event we
+> already parse. And because Codex shells out through `/bin/zsh -lc '…'`, the
+> first-token rule yielded `Bash /bin/zsh` for every command until the wrapper was
+> unwrapped. Details in [docs/protocol.md](../protocol.md#what-the-runner-reports-as-activity).
+
 ## Alternatives considered
 
 **Stream everything, verbatim.** Maximum transparency, best "watch it work" feel,

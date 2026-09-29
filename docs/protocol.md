@@ -446,11 +446,16 @@ claude -p "<prompt>" \
 
 ```bash
 codex exec --json --skip-git-repo-check --approve-for-me \
-  -c 'mcp_servers.fabrikka.url="<session endpoint>"' \
-  -c 'mcp_servers.fabrikka.bearer_token_env_var="FABRIKKA_RUN_TOKEN"' \
+  -c 'mcp_servers.fabrikka_session.url="<session endpoint>"' \
+  -c 'mcp_servers.fabrikka_session.bearer_token_env_var="FABRIKKA_RUN_TOKEN"' \
   -o <last-message-file> \
   "<prompt>"
 ```
+
+The server key is **`fabrikka_session`, not `fabrikka`**: `-c` *merges* into the
+user's own `config.toml`, so reusing a name someone may already have configured
+would silently combine two servers' settings. Tools therefore arrive namespaced as
+`fabrikka_session__post_message`, which is what shows up in activity lines.
 
 Verified against codex-cli `0.158.0-alpha.2.1`. Four things differ from what the
 older docs implied, each found by running it rather than reading about it:
@@ -469,6 +474,28 @@ older docs implied, each found by running it rather than reading about it:
   git repository.
 
 Resume is a subcommand, not a flag: `codex exec resume <options> <id> <prompt>`.
+
+### What the runner reports as activity
+
+Both runners parse the agent's own event stream **incrementally** — a line is
+summarised the moment its newline arrives — and send `activity` frames as the run
+proceeds. What each stream offers differs:
+
+| Provider | Read from | Notes |
+| --- | --- | --- |
+| Claude Code | `{"type":"assistant"}` events, each `tool_use` block | One event per call; no de-duplication needed |
+| Codex | `{"type":"item.started"}` events, `command_execution` and `mcp_tool_call` items | **`item.completed` repeats the same item `id`** and is ignored, or every step would appear twice |
+
+Codex's `item.completed` also carries `aggregated_output` — the command's actual
+stdout. **It is never read.** Tool output is not streamed by design (ADR 0015),
+and this is the one place a runner would trip over it by accident.
+
+Codex runs shell commands through a login shell, so `command` arrives as
+`/bin/zsh -lc 'pytest -q'`. The summariser **unwraps the wrapper** before taking
+the first token, because `Bash /bin/zsh` describes every command Codex ever runs
+and therefore describes none of them. The unwrapped token is still only the first
+one: the wrapper's payload is a full command line, which is exactly what must not
+travel.
 
 ### If the agent posts nothing, the runner posts for it
 

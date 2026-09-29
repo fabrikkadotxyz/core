@@ -308,34 +308,48 @@ async function runCodex(req: SpawnRequest): Promise<SpawnResult> {
   }
 }
 
-/** One line of `codex exec --json`, reported as it happens. */
-function emitCodexActivity(line: string, req: SpawnRequest): void {
-  if (!line.startsWith('{')) return;
+/**
+ * One line of `codex exec --json`, as an activity line or nothing.
+ *
+ * Pure, so the stream shapes that cost a real run to discover can be unit-tested
+ * against captured lines. Verified against codex-cli 0.158.0-alpha.2.1.
+ *
+ * **Only `item.started` is read.** Codex reports every item twice — once started,
+ * once completed with the same `id` — so reading both showed each step twice.
+ * `item.completed` additionally carries `aggregated_output`, the command's real
+ * stdout, which is precisely what ADR 0015 says never travels; ignoring the event
+ * outright is the safest way not to reach for it.
+ */
+export function codexActivity(line: string): ActivityLine | null {
+  if (!line.startsWith('{')) return null;
 
   let event: Record<string, unknown>;
   try {
     event = JSON.parse(line) as Record<string, unknown>;
   } catch {
-    return;
+    return null;
   }
+  if (event.type !== 'item.started') return null;
 
   const item = event.item as
     | { type?: string; tool?: string; server?: string; command?: string; arguments?: unknown }
     | undefined;
-  if (!item) return;
+  if (!item) return null;
 
-  // `item.started` carries the call; waiting for `completed` would report each
-  // step only once it had already finished.
   if (item.type === 'mcp_tool_call' && item.tool) {
-    req.onLog?.(`tool: ${item.server}/${item.tool}`);
-    req.onActivity?.(
-      summarise({ name: `${item.server}__${item.tool}`, args: item.arguments }),
-    );
+    return summarise({ name: `${item.server}__${item.tool}`, args: item.arguments });
   }
   if (item.type === 'command_execution') {
-    req.onLog?.('tool: shell');
-    req.onActivity?.(summarise({ name: 'Bash', args: { command: item.command } }));
+    return summarise({ name: 'Bash', args: { command: item.command } });
   }
+  return null;
+}
+
+function emitCodexActivity(line: string, req: SpawnRequest): void {
+  const activity = codexActivity(line);
+  if (!activity) return;
+  req.onLog?.(`tool: ${activity.tool}`);
+  req.onActivity?.(activity);
 }
 
 /* -------------------------------------------------------------------------- */

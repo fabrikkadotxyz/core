@@ -1,4 +1,5 @@
 import { redact, summarise } from '../redact.ts';
+import { codexActivity } from '../spawn.ts';
 
 let fails = 0;
 const eq = (label: string, got: unknown, want: unknown) => {
@@ -56,6 +57,29 @@ const long = summarise({ name: 'Read', args: { file_path: '/very/deep/' + 'x'.re
 eq('long detail is truncated', (long.detail ?? '').length <= 80, true);
 eq('Read with no args', summarise({ name: 'Read' }), { tool: 'Read', detail: null });
 eq('Bash with no command', summarise({ name: 'Bash', args: {} }), { tool: 'Bash', detail: null });
+
+/* --- shell wrappers: Codex runs everything through a login shell --- */
+eq('zsh -lc is unwrapped', summarise({ name: 'Bash', args: { command: "/bin/zsh -lc 'pytest -q'" } }), { tool: 'Bash', detail: 'pytest' });
+eq('bash -c is unwrapped', summarise({ name: 'Bash', args: { command: 'bash -c "npm test"' } }), { tool: 'Bash', detail: 'npm' });
+eq('sh -c is unwrapped', summarise({ name: 'Bash', args: { command: "sh -c 'ls -la'" } }), { tool: 'Bash', detail: 'ls' });
+const wrapped = summarise({ name: 'Bash', args: { command: `/bin/zsh -lc 'curl -H "Authorization: Bearer sk-ant-api03-SECRETVALUE" https://api.example.com'` } });
+eq('wrapped command still shows only the program', wrapped, { tool: 'Bash', detail: 'curl' });
+lacks('a wrapper does not smuggle the token through', JSON.stringify(wrapped), 'SECRETVALUE');
+eq('a bare shell is left alone', summarise({ name: 'Bash', args: { command: '/bin/zsh' } }), { tool: 'Bash', detail: '/bin/zsh' });
+eq('ssh is not mistaken for a shell wrapper', summarise({ name: 'Bash', args: { command: 'ssh -c aes256 host' } }), { tool: 'Bash', detail: 'ssh' });
+
+/* --- Codex's event stream, from lines captured off codex-cli 0.158.0 --- */
+const codexShellStarted = '{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"/bin/zsh -lc \'cat ANSWER.txt\'","aggregated_output":"","exit_code":null,"status":"in_progress"}}';
+const codexShellCompleted = '{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"/bin/zsh -lc \'cat ANSWER.txt\'","aggregated_output":"the magic number is 8471\\n","exit_code":0,"status":"completed"}}';
+
+eq('codex reports a shell step once, on started', codexActivity(codexShellStarted), { tool: 'Bash', detail: 'cat' });
+eq('codex ignores the completed twin, so no step appears twice', codexActivity(codexShellCompleted), null);
+lacks('codex never carries aggregated_output', JSON.stringify(codexActivity(codexShellStarted)), '8471');
+eq('codex mcp call is namespaced', codexActivity('{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"fabrikka_session","tool":"post_message","arguments":{"content":"done"}}}'), { tool: 'fabrikka_session__post_message', detail: null });
+eq('codex thread events are not activity', codexActivity('{"type":"thread.started","thread_id":"t_1"}'), null);
+eq('codex agent_message is not activity', codexActivity('{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"the number is 8471"}}'), null);
+eq('a non-JSON line is ignored', codexActivity('Reading additional input from stdin...'), null);
+eq('malformed JSON is ignored', codexActivity('{"type":"item.started"'), null);
 
 console.log(fails === 0 ? '\nredaction: PASS' : `\nredaction: ${fails} FAILURE(S)`);
 process.exit(fails === 0 ? 0 : 1);

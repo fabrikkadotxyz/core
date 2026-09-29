@@ -354,6 +354,65 @@ steering **stops and resumes**, and the UI says which
 5. A non-owner correction is refused, exactly like a mention.
 6. Fire five corrections in two seconds: they coalesce into one restart.
 
+## M12 — Four more agents, and model pass-through
+
+> **Adding an agent is mostly free already.** Lane A (any MCP client) works today
+> for anything speaking MCP — zero code. An adapter buys only the **spawn path**,
+> and that is ~50 lines, as Codex was. We do not need twenty-five adapters;
+> a runtime-owning approach needs them because it supervises every agent CLI
+> ([ADR 0002](decisions/0002-do-not-own-the-agent-runtime.md)).
+
+Ranked by adoption × spawn feasibility, not by name recognition:
+
+| # | Agent | Why it earns the slot | Spawn readiness |
+| --- | --- | --- | --- |
+| 1 | **Gemini CLI** | Google distribution and a free tier — most users per unit of work | Streamable-HTTP MCP ✓, headless with model, output format **and resume** ✓ |
+| 2 | **OpenCode** | Widely used open-source agent, and the most-starred one | `opencode run -m provider/model` ✓, MCP ✓, `--attach` skips MCP cold-boot |
+| 3 | **Cursor CLI** | Most broadly adopted overall among individuals and small teams | `agent -p` ✓, MCP shares the editor's config — **but verify first** |
+| 4 | **Goose** *or* **Copilot CLI** | Goose is MCP-native, so least work and closest to the architecture. Copilot CLI has the widest distribution. Pick by whether slot 4 is about proving the bet or reach | Unverified |
+
+> **Verify Cursor before committing.** There is an open Cursor request titled *MCP
+> access in headless mode*. If MCP does not work under `-p`, a spawned Cursor run
+> cannot reach the session endpoint and falls back to relay-only — the same
+> asymmetry Codex appeared to have until it was actually installed and tested, at
+> which point three documented claims turned out to be wrong. Install it, run it,
+> then decide.
+
+Not on the list, deliberately: **Cursor IDE, Antigravity, Cline, Windsurf.** IDEs
+and extensions with no headless CLI. They get Lane A today and need nothing from us.
+
+### Model pass-through
+
+See [ADR 0017](decisions/0017-model-selection-is-spawn-only.md). The short version
+is that we mostly cannot choose, and the interface says so:
+
+| Lane | Model chosen by |
+| --- | --- |
+| Live session | The user, when they started their agent |
+| Any MCP client | The user, in their own client config |
+| **Spawned run** | **Us** — we build the command line |
+
+- Optional `model` per session-agent, null meaning the agent's own default, passed
+  as `--model` / `-m` on spawn and ignored elsewhere.
+- **Opaque string, no curated list.** Catalogues change weekly and formats disagree
+  (`opus` vs `provider/model`); a stale dropdown silently withholds the model
+  someone wants.
+- **`model_used` is parsed from the run's stream and displayed** — verified against
+  Claude Code, which reports `model = claude-opus-5-5` on its `system` event. Kept
+  separate from the requested model, because `--fallback-model` exists and "asked
+  for opus, ran on sonnet" is the interesting fact.
+- On live lanes the UI reports the model rather than offering an inert control.
+
+**Test:**
+1. Add a Gemini CLI agent, run it via the runner, and see its answer in the session.
+2. Same for OpenCode, with `-m provider/model`.
+3. Set a model on a spawn-enabled agent; the timeline shows which model the run
+   actually used.
+4. Set a nonsense model; the run fails **visibly**, with the provider's own error.
+5. A live-session agent shows no model control, and reports the model its own
+   config chose.
+6. Two agents in one session on different models both work.
+
 ---
 
 ## MVP acceptance

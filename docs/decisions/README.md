@@ -49,3 +49,4 @@ What we rejected and why.
 | [0014](0014-aggregation-is-http-only-and-credentials-are-encrypted.md) | Aggregated servers are HTTP-only, and credentials are encrypted or refused | Accepted |
 | [0015](0015-activity-is-a-redacted-summary.md) | Activity is a redacted summary, not a transcript | Proposed |
 | [0016](0016-steering-is-stop-and-resume.md) | Steering is stop-and-resume, not interruption | Proposed |
+| [0017](0017-model-selection-is-spawn-only.md) | Model selection is spawn-only, opaque, and reported | Proposed |

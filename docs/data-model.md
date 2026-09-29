@@ -268,9 +268,20 @@ runs
   ended_at         timestamptz
   index (session_id, started_at)
 
-session_agents  (addition)
+session_agents  (additions)
   activity_visible boolean not null default true
+  model            text                   -- null = the agent's own default
+
+runs  (addition)
+  model_requested  text                   -- what we asked for, if anything
+  model_used       text                   -- what the stream reported
 ```
+
+`model_requested` and `model_used` are separate because `--fallback-model` exists:
+"asked for opus, ran on sonnet" is a different fact from either one alone, and
+collapsing them hides the interesting half. `model` only affects **spawned** runs —
+on a live session the model was chosen before we were involved. See
+[ADR 0017](decisions/0017-model-selection-is-spawn-only.md).
 
 **There is no `activity` table, deliberately.** Activity events live in a capped
 in-memory buffer per run and are discarded when it ends: hundreds of rows per run

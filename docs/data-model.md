@@ -252,7 +252,7 @@ non-event rather than data loss.
 
 Context is **not** over-normalized. Facts and decisions are lists of text with timestamps, not an entity graph. If this needs to become relational later, that will be obvious from use — it is not obvious now.
 
-### M10/M11 — runs and activity *(specced, not built)*
+### M10 — runs and activity
 
 ```
 runs
@@ -268,11 +268,21 @@ runs
   ended_at         timestamptz
   index (session_id, started_at)
 
-session_agents  (additions)
+session_agents  (addition)
   activity_visible boolean not null default true
+```
+
+`resume_handle` exists but is **not written yet** — M11 fills it, because a
+correction can only continue a run that remembered how to be continued. The column
+is here rather than in a later migration so `runs` has one shape.
+
+**M12 adds (specced, not built):**
+
+```
+session_agents  (addition)
   model            text                   -- null = the agent's own default
 
-runs  (addition)
+runs  (additions)
   model_requested  text                   -- what we asked for, if anything
   model_used       text                   -- what the stream reported
 ```

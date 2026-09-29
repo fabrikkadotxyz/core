@@ -138,6 +138,11 @@ export const sessions = {
       method: 'PATCH',
       body: { trustTier },
     }),
+  setAgentActivity: (ref: SessionRef, sessionAgentId: string, visible: boolean) =>
+    call<{ ok: true }>(`${base(ref)}/agents/${sessionAgentId}/activity`, {
+      method: 'PATCH',
+      body: { visible },
+    }),
 
   tokens: (ref: SessionRef) => call<TokenSummary[]>(`${base(ref)}/tokens`),
   revokeToken: (ref: SessionRef, id: string) =>

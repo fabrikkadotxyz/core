@@ -1,6 +1,6 @@
 # 0015 — Activity is a redacted summary, not a transcript
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-09-29
 
 ## Context
@@ -72,6 +72,25 @@ activity to a shared room is a reasonable default and an unreasonable
 obligation — somebody working in a private repo inside a shared session gets to
 decline without leaving the session.
 
+### How much is visible depends on the lane, and that is not fixable here
+
+| Lane | What can be streamed |
+| --- | --- |
+| **Spawned run** | **Everything.** The runner parses the agent's own event stream, so it sees every tool call |
+| **Live session** | **Only tools called through us** — `post_message`, `read_messages`, aggregated integrations. Claude Code executes `Read`, `Bash` and the rest in the user's own terminal, and the bridge is not in that loop |
+
+This is a property of how channels work, not an implementation gap. The bridge is
+an MCP server the agent talks to; it never sees the agent's other tools.
+
+It is also the less important half. The case the multiplayer thesis describes —
+"agents running tasks that take hours, days, even weeks" with nobody watching — is
+precisely the spawned run. A live session already has a human in front of it,
+reading the terminal.
+
+A future option, deliberately out of scope: Claude Code's `PostToolUse` hook could
+post activity from the user's side. That would mean shipping a hook, which is
+configuration in someone else's tool, so it needs its own decision.
+
 ### Activity is display data, never instructions
 
 An activity event's text originates from tool arguments, which an agent can be
@@ -93,6 +112,24 @@ delivery and must not become an injection path between agents.
   of a previous run is a message in the timeline.
 - A `runs` concept has to exist, so activity can group and so M11 can address a
   run. That is a prerequisite either way.
+
+## What building it changed
+
+Two things were wrong in a way only the running system showed:
+
+- **Buffered stdout replays the run after it ends.** The runner originally read the
+  agent's whole output and parsed it on exit, so every step arrived *after* the
+  answer. Every assertion about content passed and the feature was useless. Parsing
+  is now incremental — a line is emitted the moment its newline arrives, with a
+  held tail for lines that straddle chunks. `scripts/acceptance/m10.mjs` asserts
+  the first step arrives **before** the agent's message, not merely that steps exist.
+- **Concurrent frame handling reorders steps.** Each frame's handler awaits the
+  database, so two frames arriving back to back finished out of order and published
+  `post_message` before the `Read` it was based on. Frames from one connection are
+  now handled one at a time.
+
+Both failures are the same shape: the events were all present and the *sequence*
+was wrong, which reads as the agent having done something it did not do.
 
 ## Alternatives considered
 

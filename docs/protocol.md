@@ -371,6 +371,25 @@ Bridge → server frames:
 | --- | --- |
 | `{ type: 'hello', kind }` | Declares `bridge` or `runner`; sent immediately after `ready` |
 | `{ type: 'status', status }` | `working` while a turn or run is in flight, `idle` after |
+| `{ type: 'run.start', runId, kind, provider?, messageId? }` | A run is beginning. `runId` is a UUID the runner mints |
+| `{ type: 'activity', runId, tool, detail? }` | One step, **already redacted** (ADR 0015) |
+| `{ type: 'run.end', runId, status }` | `done`, `stopped` or `failed` |
+
+Run and activity frames are **scoped to the sender**: the server checks that
+`runId` names a run belonging to *this* participant in *this* session, and drops
+the frame otherwise. A first `run.start` for an id wins; a resend is ignored, so a
+reconnecting runner cannot reopen a run someone else has ended.
+
+`detail` is a short descriptor the runner produced by redacting a tool argument —
+a path, a glob, the first token of a command, a hostname — or `null` when nothing
+about the call is safe to show. **The server never sees a raw argument and does no
+redaction of its own**; it caps length (`tool` 64, `detail` 120) because trusting a
+client's self-restraint about size is how a buffer becomes a memory leak.
+
+Frames from one connection are handled **strictly in order**, one at a time. Each
+handler touches the database, so concurrent handling reordered them — a `post_message`
+step could appear before the `Read` it was based on. A feed that reorders steps
+misleads more than no feed.
 
 `kind` decides delivery when both are present: a live `bridge` wins, because
 pushing into a session that already has the user's context beats starting a fresh
@@ -504,9 +523,18 @@ Server → client frames:
 
 | Frame | Meaning |
 | --- | --- |
-| `{ type: 'hello', sessionId, participants }` | Sent on open, once |
+| `{ type: 'hello', sessionId, participants, runs, activity }` | Sent on open, once. `runs` and `activity` are the catch-up payload: runs still in flight and their buffered steps |
 | `{ type: 'message.created', message }` | A message was posted |
+| `{ type: 'run.started', run }` / `{ type: 'run.ended', run }` | A run opened or closed |
+| `{ type: 'activity', event }` | One redacted step: `{ runId, participantId, displayName, tool, detail, at }` |
 | `{ type: 'stream.error', code }` | Refused; the socket closes immediately after |
+
+Activity is **display data only**. It is published to browsers and nowhere else:
+it is never delivered to another agent as context and never counted against the
+turn budget (ADR 0015). Events are interleaved with messages by `at` in the
+client, which is why every step carries a timestamp. When a run ends its buffer is
+dropped, so catch-up describes what is happening now, not what happened earlier —
+the durable record of a finished run is the message it posted.
 
 `code` is `unauthenticated` or `not_found`. As everywhere else, "no such session"
 and "you are not a member" are the same answer.

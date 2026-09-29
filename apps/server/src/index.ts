@@ -39,6 +39,7 @@ import {
 import { publish, subscribe } from './bus.ts';
 import { createMcpApp } from './mcp.ts';
 import { broadcastAbort, onAbort, pauseState, setPaused } from './rails.ts';
+import { catchUp, endRun, recordActivity, startRun } from './activity.ts';
 import {
   attachServer,
   detachServer,
@@ -70,6 +71,7 @@ import {
   listSessionAgents,
   listSessionTokens,
   revokeToken,
+  setActivityVisible,
   setAgentTrustTier,
 } from './agents.ts';
 import {
@@ -475,6 +477,31 @@ sessionRoutes.patch('/agents/:sessionAgentId/trust', async (c) => {
   return c.json({ ok: true });
 });
 
+/**
+ * Whether this agent's steps are streamed to the session.
+ *
+ * The AGENT OWNER's call, like trust elevation: it is their machine and their
+ * private work being described, not the session's (ADR 0015).
+ */
+sessionRoutes.patch('/agents/:sessionAgentId/activity', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+
+  const { visible } = await c.req.json<{ visible?: boolean }>();
+  if (typeof visible !== 'boolean') {
+    return c.json({ error: 'visible must be a boolean' }, 400);
+  }
+
+  const agentList = await listSessionAgents(db, s.id);
+  const target = agentList.find((a) => a.sessionAgentId === c.req.param('sessionAgentId'));
+  if (!target) return c.notFound();
+  if (target.ownerUserId !== c.get('user').id) return c.notFound();
+
+  const done = await setActivityVisible(db, s.id, c.req.param('sessionAgentId'), visible);
+  if (!done) return c.notFound();
+  return c.json({ ok: true });
+});
+
 /* ---- tokens ---- */
 
 sessionRoutes.get('/tokens', async (c) => {
@@ -804,6 +831,107 @@ app.get(
      */
     let kind: 'bridge' | 'runner' = 'bridge';
 
+    /**
+     * Frames are handled ONE AT A TIME. Every handler below awaits the database,
+     * so two frames arriving back to back would otherwise interleave and publish
+     * out of order — "posted a reply" landing before the read it was based on.
+     * An activity feed that reorders steps is worse than no feed at all.
+     */
+    let queue: Promise<void> = Promise.resolve();
+
+    const handleFrame = async (
+      evt: { data: unknown },
+      ws: { send: (data: string) => void },
+    ): Promise<void> => {
+      if (!actorRef) return;
+      try {
+        const frame = JSON.parse(String(evt.data)) as {
+          type?: string;
+          status?: string;
+          kind?: string;
+          runId?: string;
+          provider?: string;
+          messageId?: string;
+          tool?: string;
+          detail?: string | null;
+        };
+
+        /**
+         * Run lifecycle and activity. Deliberately NOT routed through
+         * deliverMentions or claimTurn: activity is display data, not a
+         * delivery, and must neither reach another agent nor consume budget
+         * (ADR 0015).
+         */
+        if (frame.type === 'run.start' && frame.runId) {
+          await startRun(db, {
+            runId: frame.runId,
+            sessionId: actorRef.sessionId,
+            participantId: actorRef.participantId,
+            kind: frame.kind === 'channel' ? 'channel' : 'spawn',
+            provider: frame.provider,
+            triggerMessageId: frame.messageId,
+          });
+          return;
+        }
+
+        if (frame.type === 'activity' && frame.runId && frame.tool) {
+          await recordActivity(db, {
+            runId: frame.runId,
+            sessionId: actorRef.sessionId,
+            participantId: actorRef.participantId,
+            tool: frame.tool,
+            detail: frame.detail ?? null,
+          });
+          return;
+        }
+
+        if (frame.type === 'run.end' && frame.runId) {
+          const status =
+            frame.status === 'stopped' || frame.status === 'failed'
+              ? frame.status
+              : 'done';
+          await endRun(db, {
+            runId: frame.runId,
+            sessionId: actorRef.sessionId,
+            participantId: actorRef.participantId,
+            status,
+          });
+          return;
+        }
+
+        // Declaring `runner` re-registers the listener under that kind, so a
+        // live bridge elsewhere still wins the mention (ADR 0011).
+        if (frame.type === 'hello') {
+          if (frame.kind !== 'runner' && frame.kind !== 'bridge') return;
+          if (frame.kind === kind) return;
+
+          kind = frame.kind;
+          unsubscribe?.();
+          unsubscribe = listenForMentions(
+            actorRef.participantId,
+            kind,
+            ({ message, trust }) => {
+              ws.send(JSON.stringify({ type: 'mention', message, trust }));
+            },
+          );
+          await setConnectionStatus(db, { ...actorRef, kind, status: 'connected' });
+          return;
+        }
+
+        if (frame.type !== 'status') return;
+        if (
+          frame.status !== 'working' &&
+          frame.status !== 'idle' &&
+          frame.status !== 'connected'
+        ) {
+          return;
+        }
+        await setConnectionStatus(db, { ...actorRef, kind, status: frame.status });
+      } catch {
+        // Ignore a malformed frame rather than dropping the connection.
+      }
+        };
+
     return {
       async onOpen(_evt, ws) {
         // Refusals travel in-band: a close code issued during the upgrade
@@ -862,46 +990,10 @@ app.get(
         });
       },
 
-      async onMessage(evt, ws) {
-        if (!actorRef) return;
-        try {
-          const frame = JSON.parse(String(evt.data)) as {
-            type?: string;
-            status?: string;
-            kind?: string;
-          };
-
-          // Declaring `runner` re-registers the listener under that kind, so a
-          // live bridge elsewhere still wins the mention (ADR 0011).
-          if (frame.type === 'hello') {
-            if (frame.kind !== 'runner' && frame.kind !== 'bridge') return;
-            if (frame.kind === kind) return;
-
-            kind = frame.kind;
-            unsubscribe?.();
-            unsubscribe = listenForMentions(
-              actorRef.participantId,
-              kind,
-              ({ message, trust }) => {
-                ws.send(JSON.stringify({ type: 'mention', message, trust }));
-              },
-            );
-            await setConnectionStatus(db, { ...actorRef, kind, status: 'connected' });
-            return;
-          }
-
-          if (frame.type !== 'status') return;
-          if (
-            frame.status !== 'working' &&
-            frame.status !== 'idle' &&
-            frame.status !== 'connected'
-          ) {
-            return;
-          }
-          await setConnectionStatus(db, { ...actorRef, kind, status: frame.status });
-        } catch {
-          // Ignore a malformed frame rather than dropping the connection.
-        }
+      onMessage(evt, ws) {
+        // A caught chain keeps a single bad frame from stalling every later one.
+        queue = queue.then(() => handleFrame(evt, ws)).catch(() => {});
+        return queue;
       },
 
       async onClose() {
@@ -1049,11 +1141,17 @@ app.get(
         // Same answer for "no such session" and "not a member".
         if (!s) return refuse('not_found');
 
+        // Catch-up: a late joiner should see the run in progress, not just a
+        // spinner and then an answer.
+        const { runs: liveRuns, activity } = await catchUp(db, s.id);
+
         ws.send(
           JSON.stringify({
             type: 'hello',
             sessionId: s.view.publicId,
             participants: await listParticipants(db, s.id),
+            runs: liveRuns,
+            activity,
           }),
         );
 

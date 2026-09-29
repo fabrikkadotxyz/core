@@ -695,3 +695,50 @@ aside input[type='file'] {
   width: auto;
   margin: 0;
 }
+
+/* ------------------------------------------------- M10 live activity */
+
+/* Deliberately quiet: activity is context for the conversation, not a peer to
+   it. Dim, monospace, no card — so a busy run does not shout over the messages. */
+.activity {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.05rem 0.2rem;
+  font-size: 0.72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+}
+
+.activity-agent {
+  color: color-mix(in srgb, var(--accent) 70%, var(--muted));
+}
+
+.activity-tool {
+  color: var(--text);
+  opacity: 0.75;
+}
+
+.activity-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity.running .activity-tool {
+  color: #fcd34d;
+}
+
+.activity.running::after {
+  content: '';
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: #fcd34d;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}

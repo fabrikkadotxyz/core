@@ -10,7 +10,8 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx src/__tests__/redact.test.mts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.1.0",

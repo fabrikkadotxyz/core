@@ -308,6 +308,22 @@ They are pointed at stderr instead of the session.
 - Activity is **inert display data**: never delivered to another agent, never
   counted against the turn budget. It must not become an injection path.
 
+**What shipped**
+
+- `runs` is a table; `run.start` / `activity` / `run.end` are bridge frames, and
+  `run.started` / `activity` / `run.ended` are browser events
+  ([docs/protocol.md](protocol.md)).
+- Redaction lives in `packages/bridge/src/redact.ts` and runs before the wire.
+  `Bash` reports its **first token only**, `WebFetch` a hostname, an unknown tool
+  its name and nothing else. 30 unit cases, `pnpm test`.
+- The runner parses the agent's stream **incrementally**. It first buffered stdout
+  and parsed on exit, which replayed the whole run *after* the answer — every
+  content assertion passed and the feature was useless.
+- Frames from one connection are handled **one at a time**; concurrent handling
+  published `post_message` before the `Read` it was based on.
+- Catch-up rides on the stream's `hello`: in-flight runs plus their buffered steps.
+- Per-agent `steps shown / steps hidden` toggle in the Agents panel, owner only.
+
 **Test:**
 1. Start a runner, mention the agent, and watch the timeline from a *second*
    browser — steps appear as they happen, not at the end.

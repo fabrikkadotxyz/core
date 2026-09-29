@@ -8,6 +8,7 @@
  * Starting it IS the consent for unattended execution — the user picked the
  * directory, and the banner states plainly what will happen. See ADR 0011.
  */
+import { randomUUID } from 'node:crypto';
 import { resolve as resolvePath } from 'node:path';
 import type { BridgeConfig } from './config.ts';
 import { BridgeSocket, type MentionFrame } from './socket.ts';
@@ -120,6 +121,17 @@ export async function watch(opts: WatchOptions): Promise<void> {
     running = true;
     warnedQueueFull = false;
     current = new AbortController();
+
+    // The runner mints the id so activity can be labelled from the first tool
+    // call, with no round trip to wait for.
+    const runId = randomUUID();
+    socket.send({
+      type: 'run.start',
+      runId,
+      kind: 'spawn',
+      provider: opts.provider,
+      messageId: frame.message.id,
+    });
     socket.send({ type: 'status', status: 'working' });
     log(`run start — @${frame.message.author.displayName}: ${frame.message.content.slice(0, 60)}`);
 
@@ -147,10 +159,19 @@ export async function watch(opts: WatchOptions): Promise<void> {
       resumeId: opts.provider === 'codex' ? undefined : resumeId,
       allowedTools: opts.allowedTools,
       onLog: (line) => log(`  ${line}`),
+      // Already a tool name plus a short redacted descriptor: summarise() ran
+      // inside the spawner, so no raw argument reaches this line (ADR 0015).
+      onActivity: ({ tool, detail }) => socket.send({ type: 'activity', runId, tool, detail }),
       signal: current.signal,
     });
 
     if (result.resumeId) resumeId = result.resumeId;
+
+    socket.send({
+      type: 'run.end',
+      runId,
+      status: result.error === 'run was stopped' ? 'stopped' : result.ok ? 'done' : 'failed',
+    });
 
     if (result.error === 'run was stopped') {
       // Deliberately stopped, not broken. Say which, so the timeline does not

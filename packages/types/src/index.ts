@@ -81,11 +81,21 @@ export interface Session {
  * A client that sees this must NOT reconnect.
  */
 export type ServerEvent =
-  | { type: 'hello'; sessionId: string; participants: Participant[] }
+  | {
+      type: 'hello';
+      sessionId: string;
+      participants: Participant[];
+      /** Runs in flight, and their buffered activity, so a late joiner catches up. */
+      runs?: Run[];
+      activity?: ActivityEvent[];
+    }
   | { type: 'message.created'; message: Message }
   | { type: 'participant.updated'; participant: Participant }
   | { type: 'context.updated'; context: SessionContext }
   | { type: 'artifact.created'; artifact: Artifact }
+  | { type: 'run.started'; run: Run }
+  | { type: 'run.ended'; run: Run }
+  | { type: 'activity'; event: ActivityEvent }
   | {
       /**
        * A mention that did NOT reach an agent, and why. Emitted so a human can
@@ -155,6 +165,8 @@ export interface AgentSummary {
   displayName: string;
   provider: string;
   trustTier: AgentTrustPolicy;
+  /** Whether this agent's steps stream to the session (ADR 0015). */
+  activityVisible: boolean;
   ownerUserId: string;
 }
 
@@ -218,6 +230,43 @@ export interface SessionContext {
   /** Increments on every write. Send it back to replace a list safely. */
   version: number;
   updatedAt: string | null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* M10 — runs and live activity                                               */
+/* -------------------------------------------------------------------------- */
+
+export type RunKind = 'channel' | 'spawn';
+export type RunStatus = 'running' | 'done' | 'stopped' | 'failed';
+
+export interface Run {
+  id: string;
+  participantId: string;
+  displayName: string;
+  kind: RunKind;
+  provider: string | null;
+  status: RunStatus;
+  startedAt: string;
+  endedAt: string | null;
+}
+
+/**
+ * One step an agent took, as a SUMMARY.
+ *
+ * `tool` is the tool's name; `detail` is one short descriptor, already redacted on
+ * the runner before it was sent. Tool OUTPUT is never carried here, and neither
+ * are full command lines. See ADR 0015.
+ *
+ * Inert display data: never delivered to another agent, never counted against the
+ * turn budget.
+ */
+export interface ActivityEvent {
+  runId: string;
+  participantId: string;
+  displayName: string;
+  tool: string;
+  detail: string | null;
+  at: string;
 }
 
 export type ArtifactType = 'file' | 'link';

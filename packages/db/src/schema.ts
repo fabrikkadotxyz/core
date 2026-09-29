@@ -4,7 +4,7 @@
  * Tables are introduced by the milestone that needs them (docs/roadmap.md).
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
- * M6 (safety rails), M7 (artifacts) and M8 (MCP aggregation).
+ * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation) and M10 (runs).
  */
 import {
   boolean,
@@ -270,6 +270,13 @@ export const sessionAgents = pgTable(
      * each message's `trust` field. See docs/security.md.
      */
     trustTier: text('trust_tier').notNull().default('owner_only'),
+    /**
+     * Whether this agent's steps are streamed to the session. Streaming your
+     * agent's activity to a shared room is a fair default and an unfair
+     * obligation — someone working in a private repo gets to decline without
+     * leaving the session. See ADR 0015.
+     */
+    activityVisible: boolean('activity_visible').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('session_agents_session_agent').on(t.sessionId, t.agentId)],
@@ -497,4 +504,44 @@ export const sessionMcpToolGrants = pgTable(
     allowed: boolean('allowed').notNull().default(false),
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.serverSlug, t.toolName] })],
+);
+
+/* -------------------------------------------------------------------------- */
+/* M10 — runs                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One unit of agent work, addressable.
+ *
+ * Exists so activity can group under something, and so a correction can name the
+ * run it is correcting rather than racing it (M11). There is deliberately NO
+ * `activity` table: events live in a capped in-memory buffer and are discarded
+ * when the run ends. Hundreds of rows per run, for something nobody re-reads, is
+ * not worth storing — the run's OUTCOME is a durable message. See ADR 0015.
+ */
+export const runs = pgTable(
+  'runs',
+  {
+    id: uuid('id').primaryKey(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    /** The mention that started it, when there was one. */
+    triggerMessageId: uuid('trigger_message_id').references(() => messages.id, {
+      onDelete: 'set null',
+    }),
+    /** channel | spawn */
+    kind: text('kind').notNull(),
+    provider: text('provider'),
+    /** --resume handle or thread id, when the provider supports one. */
+    resumeHandle: text('resume_handle'),
+    /** running | done | stopped | failed */
+    status: text('status').notNull().default('running'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+  },
+  (t) => [index('runs_session_started_idx').on(t.sessionId, t.startedAt)],
 );

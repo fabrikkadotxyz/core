@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type {
+  ActivityEvent,
   AgentSummary,
   Artifact,
   CreatedAgentView,
   InviteSummary,
+  Run,
   ServerEvent,
   SessionContext,
   SetupLane,
@@ -37,6 +39,12 @@ export function SessionPage() {
   >([]);
   /** Bumped when context or artifacts change elsewhere, to refetch the panels. */
   const [panelsVersion, setPanelsVersion] = useState(0);
+  /**
+   * What agents are doing right now. Both are capped: activity is a live feed,
+   * not a log — the durable record is the messages agents post (ADR 0015).
+   */
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
 
   const reload = useCallback(() => {
     sessions
@@ -63,6 +71,26 @@ export function SessionPage() {
               prev.some((m) => m.id === event.message.id)
                 ? prev
                 : [...prev, event.message],
+            );
+          }
+          // Catch-up: a tab opened mid-run still sees the run and what led to it.
+          if (event.type === 'hello') {
+            setRuns(event.runs ?? []);
+            setActivity(event.activity ?? []);
+          }
+          if (event.type === 'activity') {
+            setActivity((prev) => [...prev, event.event].slice(-300));
+          }
+          if (event.type === 'run.started') {
+            setRuns((prev) =>
+              prev.some((r) => r.id === event.run.id) ? prev : [...prev, event.run],
+            );
+          }
+          if (event.type === 'run.ended') {
+            // The run stays in the list, now ended: its activity is still on
+            // screen and would otherwise lose the name it belongs to.
+            setRuns((prev) =>
+              prev.map((r) => (r.id === event.run.id ? event.run : r)),
             );
           }
           // Patch the participant list rather than refetching messages: chips
@@ -241,6 +269,8 @@ export function SessionPage() {
 
           <Timeline
             messages={messages}
+            activity={activity}
+            runs={runs}
             participants={view.participants}
             meParticipantId={view.me.participantId}
           />
@@ -555,6 +585,24 @@ function AgentsPanel({
                 }}
               >
                 {a.trustTier === 'owner_only' ? 'owner only' : 'session trusted'}
+              </button>
+              <button
+                className="link small"
+                title={
+                  a.activityVisible
+                    ? 'This agent\u2019s steps stream to the session. Click to hide them.'
+                    : 'This agent works silently. Click to stream its steps.'
+                }
+                onClick={async () => {
+                  await sessions.setAgentActivity(
+                    ref_,
+                    a.sessionAgentId,
+                    !a.activityVisible,
+                  );
+                  refresh();
+                }}
+              >
+                {a.activityVisible ? 'steps shown' : 'steps hidden'}
               </button>
             </li>
           ))}
@@ -1069,12 +1117,22 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
   );
 }
 
+/**
+ * The timeline, with agent steps interleaved chronologically.
+ *
+ * Activity renders inline rather than in a side panel: the point is that you watch
+ * the work happen in the same place you read the conversation.
+ */
 function Timeline({
   messages,
+  activity,
+  runs,
   participants,
   meParticipantId,
 }: {
   messages: Message[];
+  activity: ActivityEvent[];
+  runs: Run[];
   participants: Participant[];
   meParticipantId: string;
 }) {
@@ -1082,9 +1140,20 @@ function Timeline({
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  }, [messages.length, activity.length]);
 
-  if (messages.length === 0) {
+  const items = useMemo(
+    () =>
+      [
+        ...messages.map((m) => ({ at: m.createdAt, kind: 'message' as const, message: m })),
+        ...activity.map((a) => ({ at: a.at, kind: 'activity' as const, event: a })),
+      ].sort((a, b) => a.at.localeCompare(b.at)),
+    [messages, activity],
+  );
+
+  const running = runs.filter((r) => r.status === 'running');
+
+  if (items.length === 0 && running.length === 0) {
     return (
       <div className="timeline empty-timeline">
         <p>Nothing here yet. Say something.</p>
@@ -1094,32 +1163,56 @@ function Timeline({
 
   return (
     <div className="timeline">
-      {messages.map((m) => (
-        <article key={m.id} className={m.author.kind === 'agent' ? 'msg agent' : 'msg'}>
-          <div className="meta">
-            <span>{m.author.kind === 'agent' ? '🤖' : '👤'}</span>
-            <span className="author">@{m.author.displayName}</span>
-            <time dateTime={m.createdAt}>
-              {new Date(m.createdAt).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </time>
+      {items.map((item, i) =>
+        item.kind === 'activity' ? (
+          <div key={`a-${i}`} className="activity">
+            <span className="activity-agent">@{item.event.displayName}</span>
+            <span className="activity-tool">{item.event.tool}</span>
+            {item.event.detail && (
+              <span className="activity-detail">{item.event.detail}</span>
+            )}
           </div>
-          <p>
-            <MentionText
-              content={m.content}
-              participants={participants}
-              fallback={m.mentions}
-              meParticipantId={meParticipantId}
-            />
-          </p>
-        </article>
+        ) : (
+          <article
+            key={item.message.id}
+            className={item.message.author.kind === 'agent' ? 'msg agent' : 'msg'}
+          >
+            <div className="meta">
+              <span>{item.message.author.kind === 'agent' ? '🤖' : '👤'}</span>
+              <span className="author">@{item.message.author.displayName}</span>
+              <time dateTime={item.message.createdAt}>
+                {new Date(item.message.createdAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </time>
+            </div>
+            <p>
+              <MentionText
+                content={item.message.content}
+                participants={participants}
+                fallback={item.message.mentions}
+                meParticipantId={meParticipantId}
+              />
+            </p>
+          </article>
+        ),
+      )}
+
+      {/* A run with no steps yet still shows as alive, so "working" is never a
+          silent gap. */}
+      {running.map((r) => (
+        <div key={r.id} className="activity running">
+          <span className="activity-agent">@{r.displayName}</span>
+          <span className="activity-tool">working…</span>
+        </div>
       ))}
+
       <div ref={endRef} />
     </div>
   );
 }
+
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (

@@ -10,6 +10,7 @@
  * directory they chose, with the risk printed on screen (ADR 0011).
  */
 import { spawn } from 'node:child_process';
+import { summarise, type ActivityLine } from './redact.ts';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
@@ -38,6 +39,11 @@ export interface SpawnRequest {
   /** Optional narrowing; unset means the provider's own default. */
   allowedTools?: string[];
   onLog?: (line: string) => void;
+  /**
+   * One step the agent took. Already reduced to a tool name and a short redacted
+   * descriptor — the raw call never leaves this module (ADR 0015).
+   */
+  onActivity?: (line: ActivityLine) => void;
   /** Aborts the run. The server asks for this when a session is paused. */
   signal?: AbortSignal;
 }
@@ -111,10 +117,13 @@ async function runClaude(req: SpawnRequest): Promise<SpawnResult> {
     if (req.allowedTools?.length) args.push('--allowedTools', ...req.allowedTools);
     if (req.resumeId) args.push('--resume', req.resumeId);
 
-    const out = await execute('claude', args, req);
+    const out = await execute('claude', args, req, {}, (line) =>
+      emitClaudeActivity(line, req),
+    );
     if (!out.ok) return out;
 
-    return parseClaudeStream(out.text, req.onLog);
+    // Activity already streamed above; this pass only extracts the outcome.
+    return parseClaudeStream(out.text);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
@@ -125,7 +134,30 @@ async function runClaude(req: SpawnRequest): Promise<SpawnResult> {
  * `result` event carries the answer; assistant text blocks are the fallback when
  * no result event arrives (an aborted run, for instance).
  */
-function parseClaudeStream(raw: string, onLog?: (l: string) => void): SpawnResult {
+/** One line of `claude --output-format stream-json`, reported as it happens. */
+function emitClaudeActivity(line: string, req: SpawnRequest): void {
+  if (!line.startsWith('{')) return;
+
+  let event: Record<string, unknown>;
+  try {
+    event = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+  if (event.type !== 'assistant') return;
+
+  const message = event.message as { content?: unknown[] } | undefined;
+  for (const block of message?.content ?? []) {
+    const b = block as { type?: string; name?: string; input?: unknown };
+    if (b.type === 'tool_use' && b.name) {
+      req.onLog?.(`tool: ${b.name}`);
+      // Summarised here, so the raw arguments never leave this process.
+      req.onActivity?.(summarise({ name: b.name, args: b.input }));
+    }
+  }
+}
+
+function parseClaudeStream(raw: string): SpawnResult {
   let result = '';
   let sessionId: string | undefined;
   const assistantText: string[] = [];
@@ -150,9 +182,8 @@ function parseClaudeStream(raw: string, onLog?: (l: string) => void): SpawnResul
     if (event.type === 'assistant') {
       const message = event.message as { content?: unknown[] } | undefined;
       for (const block of message?.content ?? []) {
-        const b = block as { type?: string; text?: string; name?: string };
+        const b = block as { type?: string; text?: string };
         if (b.type === 'text' && b.text) assistantText.push(b.text);
-        if (b.type === 'tool_use' && b.name) onLog?.(`tool: ${b.name}`);
       }
     }
   }
@@ -224,11 +255,17 @@ async function runCodex(req: SpawnRequest): Promise<SpawnResult> {
     // session timeline is the continuity, which is the point of the product.
     const args = ['exec', ...options, prompt];
 
-    const out = await execute('codex', args, req, {
-      // Passed in the environment, not on the command line or in a file: it is
-      // then invisible to `ps` and leaves nothing behind.
-      ...(req.mcp ? { FABRIKKA_RUN_TOKEN: req.mcp.token } : {}),
-    });
+    const out = await execute(
+      'codex',
+      args,
+      req,
+      {
+        // Passed in the environment, not on the command line or in a file: it is
+        // then invisible to `ps` and leaves nothing behind.
+        ...(req.mcp ? { FABRIKKA_RUN_TOKEN: req.mcp.token } : {}),
+      },
+      (line) => emitCodexActivity(line, req),
+    );
     if (!out.ok) return out;
 
     let threadId: string | undefined;
@@ -242,13 +279,18 @@ async function runCodex(req: SpawnRequest): Promise<SpawnResult> {
         if (typeof event.thread_id === 'string') threadId = event.thread_id;
 
         const item = event.item as
-          | { type?: string; text?: string; tool?: string; server?: string }
+          | {
+              type?: string;
+              text?: string;
+              tool?: string;
+              server?: string;
+              command?: string;
+              arguments?: unknown;
+            }
           | undefined;
         if (item?.type === 'agent_message' && item.text) fallback.push(item.text);
-        if (item?.type === 'mcp_tool_call' && item.tool) {
-          req.onLog?.(`tool: ${item.server}/${item.tool}`);
-        }
-        if (item?.type === 'command_execution') req.onLog?.('tool: shell');
+        // Activity streamed live in emitCodexActivity; this pass extracts the
+        // outcome only.
       } catch {
         continue;
       }
@@ -266,17 +308,56 @@ async function runCodex(req: SpawnRequest): Promise<SpawnResult> {
   }
 }
 
+/** One line of `codex exec --json`, reported as it happens. */
+function emitCodexActivity(line: string, req: SpawnRequest): void {
+  if (!line.startsWith('{')) return;
+
+  let event: Record<string, unknown>;
+  try {
+    event = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  const item = event.item as
+    | { type?: string; tool?: string; server?: string; command?: string; arguments?: unknown }
+    | undefined;
+  if (!item) return;
+
+  // `item.started` carries the call; waiting for `completed` would report each
+  // step only once it had already finished.
+  if (item.type === 'mcp_tool_call' && item.tool) {
+    req.onLog?.(`tool: ${item.server}/${item.tool}`);
+    req.onActivity?.(
+      summarise({ name: `${item.server}__${item.tool}`, args: item.arguments }),
+    );
+  }
+  if (item.type === 'command_execution') {
+    req.onLog?.('tool: shell');
+    req.onActivity?.(summarise({ name: 'Bash', args: { command: item.command } }));
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Process plumbing                                                           */
 /* -------------------------------------------------------------------------- */
 
 const RUN_TIMEOUT_MS = 10 * 60 * 1000;
 
+/**
+ * Run the binary, streaming stdout line by line.
+ *
+ * `onLine` fires as each complete line arrives, which is what makes activity
+ * LIVE. An earlier version parsed the whole buffer after the process exited — the
+ * events were all correct and completely useless, arriving after the answer they
+ * described.
+ */
 function execute(
   bin: string,
   args: string[],
   req: SpawnRequest,
   extraEnv: Record<string, string> = {},
+  onLine?: (line: string) => void,
 ): Promise<{ ok: boolean; text: string; error?: string }> {
   return new Promise((resolve) => {
     const child = spawn(resolveBin(bin), args, {
@@ -319,8 +400,20 @@ function execute(
     if (req.signal?.aborted) onAbort();
     else req.signal?.addEventListener('abort', onAbort, { once: true });
 
+    // Lines can straddle chunk boundaries, so hold the tail until it completes.
+    let pending = '';
     child.stdout.on('data', (d) => {
-      stdout += d.toString();
+      const chunk = d.toString();
+      stdout += chunk;
+      if (!onLine) return;
+
+      pending += chunk;
+      let nl: number;
+      while ((nl = pending.indexOf('\n')) !== -1) {
+        const line = pending.slice(0, nl).trim();
+        pending = pending.slice(nl + 1);
+        if (line) onLine(line);
+      }
     });
     child.stderr.on('data', (d) => {
       stderr += d.toString();

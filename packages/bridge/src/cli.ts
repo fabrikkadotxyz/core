@@ -19,7 +19,9 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { loadConfig } from './config.ts';
 import { watch } from './watch.ts';
+import { randomUUID } from 'node:crypto';
 import { createChannelServer, formatMention, pushToChannel } from './channel.ts';
+import { summarise } from './redact.ts';
 import { BridgeSocket } from './socket.ts';
 import { Upstream } from './upstream.ts';
 
@@ -94,15 +96,42 @@ async function main(): Promise<void> {
 
   mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
+
+    /**
+     * A live session's activity is necessarily partial: Claude Code runs Read,
+     * Bash and the rest in the user's own terminal, and the bridge is not in that
+     * loop. What we CAN see is the tools the agent calls through us, which is
+     * still worth showing — "read the session", "posted a reply". See ADR 0015.
+     */
+    if (channelRunId) {
+      const { tool, detail } = summarise({ name: req.params.name, args });
+      socket?.send({ type: 'activity', runId: channelRunId, tool, detail });
+    }
+
     // Forwarded verbatim: the bridge holds no tool logic of its own (ADR 0010).
-    return (await upstream.callTool(req.params.name, args)) as never;
+    const result = await upstream.callTool(req.params.name, args);
+
+    // Posting is the only completion signal a channel turn gives us.
+    if (channelRunId && req.params.name === 'post_message') {
+      socket?.send({ type: 'run.end', runId: channelRunId, status: 'done' });
+      channelRunId = undefined;
+    }
+
+    return result as never;
   });
 
   await mcp.connect(new StdioServerTransport());
 
   /* ------------------------------------------------------- the channel --- */
 
-  const socket = new BridgeSocket(config.bridgeUrl, config.token, {
+  /**
+   * A channel run has no clean end signal — Claude Code does not tell us when the
+   * turn finished. So one run is opened per pushed mention and closed when the
+   * agent posts back, which is the only observable completion we get.
+   */
+  let channelRunId: string | undefined;
+
+  const socket: BridgeSocket = new BridgeSocket(config.bridgeUrl, config.token, {
     onReady: (frame) => {
       log(
         `connected as @${frame.participant.display_name} in session ${frame.session.id}`,
@@ -110,6 +139,15 @@ async function main(): Promise<void> {
     },
 
     onMention: (frame) => {
+      channelRunId = randomUUID();
+      socket.send({
+        type: 'run.start',
+        runId: channelRunId,
+        kind: 'channel',
+        provider: 'claude-code',
+        messageId: frame.message.id,
+      });
+
       // meta keys MUST be [A-Za-z0-9_]+ or Claude Code drops them silently.
       // pushToChannel enforces that rather than trusting this call site.
       void pushToChannel(mcp, {

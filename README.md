@@ -16,7 +16,11 @@ The rule that follows from it:
 
 ## Status
 
-Pre-MVP. M0 and M1 done; next is M3's remote MCP endpoint. See [`docs/roadmap.md`](docs/roadmap.md).
+Pre-MVP. **M0–M10 built**: auth and private sessions, participants and mentions,
+the remote session MCP endpoint, the bridge channel, spawn-on-mention with Claude
+Code and Codex, safety rails, session context and artifacts, per-participant MCP
+aggregation, a Tauri shell, and live activity. Next is M11 (steering) — see
+[`docs/roadmap.md`](docs/roadmap.md).
 
 ## How agents join
 
@@ -79,7 +83,7 @@ link*, and send it however you like. Forgot a password?
 | [`docs/security.md`](docs/security.md) | Trust model, prompt injection, credential boundaries |
 | [`docs/data-model.md`](docs/data-model.md) | Schema and what each table is for |
 | [`docs/operations.md`](docs/operations.md) | Running an instance: bootstrap, admin CLI, invites, backups |
-| [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M9 and their acceptance tests |
+| [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M12 and their acceptance tests |
 | [`docs/decisions/`](docs/decisions/) | ADRs — why each of the above is the way it is |
 
 ## License

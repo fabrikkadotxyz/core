@@ -218,6 +218,7 @@ export async function addAgentToSession(
         displayName: created.participant.displayName,
         provider: created.agent.provider,
         trustTier: created.sa.trustTier as AgentTrustPolicy,
+        activityVisible: created.sa.activityVisible,
         ownerUserId: created.agent.ownerId,
       },
     },
@@ -235,6 +236,7 @@ export async function listSessionAgents(
       displayName: participants.displayName,
       provider: agents.provider,
       trustTier: sessionAgents.trustTier,
+      activityVisible: sessionAgents.activityVisible,
       ownerUserId: agents.ownerId,
     })
     .from(sessionAgents)
@@ -249,6 +251,7 @@ export async function listSessionAgents(
     displayName: r.displayName,
     provider: r.provider,
     trustTier: r.trustTier as AgentTrustPolicy,
+    activityVisible: r.activityVisible,
     ownerUserId: r.ownerUserId,
   }));
 }
@@ -457,5 +460,27 @@ export async function revokeOwnToken(
       ),
     )
     .returning({ id: sessionTokens.id });
+  return updated.length > 0;
+}
+
+/**
+ * Toggle whether an agent's steps stream to the session.
+ *
+ * Caller must already have established that they own the agent — this function
+ * enforces session scope, not authorship.
+ */
+export async function setActivityVisible(
+  db: Database,
+  sessionId: string,
+  sessionAgentId: string,
+  visible: boolean,
+): Promise<boolean> {
+  const updated = await db
+    .update(sessionAgents)
+    .set({ activityVisible: visible })
+    .where(
+      and(eq(sessionAgents.id, sessionAgentId), eq(sessionAgents.sessionId, sessionId)),
+    )
+    .returning({ id: sessionAgents.id });
   return updated.length > 0;
 }

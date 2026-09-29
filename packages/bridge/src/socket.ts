@@ -38,7 +38,19 @@ export type ClientFrame =
   /** Declares how this connection wants to act, so the server can prefer a live
    *  bridge over a runner (ADR 0011). */
   | { type: 'hello'; kind: 'bridge' | 'runner' }
-  | { type: 'status'; status: 'working' | 'idle' };
+  | { type: 'status'; status: 'working' | 'idle' }
+  /** A unit of work begins. The runner mints the id so it can label activity
+   *  immediately, without a round trip. */
+  | {
+      type: 'run.start';
+      runId: string;
+      kind: 'channel' | 'spawn';
+      provider?: string;
+      messageId?: string;
+    }
+  /** One step, ALREADY REDACTED on this side of the wire (ADR 0015). */
+  | { type: 'activity'; runId: string; tool: string; detail: string | null }
+  | { type: 'run.end'; runId: string; status: 'done' | 'stopped' | 'failed' };
 
 export class BridgeSocket {
   private ws: WebSocket | undefined;

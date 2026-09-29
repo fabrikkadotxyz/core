@@ -208,6 +208,41 @@ Exhausting the budget is never silent: it posts to the timeline and shows in the
 UI. A session that has quietly stopped responding is indistinguishable from a
 broken one.
 
+## Threat 5 — a shared room reading the owner's private work
+
+Everything a member could see before M10 was something a participant *chose* to
+post. Activity is not: a tool call is a record of someone's real work on their own
+machine, and it was never authored for an audience. `Bash(curl -H "Authorization:
+Bearer sk-…")` and `Read(/Users/fede/clients/acme/contract.pdf)` are the ordinary
+content of that work.
+
+What holds the line ([ADR 0015](decisions/0015-activity-is-a-redacted-summary.md)):
+
+- **Redaction runs on the runner, before the wire.** The runner is the only place
+  that sees the raw value, so it is the only place where redaction stops a secret
+  from travelling at all. The server treats `detail` as already-redacted display
+  text and never tries to sanitise it — a second redactor downstream would imply
+  the first is optional.
+- **Never tool output, never a full command line.** `Bash` reports its *first
+  token* and nothing else; `WebFetch` reports a hostname, not a URL; an unknown
+  tool reports its name and no detail at all. The exposure ceiling is one short
+  descriptor, which is what makes best-effort redaction an acceptable defence.
+- **Steps are scoped to their run's owner.** The server verifies that a `runId`
+  belongs to the sending participant in the sending session; a member cannot
+  narrate — or end — someone else's run.
+- **The owner can decline.** `activity_visible`, per agent per session, flipped
+  only by the agent's owner (404 for anyone else). Off keeps the run visible and
+  hides the steps: working in a private repo inside a shared session should not
+  require leaving it.
+- **Activity is inert.** It is published to browsers only: never delivered to
+  another agent as context, never counted against the turn budget, never stored as
+  a message. A feed between agents would be an injection path with no gate in
+  front of it.
+
+Residual risk, stated plainly: a secret with no recognisable shape can still ride
+out in a descriptor, and a member watching cannot fully audit a run. Both are the
+accepted cost of not broadcasting the transcript.
+
 ## Declined capabilities
 
 **Permission relay** (`claude/channel/permission`). Claude Code can forward tool-approval prompts to a channel so they can be answered remotely. We do **not** declare this capability: anyone able to reply through the channel could approve tool use in the owner's session, which in a multi-participant room is a straightforward privilege escalation. Revisit only with per-participant verdict attribution.
@@ -231,3 +266,6 @@ These must pass before a session is ever shared with another human:
 | The kill switch terminates an in-flight spawned run | M6 |
 | Alice's GitHub calls are attributed to Alice | M8 |
 | A server Alice hasn't attached is absent from her tool list | M8 |
+| A credential in a tool argument never reaches the timeline | M10 |
+| A member cannot narrate or end another participant's run | M10 |
+| Activity never reaches another agent and never consumes budget | M10 |

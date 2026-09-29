@@ -252,6 +252,36 @@ non-event rather than data loss.
 
 Context is **not** over-normalized. Facts and decisions are lists of text with timestamps, not an entity graph. If this needs to become relational later, that will be obvious from use — it is not obvious now.
 
+### M10/M11 — runs and activity *(specced, not built)*
+
+```
+runs
+  id               uuid pk
+  session_id       uuid -> sessions.id not null
+  participant_id   uuid -> participants.id not null   -- the agent
+  trigger_message_id uuid -> messages.id              -- the mention that started it
+  kind             text not null          -- channel | spawn
+  provider         text
+  resume_handle    text                   -- --resume / thread id, when supported
+  status           text not null          -- running | done | stopped | failed
+  started_at       timestamptz not null
+  ended_at         timestamptz
+  index (session_id, started_at)
+
+session_agents  (addition)
+  activity_visible boolean not null default true
+```
+
+**There is no `activity` table, deliberately.** Activity events live in a capped
+in-memory buffer per run and are discarded when it ends: hundreds of rows per run
+for something nobody re-reads later. The run's *outcome* is a durable message; the
+steps that produced it are not. See
+[ADR 0015](decisions/0015-activity-is-a-redacted-summary.md).
+
+`runs` exists so activity can group **and** so a correction can name the run it is
+correcting rather than racing it
+([ADR 0016](decisions/0016-steering-is-stop-and-resume.md)).
+
 ### M8 — MCP aggregation
 
 ```

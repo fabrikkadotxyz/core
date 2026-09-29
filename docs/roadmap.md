@@ -281,6 +281,79 @@ servers, local files, local-only sessions — are Phase II.
 3. Sign in, open a session, confirm realtime messaging behaves as in the browser.
 4. Relaunch — it goes straight to the session, remembering the server.
 
+## M10 — Live activity: watch it work
+
+> The multiplayer claim is "drop into a live agent session to **watch it work**,
+> redirect it, and hand it off." Today a session shows a `working` pill and
+> nothing else: every tool call goes to `console.error` on the runner's machine.
+> The work happens off-screen, which is the read-only-transcript problem one level
+> in. This is the milestone that makes the claim true.
+
+**Cheapest of the three gaps, because the events already exist** — `onLog` fires on
+every tool call, the event bus already fans out, the browser already has a socket.
+They are pointed at stderr instead of the session.
+
+- A **`run`** is addressable: id, agent, trigger message, started/ended, outcome.
+  Required here, and a prerequisite for M11.
+- Activity streams into the timeline as it happens: `Read src/retry.ts`,
+  `Bash ran the test suite`, `github__list_issues`.
+- **Summary, never transcript** ([ADR 0015](decisions/0015-activity-is-a-redacted-summary.md)):
+  tool name plus one short redacted descriptor. **Never tool output**, never full
+  command lines. Redaction happens **on the runner, before the wire** — the only
+  place it stops a secret travelling at all.
+- **Ephemeral**, capped per run (~200 events), so a late joiner catches up without
+  leaving hundreds of rows behind forever. The run's *outcome* is a durable message.
+- The agent's **owner can turn it off** per session. Streaming your activity to a
+  shared room is a fair default and an unfair obligation.
+- Activity is **inert display data**: never delivered to another agent, never
+  counted against the turn budget. It must not become an injection path.
+
+**Test:**
+1. Start a runner, mention the agent, and watch the timeline from a *second*
+   browser — steps appear as they happen, not at the end.
+2. Join mid-run in a third tab: you catch up on the current run.
+3. Have the agent run `Bash(curl -H "Authorization: Bearer sk-test-123" …)`. The
+   timeline shows the tool ran; **the token does not appear**.
+4. No tool output ever appears in the timeline.
+5. Turn activity off for that agent; the pill still moves, the steps stop.
+6. A second agent in the session never receives activity as context.
+
+## M11 — Steering: redirect it
+
+> Today a mention arriving mid-run **queues a second run**, so the agent spends
+> minutes finishing work everyone can already see is wrong.
+
+**The honest version is narrower than the word suggests.** Neither runtime lets us
+change a model's instructions mid-thought: `claude -p` and `codex exec` take their
+prompt up front, and a channel push is documented to land "on the next turn". So
+steering **stops and resumes**, and the UI says which
+([ADR 0016](decisions/0016-steering-is-stop-and-resume.md)).
+
+| Path | What happens |
+| --- | --- |
+| Spawned run | Stop the child, restart with `--resume` so the thread survives, carrying the correction |
+| Codex spawned run | Starts **fresh** — `codex exec resume` rejects `--approve-for-me` (found at M5). Stated in the UI |
+| Live Claude Code session | The correction lands **on the next turn**. No stop: that turn is in the user's own terminal, against their files |
+
+- Steering routes through the **existing delivery gate** unchanged — an untrusted
+  mention cannot steer any more than it can start a run. Stopping work in flight is
+  more disruptive than starting it, so it cannot be the weaker permission.
+- The **kill switch stays open to any member**: stopping everything is safety,
+  redirecting is participation.
+- Corrections within a couple of seconds **coalesce**, or steering thrashes.
+- Each resumed run counts against the turn budget, so a steering war pauses the
+  session. Correct, and needs no special case.
+
+**Test:**
+1. Start a long spawned run, then mention a correction. The run stops and restarts
+   with the correction, and the timeline shows it resumed rather than started over.
+2. The new run does not repeat the reading the first one already did.
+3. Steer a Codex run: it restarts fresh, and the timeline says so.
+4. Steer a live Claude Code session: the timeline says it will be picked up when
+   the current turn finishes — and it is.
+5. A non-owner correction is refused, exactly like a mention.
+6. Fire five corrections in two seconds: they coalesce into one restart.
+
 ---
 
 ## MVP acceptance

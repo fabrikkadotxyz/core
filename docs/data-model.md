@@ -272,11 +272,11 @@ session_agents  (addition)
   activity_visible boolean not null default true
 ```
 
-`resume_handle` exists but is **not written yet** — M11 fills it, because a
+`resume_handle` exists but is **not written yet** — M12 fills it, because a
 correction can only continue a run that remembered how to be continued. The column
 is here rather than in a later migration so `runs` has one shape.
 
-**M12 adds (specced, not built):**
+**M13 adds (specced, not built):**
 
 ```
 session_agents  (addition)

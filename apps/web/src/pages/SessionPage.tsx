@@ -24,6 +24,53 @@ import {
 import { useAuth } from '../auth-context.tsx';
 import { MentionComposer, MentionText } from '../mentions.tsx';
 
+interface PaneState {
+  setup: boolean;
+  output: boolean;
+}
+
+/** Setup is a one-time job; the conversation is the hour-long one. */
+const PANES_DEFAULT: PaneState = { setup: false, output: true };
+
+/**
+ * Which side panes are open, remembered per session.
+ *
+ * Per viewer and per device, so it lives in `localStorage` rather than on the
+ * server: collapsing the rail on a laptop says nothing about a phone, and it is
+ * not worth an endpoint and a write for something re-decided in one click
+ * (ADR 0018). Every access is guarded — storage can be disabled or cleared, and
+ * a preference that throws must not take the session screen down with it.
+ */
+function usePanes(
+  key: string,
+): [PaneState, (next: PaneState | ((prev: PaneState) => PaneState)) => void] {
+  const storageKey = `fabrikka.panes.${key}`;
+
+  const [panes, setPanes] = useState<PaneState>(() => {
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return PANES_DEFAULT;
+      const parsed = JSON.parse(raw) as Partial<PaneState>;
+      return {
+        setup: typeof parsed.setup === 'boolean' ? parsed.setup : PANES_DEFAULT.setup,
+        output: typeof parsed.output === 'boolean' ? parsed.output : PANES_DEFAULT.output,
+      };
+    } catch {
+      return PANES_DEFAULT;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(panes));
+    } catch {
+      // A session that works but forgets a pane preference is fine.
+    }
+  }, [storageKey, panes]);
+
+  return [panes, setPanes];
+}
+
 export function SessionPage() {
   const { owner = '', session = '' } = useParams();
   const ref = useMemo<SessionRef>(() => ({ owner, session }), [owner, session]);
@@ -45,6 +92,10 @@ export function SessionPage() {
    */
   const [runs, setRuns] = useState<Run[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [panes, setPanes] = usePanes(`${owner}/${session}`);
+
+  const togglePane = (which: 'setup' | 'output') =>
+    setPanes((prev) => ({ ...prev, [which]: !prev[which] }));
 
   const reload = useCallback(() => {
     sessions
@@ -193,9 +244,138 @@ export function SessionPage() {
         </button>
       </header>
 
-      <div className="app">
+      <div
+        className="workspace"
+        data-setup={panes.setup ? 'open' : 'closed'}
+        data-output={panes.output ? 'open' : 'closed'}
+      >
+        {/*
+          Left — SETUP: everything that CHANGES the session. Collapsible, because
+          you add an agent once and then talk for an hour (ADR 0018).
+        */}
+        <aside className="rail setup" aria-label="Session setup" aria-hidden={!panes.setup}>
+          <Panel title="Participants">
+            <ul className="participants">
+              {view.participants.map((p: Participant) => (
+                <li key={p.id}>
+                  <span>{p.kind === 'agent' ? '🤖' : '👤'}</span>
+                  <span>@{p.displayName}</span>
+                  {p.kind === 'agent' && (
+                    <span className={`presence ${p.status ?? 'offline'}`}>
+                      {p.status ?? 'offline'}
+                    </span>
+                  )}
+                  {p.id === view.me.participantId && <em className="small">you</em>}
+                  {(p.id === view.me.participantId || isOwner) && (
+                    <button
+                      className="link small"
+                      onClick={async () => {
+                        const next = window.prompt(
+                          `Rename @${p.displayName} in this session`,
+                          p.displayName,
+                        );
+                        if (!next?.trim() || next.trim() === p.displayName) return;
+                        try {
+                          await sessions.renameParticipant(ref, p.id, next.trim());
+                          reload();
+                        } catch (err) {
+                          window.alert((err as Error).message);
+                        }
+                      }}
+                    >
+                      rename
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="hint">
+              Renaming updates every message that mentioned them, including old
+              ones.
+            </p>
+          </Panel>
+
+          {/*
+            ANY member may add their own agent — the server has allowed it since
+            M3, and @claude-alice is half the multi-participant story (ADR 0004).
+            This panel was gated on isOwner until M11, which made it impossible
+            through the UI.
+          */}
+          <AgentsPanel
+            ref_={ref}
+            onChanged={reload}
+            isOwner={isOwner}
+            myUserId={user?.id}
+          />
+
+          <IntegrationsPanel ref_={ref} isOwner={isOwner} />
+
+          <Panel title={`Members (${view.members.length})`}>
+            <ul className="participants">
+              {view.members.map((m) => (
+                <li key={m.userId}>
+                  <span>{m.displayName}</span>
+                  <span className="muted small">{m.role}</span>
+                  {isOwner && m.userId !== user?.id && (
+                    <button
+                      className="link small"
+                      onClick={async () => {
+                        await sessions.removeMember(ref, m.userId);
+                        reload();
+                      }}
+                    >
+                      remove
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Panel>
+
+          {isOwner && <InvitesPanel ref_={ref} />}
+
+          {isOwner && (
+            <Panel title="Settings">
+              <div className="stack">
+                <button className="link" onClick={rename}>
+                  Rename session
+                </button>
+                <button className="link" onClick={toggleArchive}>
+                  {view.session.status === 'archived' ? 'Unarchive' : 'Archive'}
+                </button>
+                <button
+                  className="link danger"
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        `Delete “${view.session.title}”? This cannot be undone.`,
+                      )
+                    ) {
+                      return;
+                    }
+                    await sessions.remove(ref);
+                    navigate('/', { replace: true });
+                  }}
+                >
+                  Delete session
+                </button>
+              </div>
+            </Panel>
+          )}
+        </aside>
+
+        {/* Middle — the session happening. Never collapses; it is the product. */}
         <main className="session">
           <header>
+            <button
+              className={panes.setup ? 'pane-toggle on' : 'pane-toggle'}
+              aria-expanded={panes.setup}
+              title="Agents, members, integrations, invites"
+              onClick={() => togglePane('setup')}
+            >
+              Setup
+            </button>
+
             <h1>
               {view.session.title} <span title="Private">🔒</span>
               {view.session.status === 'archived' && <em className="badge">archived</em>}
@@ -203,6 +383,7 @@ export function SessionPage() {
             <span className={connected ? 'status on' : 'status off'}>
               {connected ? 'live' : 'reconnecting…'}
             </span>
+            <span className="spacer" />
             {/* Any member can pull it: waiting for the owner is the wrong
                 failure mode when an agent is misbehaving. */}
             {!view.agents.paused && view.participants.some((p) => p.kind === 'agent') && (
@@ -217,6 +398,15 @@ export function SessionPage() {
                 Pause agents
               </button>
             )}
+
+            <button
+              className={panes.output ? 'pane-toggle on' : 'pane-toggle'}
+              aria-expanded={panes.output}
+              title="What this session has produced: context and artifacts"
+              onClick={() => togglePane('output')}
+            >
+              Output
+            </button>
           </header>
 
           {view.agents.paused && (
@@ -286,106 +476,27 @@ export function SessionPage() {
           />
         </main>
 
-        <aside>
-          <Panel title="Participants">
-            <ul className="participants">
-              {view.participants.map((p: Participant) => (
-                <li key={p.id}>
-                  <span>{p.kind === 'agent' ? '🤖' : '👤'}</span>
-                  <span>@{p.displayName}</span>
-                  {p.kind === 'agent' && (
-                    <span className={`presence ${p.status ?? 'offline'}`}>
-                      {p.status ?? 'offline'}
-                    </span>
-                  )}
-                  {p.id === view.me.participantId && <em className="small">you</em>}
-                  {(p.id === view.me.participantId || isOwner) && (
-                    <button
-                      className="link small"
-                      onClick={async () => {
-                        const next = window.prompt(
-                          `Rename @${p.displayName} in this session`,
-                          p.displayName,
-                        );
-                        if (!next?.trim() || next.trim() === p.displayName) return;
-                        try {
-                          await sessions.renameParticipant(ref, p.id, next.trim());
-                          reload();
-                        } catch (err) {
-                          window.alert((err as Error).message);
-                        }
-                      }}
-                    >
-                      rename
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <p className="hint">
-              Renaming updates every message that mentioned them, including old
-              ones.
-            </p>
-          </Panel>
-
-          <Panel title={`Members (${view.members.length})`}>
-            <ul className="participants">
-              {view.members.map((m) => (
-                <li key={m.userId}>
-                  <span>{m.displayName}</span>
-                  <span className="muted small">{m.role}</span>
-                  {isOwner && m.userId !== user?.id && (
-                    <button
-                      className="link small"
-                      onClick={async () => {
-                        await sessions.removeMember(ref, m.userId);
-                        reload();
-                      }}
-                    >
-                      remove
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Panel>
-
-          {isOwner && <InvitesPanel ref_={ref} />}
-
-          <IntegrationsPanel ref_={ref} isOwner={isOwner} />
+        {/*
+          Right — OUTPUT: what the session PRODUCED. Context and artifacts are
+          written by agents through MCP, so this pane is already filled by AI;
+          it is filled by tool calls rather than by a button (ADR 0018).
+        */}
+        <aside className="rail output" aria-label="Session output" aria-hidden={!panes.output}>
           <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
           <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} />
-          {isOwner && <AgentsPanel ref_={ref} onChanged={reload} />}
-
-          {isOwner && (
-            <Panel title="Settings">
-              <div className="stack">
-                <button className="link" onClick={rename}>
-                  Rename session
-                </button>
-                <button className="link" onClick={toggleArchive}>
-                  {view.session.status === 'archived' ? 'Unarchive' : 'Archive'}
-                </button>
-                <button
-                  className="link danger"
-                  onClick={async () => {
-                    if (
-                      !window.confirm(
-                        `Delete “${view.session.title}”? This cannot be undone.`,
-                      )
-                    ) {
-                      return;
-                    }
-                    await sessions.remove(ref);
-                    navigate('/', { replace: true });
-                  }}
-                >
-                  Delete session
-                </button>
-              </div>
-            </Panel>
-          )}
         </aside>
+
+        {/*
+          On a narrow screen the rails are overlays, so a backdrop is the way out.
+          Hidden by CSS at desktop widths, where nothing overlaps anything.
+        */}
+        {(panes.setup || panes.output) && (
+          <button
+            className="pane-backdrop"
+            aria-label="Close panel"
+            onClick={() => setPanes({ setup: false, output: false })}
+          />
+        )}
       </div>
     </div>
   );
@@ -501,9 +612,13 @@ function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
 function AgentsPanel({
   ref_,
   onChanged,
+  isOwner,
+  myUserId,
 }: {
   ref_: SessionRef;
   onChanged: () => void;
+  isOwner: boolean;
+  myUserId: string | undefined;
 }) {
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [tokens, setTokens] = useState<TokenSummary[]>([]);
@@ -514,8 +629,10 @@ function AgentsPanel({
 
   const refresh = useCallback(() => {
     sessions.agents(ref_).then(setAgents).catch(() => {});
-    sessions.tokens(ref_).then(setTokens).catch(() => {});
-  }, [ref_]);
+    // Owner-only on the server (404 otherwise). Asking anyway would work, but a
+    // request whose failure we plan on is a request not worth sending.
+    if (isOwner) sessions.tokens(ref_).then(setTokens).catch(() => {});
+  }, [ref_, isOwner]);
 
   useEffect(refresh, [refresh]);
 
@@ -568,42 +685,56 @@ function AgentsPanel({
             <li key={a.sessionAgentId}>
               <span>🤖 @{a.displayName}</span>
               <span className="muted small">{a.provider}</span>
-              <button
-                className="link small"
-                title={
-                  a.trustTier === 'owner_only'
-                    ? 'Only you can direct this agent. Click to let any member direct it.'
-                    : 'Any member can direct this agent. Click to restrict it to you.'
-                }
-                onClick={async () => {
-                  await sessions.setAgentTrust(
-                    ref_,
-                    a.sessionAgentId,
-                    a.trustTier === 'owner_only' ? 'session_trusted' : 'owner_only',
-                  );
-                  refresh();
-                }}
-              >
-                {a.trustTier === 'owner_only' ? 'owner only' : 'session trusted'}
-              </button>
-              <button
-                className="link small"
-                title={
-                  a.activityVisible
-                    ? 'This agent\u2019s steps stream to the session. Click to hide them.'
-                    : 'This agent works silently. Click to stream its steps.'
-                }
-                onClick={async () => {
-                  await sessions.setAgentActivity(
-                    ref_,
-                    a.sessionAgentId,
-                    !a.activityVisible,
-                  );
-                  refresh();
-                }}
-              >
-                {a.activityVisible ? 'steps shown' : 'steps hidden'}
-              </button>
+              {/*
+                Trust and step visibility are the AGENT owner's call, and the
+                server answers 404 to anyone else. Showing the buttons to a
+                member who cannot use them would be a control that fails on
+                click — the rule is absent, not broken (ADR 0018).
+              */}
+              {a.ownerUserId !== myUserId ? (
+                <span className="muted small">
+                  {a.trustTier === 'owner_only' ? 'owner only' : 'session trusted'}
+                </span>
+              ) : (
+                <>
+                  <button
+                    className="link small"
+                    title={
+                      a.trustTier === 'owner_only'
+                        ? 'Only you can direct this agent. Click to let any member direct it.'
+                        : 'Any member can direct this agent. Click to restrict it to you.'
+                    }
+                    onClick={async () => {
+                      await sessions.setAgentTrust(
+                        ref_,
+                        a.sessionAgentId,
+                        a.trustTier === 'owner_only' ? 'session_trusted' : 'owner_only',
+                      );
+                      refresh();
+                    }}
+                  >
+                    {a.trustTier === 'owner_only' ? 'owner only' : 'session trusted'}
+                  </button>
+                  <button
+                    className="link small"
+                    title={
+                      a.activityVisible
+                        ? 'This agent\u2019s steps stream to the session. Click to hide them.'
+                        : 'This agent works silently. Click to stream its steps.'
+                    }
+                    onClick={async () => {
+                      await sessions.setAgentActivity(
+                        ref_,
+                        a.sessionAgentId,
+                        !a.activityVisible,
+                      );
+                      refresh();
+                    }}
+                  >
+                    {a.activityVisible ? 'steps shown' : 'steps hidden'}
+                  </button>
+                </>
+              )}
             </li>
           ))}
         </ul>

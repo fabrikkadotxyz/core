@@ -110,7 +110,7 @@ delivery and must not become an injection path between agents.
   descriptor rather than a whole transcript.
 - Late joiners see the current run but not previous ones. Acceptable: the outcome
   of a previous run is a message in the timeline.
-- A `runs` concept has to exist, so activity can group and so M11 can address a
+- A `runs` concept has to exist, so activity can group and so M12 can address a
   run. That is a prerequisite either way.
 
 ## What building it changed

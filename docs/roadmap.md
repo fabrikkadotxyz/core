@@ -294,7 +294,7 @@ every tool call, the event bus already fans out, the browser already has a socke
 They are pointed at stderr instead of the session.
 
 - A **`run`** is addressable: id, agent, trigger message, started/ended, outcome.
-  Required here, and a prerequisite for M11.
+  Required here, and a prerequisite for M12.
 - Activity streams into the timeline as it happens: `Read src/retry.ts`,
   `Bash ran the test suite`, `github__list_issues`.
 - **Summary, never transcript** ([ADR 0015](decisions/0015-activity-is-a-redacted-summary.md)):
@@ -334,7 +334,52 @@ They are pointed at stderr instead of the session.
 5. Turn activity off for that agent; the pill still moves, the steps stop.
 6. A second agent in the session never receives activity as context.
 
-## M11 — Steering: redirect it
+## M11 — The session screen: configure, converse, produce
+
+> Every panel the last eight milestones added went into one right-hand column:
+> participants, members, invites, integrations, context, artifacts, agents,
+> tokens, settings. It is a **stack of nine panels next to a chat**, and the
+> chat — the thing people are actually here for — is the narrower half of the
+> screen. The information architecture never got designed; it accumulated.
+
+Three panes, each answering a different question
+([ADR 0018](decisions/0018-session-screen-is-three-panes.md)):
+
+| Pane | Question | Holds |
+| --- | --- | --- |
+| **Left — Setup** | *Who and what is in this session?* | Participants, members, invites, agents, integrations, tokens, session settings |
+| **Middle — Conversation** | *What are we saying?* | Timeline, activity, composer. **Never collapses** |
+| **Right — Output** | *What has this session produced?* | Session context (objective, decisions, facts, questions, constraints) and artifacts |
+
+- The left rail **collapses**, because setup is what you do once and conversation
+  is what you do for an hour. Collapsed state is remembered per session.
+- The middle pane is the one that grows when either side closes. It is the product.
+- The right pane is **what the session produced**, which today means context and
+  artifacts — both already real (M7). It is deliberately *not* a placeholder for a
+  generate button: a pane that exists to be filled later is a pane that teaches
+  people to ignore that third of the screen.
+- **A member can add their own agent from the UI.** The server has allowed this
+  since M3's fix; the web app still gated the panel on `isOwner`, so `@claude-alice`
+  was impossible to create through the interface. The restyle is where that shows.
+- No new API surface. This milestone moves and styles what exists; the one
+  behavioural change is the gate above.
+
+**Test:**
+1. Open a session. Three panes: setup on the left, conversation in the middle,
+   output on the right. The conversation is the widest.
+2. Collapse the left rail — the conversation grows. Reload: still collapsed.
+   Collapse the right pane too, reload, and both stay as you left them.
+3. Post a message with the rail collapsed; the composer and timeline still work.
+4. Write an Objective in the right pane; it appears there, not in a panel you had
+   to scroll to find.
+5. Sign in as a **member** (not the owner): add an agent named `claude-alice`,
+   copy its setup block, and connect it. Owner-only controls (invites, tokens,
+   delete session) are absent, not broken.
+6. Narrow the window to a phone width: the panes stack, conversation first, and
+   nothing is clipped or unreachable.
+7. Activity still streams into the middle pane while the rail is collapsed.
+
+## M12 — Steering: redirect it
 
 > Today a mention arriving mid-run **queues a second run**, so the agent spends
 > minutes finishing work everyone can already see is wrong.
@@ -370,7 +415,7 @@ steering **stops and resumes**, and the UI says which
 5. A non-owner correction is refused, exactly like a mention.
 6. Fire five corrections in two seconds: they coalesce into one restart.
 
-## M12 — Four more agents, and model pass-through
+## M13 — Four more agents, and model pass-through
 
 > **Adding an agent is mostly free already.** Lane A (any MCP client) works today
 > for anything speaking MCP — zero code. An adapter buys only the **spawn path**,

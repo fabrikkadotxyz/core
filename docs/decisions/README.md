@@ -47,6 +47,7 @@ What we rejected and why.
 | [0012](0012-halt-is-server-side-termination-is-cooperative.md) | Halting is server-side; terminating a run is cooperative | Accepted |
 | [0013](0013-context-is-append-only-with-explicit-removal.md) | Session context is append-first, and artifacts are content-addressed | Accepted |
 | [0014](0014-aggregation-is-http-only-and-credentials-are-encrypted.md) | Aggregated servers are HTTP-only, and credentials are encrypted or refused | Accepted |
-| [0015](0015-activity-is-a-redacted-summary.md) | Activity is a redacted summary, not a transcript | Proposed |
+| [0015](0015-activity-is-a-redacted-summary.md) | Activity is a redacted summary, not a transcript | Accepted |
 | [0016](0016-steering-is-stop-and-resume.md) | Steering is stop-and-resume, not interruption | Proposed |
 | [0017](0017-model-selection-is-spawn-only.md) | Model selection is spawn-only, opaque, and reported | Proposed |
+| [0018](0018-session-screen-is-three-panes.md) | The session screen is three panes: configure, converse, produce | Accepted |

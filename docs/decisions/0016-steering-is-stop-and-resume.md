@@ -5,7 +5,7 @@
 
 ## Context
 
-The thesis behind M10/M11 asks that anyone be able to "drop into the same live
+The thesis behind M10/M12 asks that anyone be able to "drop into the same live
 agent session to watch it work, **redirect it**, and hand it off." Today a mention
 arriving while an agent is working **queues a second run**. There is no way to say
 "no, look at the other file." The only mid-flight control is the kill switch.

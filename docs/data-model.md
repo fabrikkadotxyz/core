@@ -348,7 +348,7 @@ member, and a session where Alice can merge because nobody denied it on her row.
 
 Credentials belong to a **user**, not a session. A tool call routes to the *calling participant's* credential; a server a participant hasn't attached is absent from their tool list entirely. Grants are **tool-level and default-deny** — server-level granularity cannot express "GitHub read but not merge", which is the actual requirement. See `docs/security.md`.
 
-### M12–M14 — outputs (specced, not built)
+### M12 — outputs (M14's `google_accounts` specced, not built)
 
 ```
 outputs
@@ -380,7 +380,7 @@ output_edits                              -- the changes log; append-only
   created_at      timestamptz not null
   index (output_id, created_at)
 
-google_accounts                           -- M14; a user's own connection
+google_accounts                           -- M14, not built; a user's own connection
   user_id         uuid -> users.id pk
   google_email    text not null
   sealed_refresh_token text not null      -- AES-256-GCM; never returned by any API

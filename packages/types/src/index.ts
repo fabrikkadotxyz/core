@@ -93,6 +93,13 @@ export type ServerEvent =
   | { type: 'participant.updated'; participant: Participant }
   | { type: 'context.updated'; context: SessionContext }
   | { type: 'artifact.created'; artifact: Artifact }
+  /** An output was created, renamed or removed. Panels refetch. See ADR 0019. */
+  | { type: 'output.changed'; outputId: string }
+  /**
+   * An output's content changed. Display data only, like activity: it is not a
+   * message, wakes no agent and costs no turn budget (ADR 0019).
+   */
+  | { type: 'output.edited'; edit: OutputEditSummary }
   | { type: 'run.started'; run: Run }
   | { type: 'run.ended'; run: Run }
   | { type: 'activity'; event: ActivityEvent }
@@ -281,6 +288,61 @@ export interface Artifact {
   url: string | null;
   createdBy: { participantId: string; displayName: string };
   createdAt: string;
+}
+
+/* ------------------------------------------------------------------ outputs */
+
+/** A kind of output this instance offers. The catalogue — see ADR 0019. */
+export type OutputKind = 'doc' | 'latex';
+
+export interface OutputKindInfo {
+  kind: OutputKind;
+  name: string;
+  description: string;
+  /** False when the instance lacks something the kind needs. */
+  available: boolean;
+}
+
+export interface Output {
+  id: string;
+  kind: OutputKind;
+  name: string;
+  files: string[];
+  mainFile: string;
+  version: number;
+  createdBy: { participantId: string; displayName: string };
+  createdAt: string;
+  updatedAt: string;
+  /** Who changed it most recently, for the list. */
+  lastEdit: { displayName: string; at: string } | null;
+}
+
+export interface OutputEditSummary {
+  id: string;
+  outputId: string;
+  outputName: string;
+  file: string;
+  participantId: string | null;
+  displayName: string;
+  participantKind: 'human' | 'agent' | null;
+  runId: string | null;
+  version: number;
+  added: number;
+  removed: number;
+  at: string;
+}
+
+export interface OutputEdit extends OutputEditSummary {
+  /** Unified diff of the lines this participant changed. */
+  diff: string;
+}
+
+/** latex only: what the last viewer's compile found. See ADR 0020. */
+export interface BuildReport {
+  status: 'ok' | 'failed' | 'unknown';
+  version: number | null;
+  at: string | null;
+  errors: { file: string; line: number | null; message: string }[];
 }
 
 export interface SessionView {

@@ -15,6 +15,10 @@ import type {
   LoginBody,
   Member,
   Message,
+  Output,
+  OutputEdit,
+  OutputEditSummary,
+  OutputKindInfo,
   Participant,
   PauseState,
   ServerEvent,
@@ -216,6 +220,19 @@ export const sessions = {
     if (!res.ok) throw new ApiError(res.status, json?.error ?? 'upload failed');
     return json as Artifact;
   },
+
+  outputKinds: (ref: SessionRef) => call<OutputKindInfo[]>(`${base(ref)}/output-kinds`),
+  outputs: (ref: SessionRef) => call<Output[]>(`${base(ref)}/outputs`),
+  createOutput: (ref: SessionRef, kind: string, name: string) =>
+    call<Output>(`${base(ref)}/outputs`, { method: 'POST', body: { kind, name } }),
+  renameOutput: (ref: SessionRef, id: string, name: string) =>
+    call<{ ok: true }>(`${base(ref)}/outputs/${id}`, { method: 'PATCH', body: { name } }),
+  deleteOutput: (ref: SessionRef, id: string) =>
+    call<{ ok: true }>(`${base(ref)}/outputs/${id}`, { method: 'DELETE' }),
+  outputChanges: (ref: SessionRef, id: string) =>
+    call<OutputEdit[]>(`${base(ref)}/outputs/${id}/changes`),
+  recentAgentEdits: (ref: SessionRef) =>
+    call<OutputEditSummary[]>(`${base(ref)}/output-edits`),
 
   invites: (ref: SessionRef) => call<InviteSummary[]>(`${base(ref)}/invites`),
   createInvite: (ref: SessionRef, body: { invitedEmail?: string } = {}) =>

@@ -1,6 +1,6 @@
 # 0019 — Outputs are live documents behind one adapter contract
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-01
 
 ## Context
@@ -109,7 +109,9 @@ one row after ten seconds idle — a row per keystroke records nothing anyone wi
 read.
 
 The session stream carries an `output.edited` frame so the timeline can say
-*claude-alice edited Report (+12 −3)* with a link to the diff. Like activity
+*claude-alice edited Report (+12 −3)* with a link to the diff. The conversation
+shows **agents'** edits only; human typing is in the document's History, or an
+hour of writing would bury the conversation. Like activity
 (ADR 0015) this is **display data**: it is not a message, it never wakes an agent,
 and it never counts against the turn budget. An edit is not a mention.
 
@@ -130,8 +132,10 @@ implementations is how we will know it is the right contract.
 ### In the right pane
 
 Outputs are listed first in the Output pane, above context and artifacts.
-Opening one widens the right pane to its maximum (60% of the window, the M11
-clamp) and closing it restores the width the viewer had chosen. The middle pane
+Opening one widens the right pane: an open document has its own remembered width,
+defaulting to 60% of the window, and the M11 640px cap does not apply to it — a
+document being written needs more room than a list of panels. Closing it restores
+the width the viewer had chosen for the list. The middle pane
 still never collapses (ADR 0018) — the point is the document *beside* the
 conversation.
 

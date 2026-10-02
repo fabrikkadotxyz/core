@@ -4,10 +4,12 @@
  * Tables are introduced by the milestone that needs them (docs/roadmap.md).
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
- * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation) and M10 (runs).
+ * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation), M10 (runs) and
+ * M12 (outputs).
  */
 import {
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -544,4 +546,78 @@ export const runs = pgTable(
     endedAt: timestamp('ended_at', { withTimezone: true }),
   },
   (t) => [index('runs_session_started_idx').on(t.sessionId, t.startedAt)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* M12 — outputs                                                              */
+/* -------------------------------------------------------------------------- */
+
+const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
+  dataType: () => 'bytea',
+  toDriver: (value) => Buffer.from(value),
+  fromDriver: (value) => new Uint8Array(value),
+});
+
+/**
+ * A live document the whole session edits. See ADR 0019.
+ *
+ * For native kinds `state` is the source of truth: one encoded Yjs document
+ * holding every file, so an edit spanning two files is one transaction.
+ * `version` is a counter beside it, bumped on every applied edit, so a wholesale
+ * replace has something to compare against. It is not a Yjs concept.
+ */
+export const outputs = pgTable(
+  'outputs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    /** doc | latex | gdoc */
+    kind: text('kind').notNull(),
+    name: text('name').notNull(),
+    mainFile: text('main_file').notNull(),
+    state: bytea('state'),
+    /** gdoc: the Google file id. */
+    externalRef: text('external_ref'),
+    version: integer('version').notNull().default(0),
+    /** latex: the latest build report from a viewer's browser. */
+    build: jsonb('build'),
+    createdByParticipantId: uuid('created_by_participant_id')
+      .notNull()
+      .references(() => participants.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('outputs_session_idx').on(t.sessionId)],
+);
+
+/**
+ * The changes log. Append-only.
+ *
+ * The diff is stored, not recomputed: the history needed to recompute it is
+ * garbage-collected out of the Yjs document. Human typing is coalesced, so this
+ * grows with edits, not keystrokes.
+ */
+export const outputEdits = pgTable(
+  'output_edits',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    outputId: uuid('output_id')
+      .notNull()
+      .references(() => outputs.id, { onDelete: 'cascade' }),
+    file: text('file').notNull(),
+    participantId: uuid('participant_id').references(() => participants.id, {
+      onDelete: 'set null',
+    }),
+    runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
+    /** gdoc: the Google account Drive reported. */
+    externalAuthor: text('external_author'),
+    version: integer('version').notNull(),
+    addedLines: integer('added_lines').notNull(),
+    removedLines: integer('removed_lines').notNull(),
+    diff: text('diff').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('output_edits_output_created_idx').on(t.outputId, t.createdAt)],
 );

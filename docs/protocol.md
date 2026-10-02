@@ -134,7 +134,7 @@ are not about to overwrite an edit you never saw. See
 [ADR 0013](decisions/0013-context-is-append-only-with-explicit-removal.md).
 Added at M8: aggregated external tools, namespaced `<server>__<tool>` (e.g. `github__create_issue`).
 
-#### Outputs (specced at M12–M14, not built)
+#### Outputs (added at M12)
 
 Outputs are live documents the whole session edits — humans in the browser, agents
 through these tools ([ADR 0019](decisions/0019-outputs-are-live-documents-behind-adapters.md)).
@@ -144,9 +144,9 @@ is writing a native document, a LaTeX paper or a Google Doc.
 | Tool | Args | Returns |
 | --- | --- | --- |
 | `list_outputs` | — | `[{ id, kind, name, files, main_file, version, updated_at }]` |
-| `read_output` | `output_id`, `file?`, `start_line?`, `max_lines?` (default 2000) | `{ content, version, format, total_lines, build? }` |
+| `read_output` | `output_id`, `file?`, `start_line?`, `max_lines?` (default 2000) | `{ output_id, name, file, format, version, start_line, total_lines, content, build? }` |
 | `edit_output` | `output_id`, `file?`, and **one of** `edits` / `append` / `content` + `if_version` | `{ version, applied }` |
-| `create_output` | `kind`, `name`, `content?` | The created output |
+| `create_output` | `kind`, `name`, `content?` | `{ id, kind, name, files, version }` |
 
 `file` defaults to the output's main file. `format` is `markdown` for `doc` and
 `gdoc`, `latex` for `latex`. `build` is present for `latex` only (ADR 0020):
@@ -166,7 +166,9 @@ quote enough surrounding text to be unique. All edits in one call apply or none 
 There is no edit by offset or line number: an offset means nothing once anyone else
 types.
 
-Errors, returned as tool errors with a `code`:
+Errors are tool errors (`isError: true`) whose text **starts with the code**, so
+an agent can branch on it: `anchor_not_found: edit 1 of 1: old_text is not in the
+file…`. Codes:
 
 | `code` | Meaning | What the agent should do |
 | --- | --- | --- |
@@ -174,7 +176,8 @@ Errors, returned as tool errors with a `code`:
 | `anchor_ambiguous` | Some `old_text` occurs more than once | Quote more context |
 | `version_moved` | `if_version` is stale | Re-read; prefer `edits` over a whole replace |
 | `credential_missing` | `gdoc`: the agent's owner has not connected Google | Tell the owner; do not retry |
-| `not_found` | No such output in this session | — |
+| `invalid_edit` | Malformed call — e.g. not exactly one of `edits` / `append` / `content`, an empty `old_text`, or `content` without `if_version` | Fix the call |
+| `not_found` | No such output (or file) in this session | — |
 
 Editing an output **never delivers anything to anyone**: it is not a message and
 not a mention, it wakes no agent and it does not count against the turn budget.
@@ -606,7 +609,8 @@ Server → client frames:
 | `{ type: 'message.created', message }` | A message was posted |
 | `{ type: 'run.started', run }` / `{ type: 'run.ended', run }` | A run opened or closed |
 | `{ type: 'activity', event }` | One redacted step: `{ runId, participantId, displayName, tool, detail, at }` |
-| `{ type: 'output.edited', edit }` | *(M12)* An output changed: `{ outputId, outputName, participantId, displayName, runId?, added, removed, at }`. Display data only, like activity |
+| `{ type: 'output.changed', outputId }` | *(M12)* An output was created, renamed or deleted |
+| `{ type: 'output.edited', edit }` | *(M12)* An output's content changed: `{ id, outputId, outputName, file, participantId, displayName, participantKind, runId, version, added, removed, at }`. Display data only, like activity |
 | `{ type: 'stream.error', code }` | Refused; the socket closes immediately after |
 
 Activity is **display data only**. It is published to browsers and nowhere else:
@@ -631,7 +635,7 @@ transient disconnect and should be retried with backoff.
 > upgrade gets a 401 HTTP response instead of a socket, leaving the client with
 > an unexplained `1006` and a reconnect loop.
 
-### Output sync socket (M12, specced)
+### Output sync socket (M12)
 
 ```
 GET /api/o/{owner_id}/s/{session_id}/outputs/{output_id}/sync     (WebSocket)
@@ -643,7 +647,11 @@ for `doc` and `latex` outputs, so a stock Yjs client connects; awareness carries
 each viewer's cursor and display name. `gdoc` outputs have no sync socket — their
 editor is Google's.
 
-`latex` viewers additionally send one JSON text frame per compile:
+Frames a client sends before the server has finished checking its cookie are held
+and replayed once it is attached — a stock client sends its first sync step the
+moment the socket opens, and dropping it means the client never syncs.
+
+`latex` viewers *(M13)* additionally send one JSON text frame per compile:
 `{ type: 'build.report', version, status, errors }`. The server keeps the latest per
 output and serves it as `build` in `read_output`.
 

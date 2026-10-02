@@ -423,8 +423,26 @@ native Markdown document that needs no account and no setup.
 - **Add output** in the right pane lists the kinds this instance has — the
   catalogue, and the seed of a marketplace. Built-in kinds only; third-party
   adapters are not in scope.
-- Opening an output widens the right pane to its maximum; closing restores the
-  viewer's width. The conversation never collapses.
+- Opening an output widens the right pane; closing restores the viewer's width.
+  A document has its own width, resizable like the rail, and the 640px cap lifts
+  while one is open (60% of the window remains the limit). The conversation never
+  collapses.
+- **Easy to understand, easy to manipulate.** The bar is someone who has never
+  seen Fabrikka or Markdown:
+  - **One click to start**: *+ New document* creates and opens it with the name
+    selected, ready to type over — no dialog first. A new document is empty; its
+    name is its title.
+  - A **formatting toolbar** (bold, italic, headings, lists, quote, link, code),
+    with ⌘B / ⌘I / ⌘K. Markdown is underneath, for agents; nobody has to know it.
+  - **Edit · Preview · History** tabs. Other people's **cursors carry their names**,
+    and who else is in the document shows as avatars.
+  - A **Live** badge says changes are saved and shared as you type; there is no
+    save button to forget.
+  - When an agent edits the document you are looking at, a notice says so with
+    **Show me**, which opens that exact change.
+  - Only **agent** edits appear in the conversation. Human typing is in History,
+    so a person writing for an hour does not flood the timeline.
+- The editor loads on first open, so the session screen does not pay for it.
 
 **Test:**
 1. Create a `doc` output named *Report* from **Add output**. It appears first in the

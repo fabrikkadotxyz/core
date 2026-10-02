@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type {
   ActivityEvent,
@@ -11,6 +11,8 @@ import type {
   SessionContext,
   SetupLane,
   Message,
+  Output,
+  OutputEditSummary,
   Participant,
   SessionView,
 } from '@fabrikka/types';
@@ -23,16 +25,33 @@ import {
 } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { MentionComposer, MentionText } from '../mentions.tsx';
+import { OutputsPanel, timeAgo, type OutputTab } from '../outputs/Outputs.tsx';
+
+/** The editor is most of the bundle; load it when a document is first opened. */
+const OutputView = lazy(() => import('../outputs/OutputView.tsx'));
 
 interface PaneState {
   setup: boolean;
   output: boolean;
   /** Width of the output rail, in px. See `clampWidth`. */
   outputWidth: number;
+  /**
+   * Width while a document is open. Separate, so closing the document gives
+   * back exactly the width you had chosen for the list (ADR 0019).
+   */
+  docWidth: number;
+  /** The document open in the output rail, if any. */
+  openOutput: string | null;
 }
 
 /** Setup is a one-time job; the conversation is the hour-long one. */
-const PANES_DEFAULT: PaneState = { setup: false, output: true, outputWidth: 320 };
+const PANES_DEFAULT: PaneState = {
+  setup: false,
+  output: true,
+  outputWidth: 320,
+  docWidth: 0, // 0 = "as wide as allowed", resolved by clampWidth
+  openOutput: null,
+};
 
 /**
  * Bounds for the output rail.
@@ -45,9 +64,24 @@ const PANES_DEFAULT: PaneState = { setup: false, output: true, outputWidth: 320 
 const RAIL_MIN = 260;
 const RAIL_MAX = 640;
 
-function clampWidth(px: number): number {
-  const ceiling = Math.min(RAIL_MAX, Math.round(window.innerWidth * 0.6));
-  return Math.max(RAIL_MIN, Math.min(Math.round(px), Math.max(RAIL_MIN, ceiling)));
+/**
+ * A document being written needs more room than a list of panels, so with one
+ * open the 640px cap lifts and only the 60%-of-window rule remains: the
+ * conversation still never becomes the narrow half.
+ */
+const DOC_MIN = 380;
+
+function railBounds(doc: boolean): { min: number; max: number } {
+  const sixty = Math.round(window.innerWidth * 0.6);
+  return doc
+    ? { min: Math.min(DOC_MIN, sixty), max: Math.max(Math.min(DOC_MIN, sixty), sixty) }
+    : { min: RAIL_MIN, max: Math.max(RAIL_MIN, Math.min(RAIL_MAX, sixty)) };
+}
+
+function clampWidth(px: number, doc = false): number {
+  const { min, max } = railBounds(doc);
+  if (doc && px <= 0) return max;
+  return Math.max(min, Math.min(Math.round(px), max));
 }
 
 /**
@@ -78,6 +112,11 @@ function usePanes(
           typeof parsed.outputWidth === 'number' && Number.isFinite(parsed.outputWidth)
             ? clampWidth(parsed.outputWidth)
             : PANES_DEFAULT.outputWidth,
+        docWidth:
+          typeof parsed.docWidth === 'number' && Number.isFinite(parsed.docWidth)
+            ? parsed.docWidth
+            : PANES_DEFAULT.docWidth,
+        openOutput: typeof parsed.openOutput === 'string' ? parsed.openOutput : null,
       };
     } catch {
       return PANES_DEFAULT;
@@ -108,10 +147,16 @@ function usePanes(
  */
 function RailHandle({
   width,
+  min,
+  max,
   onResize,
+  onReset,
 }: {
   width: number;
+  min: number;
+  max: number;
   onResize: (px: number) => void;
+  onReset: () => void;
 }) {
   const [dragging, setDragging] = useState(false);
 
@@ -130,8 +175,8 @@ function RailHandle({
       aria-orientation="vertical"
       aria-label="Resize the output pane"
       aria-valuenow={width}
-      aria-valuemin={RAIL_MIN}
-      aria-valuemax={RAIL_MAX}
+      aria-valuemin={min}
+      aria-valuemax={max}
       tabIndex={0}
       onPointerDown={(e) => {
         e.preventDefault();
@@ -147,13 +192,13 @@ function RailHandle({
         setDragging(false);
       }}
       onPointerCancel={() => setDragging(false)}
-      onDoubleClick={() => onResize(PANES_DEFAULT.outputWidth)}
+      onDoubleClick={onReset}
       onKeyDown={(e) => {
         const step = e.shiftKey ? 64 : 16;
         if (e.key === 'ArrowLeft') onResize(width + step);
         else if (e.key === 'ArrowRight') onResize(width - step);
-        else if (e.key === 'Home') onResize(RAIL_MAX);
-        else if (e.key === 'End') onResize(RAIL_MIN);
+        else if (e.key === 'Home') onResize(max);
+        else if (e.key === 'End') onResize(min);
         else return;
         // Arrow keys scroll the pane behind the handle otherwise.
         e.preventDefault();
@@ -184,12 +229,64 @@ export function SessionPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [panes, setPanes] = usePanes(`${owner}/${session}`);
+  /** Live documents, refetched when the stream says one changed. */
+  const [outputs, setOutputs] = useState<Output[]>([]);
+  const [outputsVersion, setOutputsVersion] = useState(0);
+  /** Agent edits, for the timeline. Human typing lives in each document's History. */
+  const [agentEdits, setAgentEdits] = useState<OutputEditSummary[]>([]);
+  const [outputTab, setOutputTab] = useState<OutputTab>('edit');
+  const [focusEdit, setFocusEdit] = useState<string | null>(null);
+  const [renameOnOpen, setRenameOnOpen] = useState(false);
+  /** An agent changed the document you are looking at: say so, once. */
+  const [editToast, setEditToast] = useState<OutputEditSummary | null>(null);
+  const openOutputRef = useRef<string | null>(panes.openOutput);
+  openOutputRef.current = panes.openOutput;
 
   const togglePane = (which: 'setup' | 'output') =>
     setPanes((prev) => ({ ...prev, [which]: !prev[which] }));
 
+  const docOpen = panes.openOutput !== null;
   const resizeOutput = (px: number) =>
-    setPanes((prev) => ({ ...prev, outputWidth: clampWidth(px) }));
+    setPanes((prev) =>
+      prev.openOutput
+        ? { ...prev, docWidth: clampWidth(px, true) }
+        : { ...prev, outputWidth: clampWidth(px) },
+    );
+  const resetOutputWidth = () =>
+    setPanes((prev) =>
+      prev.openOutput ? { ...prev, docWidth: 0 } : { ...prev, outputWidth: PANES_DEFAULT.outputWidth },
+    );
+  const railWidth = docOpen ? clampWidth(panes.docWidth, true) : panes.outputWidth;
+  const bounds = railBounds(docOpen);
+
+  const openOutput = (id: string, opts: { tab?: OutputTab; edit?: string; rename?: boolean } = {}) => {
+    setOutputTab(opts.tab ?? 'edit');
+    setFocusEdit(opts.edit ?? null);
+    setRenameOnOpen(!!opts.rename);
+    setEditToast(null);
+    setPanes((prev) => ({ ...prev, output: true, openOutput: id }));
+  };
+  const closeOutput = () => {
+    setEditToast(null);
+    setPanes((prev) => ({ ...prev, openOutput: null }));
+  };
+
+  useEffect(() => {
+    sessions
+      .outputs(ref)
+      .then((list) => {
+        setOutputs(list);
+        // A remembered document that has since been deleted just closes.
+        if (openOutputRef.current && !list.some((o) => o.id === openOutputRef.current)) {
+          setPanes((prev) => ({ ...prev, openOutput: null }));
+        }
+      })
+      .catch(() => {});
+  }, [ref, outputsVersion, setPanes]);
+
+  useEffect(() => {
+    sessions.recentAgentEdits(ref).then(setAgentEdits).catch(() => {});
+  }, [ref]);
 
   const reload = useCallback(() => {
     sessions
@@ -244,6 +341,17 @@ export function SessionPage() {
           if (event.type === 'context.updated' || event.type === 'artifact.created') {
             // Panels own their own state; a bump is enough to make them refetch.
             setPanelsVersion((v) => v + 1);
+          }
+          if (event.type === 'output.changed') setOutputsVersion((v) => v + 1);
+          if (event.type === 'output.edited') {
+            const e = event.edit;
+            setOutputsVersion((v) => v + 1);
+            if (e.participantKind === 'agent') {
+              setAgentEdits((prev) =>
+                prev.some((x) => x.id === e.id) ? prev : [e, ...prev].slice(0, 200),
+              );
+              if (e.outputId === openOutputRef.current) setEditToast(e);
+            }
           }
           if (event.type === 'agents.paused') {
             setView((prev) =>
@@ -342,7 +450,8 @@ export function SessionPage() {
         className="workspace"
         data-setup={panes.setup ? 'open' : 'closed'}
         data-output={panes.output ? 'open' : 'closed'}
-        style={{ '--rail-output-w': `${panes.outputWidth}px` } as React.CSSProperties}
+        data-doc={docOpen ? 'open' : 'closed'}
+        style={{ '--rail-output-w': `${railWidth}px` } as React.CSSProperties}
       >
         {/*
           Left — SETUP: everything that CHANGES the session. Collapsible, because
@@ -497,7 +606,7 @@ export function SessionPage() {
             <button
               className={panes.output ? 'pane-toggle on' : 'pane-toggle'}
               aria-expanded={panes.output}
-              title="What this session has produced: context and artifacts"
+              title="What this session has produced: documents, context and files"
               onClick={() => togglePane('output')}
             >
               Output
@@ -555,9 +664,11 @@ export function SessionPage() {
           <Timeline
             messages={messages}
             activity={activity}
+            edits={agentEdits}
             runs={runs}
             participants={view.participants}
             meParticipantId={view.me.participantId}
+            onShowEdit={(e) => openOutput(e.outputId, { tab: 'history', edit: e.id })}
           />
           <MentionComposer
             participants={view.participants}
@@ -578,11 +689,73 @@ export function SessionPage() {
         */}
         {/* A sibling of the rail, not a child: the rail scrolls, and a handle
             that scrolls away is a handle you cannot reach. */}
-        {panes.output && <RailHandle width={panes.outputWidth} onResize={resizeOutput} />}
+        {panes.output && (
+          <RailHandle
+            width={railWidth}
+            min={bounds.min}
+            max={bounds.max}
+            onResize={resizeOutput}
+            onReset={resetOutputWidth}
+          />
+        )}
 
         <aside className="rail output" aria-label="Session output" aria-hidden={!panes.output}>
-          <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
-          <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} />
+          {(() => {
+            const open = outputs.find((o) => o.id === panes.openOutput);
+            const me = view.participants.find((p) => p.id === view.me.participantId);
+            if (open && me) {
+              return (
+                <>
+                  {editToast && (
+                    <div className="edit-toast" role="status">
+                      <span>
+                        ✎ @{editToast.displayName} just edited this (+{editToast.added} −
+                        {editToast.removed})
+                      </span>
+                      <button
+                        className="link"
+                        onClick={() => {
+                          setOutputTab('history');
+                          setFocusEdit(editToast.id);
+                          setEditToast(null);
+                        }}
+                      >
+                        Show me
+                      </button>
+                      <button className="link muted" aria-label="Dismiss" onClick={() => setEditToast(null)}>
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                  <Suspense fallback={<p className="muted small">Opening…</p>}>
+                  <OutputView
+                    key={open.id}
+                    ref_={ref}
+                    output={open}
+                    me={me}
+                    canDelete={isOwner || open.createdBy.participantId === view.me.participantId}
+                    tab={outputTab}
+                    onTab={(t) => {
+                      setOutputTab(t);
+                      if (t !== 'history') setFocusEdit(null);
+                    }}
+                    focusEditId={focusEdit}
+                    renameOnOpen={renameOnOpen}
+                    editsVersion={outputsVersion}
+                    onClose={closeOutput}
+                  />
+                  </Suspense>
+                </>
+              );
+            }
+            return (
+              <>
+                <OutputsPanel ref_={ref} outputs={outputs} onOpen={(id, o) => openOutput(id, o)} />
+                <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
+                <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} />
+              </>
+            );
+          })()}
         </aside>
 
         {/*
@@ -1356,29 +1529,35 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
 function Timeline({
   messages,
   activity,
+  edits,
   runs,
   participants,
   meParticipantId,
+  onShowEdit,
 }: {
   messages: Message[];
   activity: ActivityEvent[];
+  /** Agent edits to documents: display only, never messages (ADR 0019). */
+  edits: OutputEditSummary[];
   runs: Run[];
   participants: Participant[];
   meParticipantId: string;
+  onShowEdit: (e: OutputEditSummary) => void;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, activity.length]);
+  }, [messages.length, activity.length, edits.length]);
 
   const items = useMemo(
     () =>
       [
         ...messages.map((m) => ({ at: m.createdAt, kind: 'message' as const, message: m })),
         ...activity.map((a) => ({ at: a.at, kind: 'activity' as const, event: a })),
+        ...edits.map((e) => ({ at: e.at, kind: 'edit' as const, edit: e })),
       ].sort((a, b) => a.at.localeCompare(b.at)),
-    [messages, activity],
+    [messages, activity, edits],
   );
 
   const running = runs.filter((r) => r.status === 'running');
@@ -1394,7 +1573,24 @@ function Timeline({
   return (
     <div className="timeline">
       {items.map((item, i) =>
-        item.kind === 'activity' ? (
+        item.kind === 'edit' ? (
+          <button
+            key={`e-${item.edit.id}`}
+            className="activity edit-line"
+            title="Open the document and see exactly what changed"
+            onClick={() => onShowEdit(item.edit)}
+          >
+            <span className="activity-agent">@{item.edit.displayName}</span>
+            <span>
+              edited <strong>{item.edit.outputName}</strong>
+            </span>
+            <span className="history-delta">
+              <span className="plus">+{item.edit.added}</span>{' '}
+              <span className="minus">−{item.edit.removed}</span>
+            </span>
+            <span className="muted small">{timeAgo(item.edit.at)} · see change →</span>
+          </button>
+        ) : item.kind === 'activity' ? (
           <div key={`a-${i}`} className="activity">
             <span className="activity-agent">@{item.event.displayName}</span>
             <span className="activity-tool">{item.event.tool}</span>

@@ -81,6 +81,18 @@ import {
   redeemInvite,
   revokeInvite,
 } from './invites.ts';
+import {
+  attachSocket,
+  createOutput,
+  deleteOutput,
+  isOutputId,
+  listEdits,
+  listOutputs,
+  OutputError,
+  outputCreator,
+  outputKinds,
+  renameOutput,
+} from './outputs.ts';
 import { createUser } from './users.ts';
 import {
   countOwners,
@@ -761,6 +773,82 @@ sessionRoutes.delete('/artifacts/:id', async (c) => {
 
 /* ---- invites ---- */
 
+/* ---- outputs (M12): live documents. See ADR 0019. ---- */
+
+/** The catalogue: what kinds of output this instance offers. */
+sessionRoutes.get('/output-kinds', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  return c.json(outputKinds());
+});
+
+sessionRoutes.get('/outputs', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  return c.json(await listOutputs(db, s.id));
+});
+
+sessionRoutes.post('/outputs', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const body = await c.req.json<{ kind?: string; name?: string }>();
+  try {
+    const output = await createOutput(db, {
+      sessionId: s.id,
+      participantId: s.participantId,
+      kind: body.kind ?? '',
+      name: body.name ?? '',
+    });
+    return c.json(output, 201);
+  } catch (err) {
+    if (err instanceof OutputError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
+});
+
+/** Any member may rename: a name is shared furniture, like the context. */
+sessionRoutes.patch('/outputs/:id', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const { name } = await c.req.json<{ name?: string }>();
+  if (!name?.trim()) return c.json({ error: 'a name is required' }, 400);
+  if (!(await renameOutput(db, s.id, c.req.param('id'), name))) return c.notFound();
+  return c.json({ ok: true });
+});
+
+/**
+ * Removing a document the whole room is writing is not a member's call to make
+ * for everyone: its creator or the session owner. Everyone else gets 404.
+ */
+sessionRoutes.delete('/outputs/:id', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const id = c.req.param('id');
+  const creator = await outputCreator(db, s.id, id);
+  if (!creator || (creator !== s.participantId && s.role !== 'owner')) return c.notFound();
+  await deleteOutput(db, s.id, id);
+  return c.json({ ok: true });
+});
+
+sessionRoutes.get('/outputs/:id/changes', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const id = c.req.param('id');
+  if (!isOutputId(id) || !(await outputCreator(db, s.id, id))) return c.notFound();
+  return c.json(await listEdits(db, s.id, { outputId: id }));
+});
+
+/**
+ * Recent agent edits across the session, so the timeline can show them after a
+ * reload. Human typing is in each output's changes view, not the conversation.
+ */
+sessionRoutes.get('/output-edits', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const edits = await listEdits(db, s.id, { agentsOnly: true, limit: 100 });
+  return c.json(edits.map(({ diff: _diff, ...summary }) => summary));
+});
+
 sessionRoutes.get('/invites', async (c) => {
   const s = await resolve(c);
   if (!s || s.role !== 'owner') return c.notFound();
@@ -1167,6 +1255,68 @@ app.get(
   }),
 );
 
+
+/**
+ * Output sync socket (M12). The standard Yjs sync and awareness protocols, so
+ * humans co-edit in real time. Same cookie, same membership check and the same
+ * in-band refusal as the session stream. Agents never use it: their edits come
+ * over MCP and are applied server-side (ADR 0019).
+ */
+app.get(
+  '/api/o/:owner/s/:session/outputs/:output/sync',
+  upgradeWebSocket((c) => {
+    const ownerSlug = c.req.param('owner');
+    const sessionPublicId = c.req.param('session');
+    const outputId = c.req.param('output') ?? '';
+    const token = readCookie(c);
+    let handlers: Awaited<ReturnType<typeof attachSocket>> = null;
+    let closed = false;
+    // A client sends its first sync step the moment the socket opens, while we
+    // are still checking who it is. Held, not dropped, or it never syncs.
+    const early: (ArrayBuffer | string)[] = [];
+
+    return {
+      async onOpen(_evt, ws) {
+        const refuse = (code: 'unauthenticated' | 'not_found') => {
+          ws.send(JSON.stringify({ type: 'stream.error', code }));
+          ws.close();
+        };
+        if (!ownerSlug || !sessionPublicId) return refuse('not_found');
+        const user = await resolveToken(db, token);
+        if (!user) return refuse('unauthenticated');
+        const s = await resolveSessionForUser(db, ownerSlug, sessionPublicId, user.id);
+        if (!s) return refuse('not_found');
+
+        handlers = await attachSocket(db, {
+          sessionId: s.id,
+          outputId,
+          participantId: s.participantId,
+          ws: {
+            send: (data) => ws.send(data as never),
+            close: () => ws.close(),
+          },
+        });
+        if (!handlers) return refuse('not_found');
+        for (const data of early.splice(0)) handlers.onMessage(data);
+        // The socket may have closed while we were checking.
+        if (closed) handlers.onClose();
+      },
+      onMessage(evt) {
+        const data = evt.data as ArrayBuffer | string;
+        if (handlers) handlers.onMessage(data);
+        else if (early.length < 100) early.push(data);
+      },
+      onClose() {
+        closed = true;
+        handlers?.onClose();
+      },
+      onError() {
+        closed = true;
+        handlers?.onClose();
+      },
+    };
+  }),
+);
 
 app.route('/api/o/:owner/s/:session', sessionRoutes);
 

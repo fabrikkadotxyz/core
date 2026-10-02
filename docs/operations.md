@@ -183,17 +183,17 @@ do not collect that garbage, and say so rather than letting you discover it.
 
 Back up `ARTIFACT_DIR` alongside the database — the rows are useless without it.
 
-## Outputs (M12–M14, specced)
+## Outputs
 
 Native outputs (`doc`, `latex`) are stored in the database as encoded Yjs state —
 the regular database backup covers them; there is nothing on disk.
 
-**LaTeX packages** are fetched by viewers' browsers on demand. By default the
+**LaTeX packages** *(M13)* are fetched by viewers' browsers on demand. By default the
 instance serves them itself, so a self-hosted instance does not tell a third party
 which packages its documents use. How to populate that package directory depends
 on the engine chosen at M13 and is documented then.
 
-**Google Docs** needs an OAuth client the operator registers in their own Google
+**Google Docs** *(M14, not built)* needs an OAuth client the operator registers in their own Google
 Cloud project:
 
 ```bash

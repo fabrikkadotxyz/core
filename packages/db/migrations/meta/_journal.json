@@ -64,6 +64,13 @@
       "when": 1790690024943,
       "tag": "0008_clever_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790903817964,
+      "tag": "0009_supreme_joseph",
+      "breakpoints": true
     }
   ]
 }

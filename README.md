@@ -16,11 +16,11 @@ The rule that follows from it:
 
 ## Status
 
-Pre-MVP. **M0–M11 built**: auth and private sessions, participants and mentions,
+Pre-MVP. **M0–M12 built**: auth and private sessions, participants and mentions,
 the remote session MCP endpoint, the bridge channel, spawn-on-mention with Claude
 Code and Codex, safety rails, session context and artifacts, per-participant MCP
-aggregation, a Tauri shell, live activity, and the three-pane session screen.
-Next is M12 (outputs: live, shared documents — then LaTeX and Google Docs, then steering) — see [`docs/roadmap.md`](docs/roadmap.md).
+aggregation, a Tauri shell, live activity, the three-pane session screen, and live shared documents.
+Next is M13 (LaTeX), then Google Docs, then steering — see [`docs/roadmap.md`](docs/roadmap.md).
 
 ## How agents join
 

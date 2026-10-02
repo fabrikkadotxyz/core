@@ -909,3 +909,486 @@ aside input[type='file'] {
   0%, 100% { opacity: 0.25; }
   50% { opacity: 1; }
 }
+
+/* ------------------------------------------------ M12: outputs (documents) */
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.panel-head h2 {
+  margin: 0;
+}
+
+.new-output {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--accent);
+  border-color: #7c9cff55;
+  cursor: pointer;
+}
+
+.new-output:hover {
+  background: #7c9cff1a;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0e0f13;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.primary:hover {
+  filter: brightness(1.08);
+}
+
+.outputs-empty {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  align-items: flex-start;
+}
+
+.outputs-empty p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.kind-menu {
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.kind-menu button {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.kind-menu button:hover {
+  background: var(--border);
+}
+
+.kind-menu button > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.output-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.output-card {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.output-card:hover {
+  border-color: #7c9cff66;
+}
+
+.kind-icon {
+  font-size: 1.1rem;
+  width: 1.4rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.output-card-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.output-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An open document takes the whole rail: it is the thing you came to write. */
+.output-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 100%;
+}
+
+.output-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.output-head .back {
+  font-size: 0.85rem;
+}
+
+.output-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.25rem 0.4rem;
+  margin-left: -0.4rem;
+}
+
+.output-title:hover {
+  border-color: var(--border);
+}
+
+.output-title:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.sync-badge {
+  font-size: 0.72rem;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sync-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.sync-badge.synced::before {
+  background: #34d399;
+}
+
+.sync-badge.offline::before,
+.sync-badge.refused::before {
+  background: #f87171;
+}
+
+.presence {
+  display: inline-flex;
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #0e0f13;
+  flex-shrink: 0;
+}
+
+.presence .avatar + .avatar {
+  margin-left: -6px;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.editor-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.3rem 0;
+  position: sticky;
+  top: -1rem;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.toolbar button {
+  min-width: 2rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  border-color: transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.toolbar button:hover:not(:disabled) {
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+.toolbar button.b {
+  font-weight: 800;
+}
+
+.toolbar button.i {
+  font-style: italic;
+  font-family: Georgia, serif;
+}
+
+.editor {
+  flex: 1;
+}
+
+.editor-loading {
+  margin: 0.5rem 0;
+}
+
+.preview {
+  line-height: 1.65;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.preview h1,
+.preview h2,
+.preview h3 {
+  line-height: 1.25;
+}
+
+.preview a {
+  color: var(--accent);
+}
+
+.preview code {
+  background: var(--panel);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+
+.preview pre {
+  background: var(--panel);
+  padding: 0.7rem;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.preview blockquote {
+  margin-left: 0;
+  padding-left: 0.9rem;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+
+.preview-empty,
+.history-empty {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.history {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.history-row:hover,
+.history li.open .history-row {
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+.history-who {
+  flex: 1;
+  font-size: 0.875rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-delta {
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+}
+
+.plus {
+  color: #34d399;
+}
+
+.minus {
+  color: #f87171;
+}
+
+.diff {
+  margin: 0.3rem 0 0.4rem;
+  padding: 0.5rem 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff span {
+  display: block;
+  padding: 0 0.6rem;
+}
+
+.diff .add {
+  background: #34d39922;
+  color: #a7f3d0;
+}
+
+.diff .del {
+  background: #f8717122;
+  color: #fecaca;
+  text-decoration: line-through;
+  text-decoration-color: #f8717188;
+}
+
+.diff .hunk {
+  color: var(--muted);
+}
+
+.edit-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid #7c9cff55;
+  background: #7c9cff1a;
+  font-size: 0.85rem;
+}
+
+.edit-toast span {
+  flex: 1;
+}
+
+/* An agent's edit in the conversation: a quiet line you can click. */
+button.edit-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+button.edit-line:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+
+button.edit-line::before {
+  content: '✎';
+}
+
+@media (max-width: 1100px) {
+  /* As an overlay, a document needs most of the screen to be writable. */
+  .workspace[data-doc='open'] .rail.output {
+    width: min(760px, 96vw);
+  }
+}
+
+/* Buttons default to the accent fill; these are quiet controls over content. */
+.toolbar button,
+.history-row,
+.output-card,
+.kind-menu button,
+.new-output {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.toolbar button,
+.history-row,
+.kind-menu button,
+.new-output {
+  background: transparent;
+}
+
+.output-card {
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+.tab {
+  font-weight: 500;
+}
+
+button.edit-line {
+  font-weight: 400;
+}

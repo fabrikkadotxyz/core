@@ -198,14 +198,18 @@ const names = tools.map((t) => t.name).sort();
 check(
   JSON.stringify(names) ===
     JSON.stringify([
-      // Artifact tools joined the surface at M7.
+      // Artifact tools joined the surface at M7, output tools at M12.
       'create_artifact',
+      'create_output',
+      'edit_output',
       'get_session_context',
       'list_artifacts',
+      'list_outputs',
       'list_participants',
       'post_message',
       'read_artifact',
       'read_messages',
+      'read_output',
       'update_session_context',
       'whoami',
     ]),

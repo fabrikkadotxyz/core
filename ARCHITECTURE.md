@@ -119,7 +119,7 @@ We don't do that, because the moment Fabrikka installs and supervises agent runt
 
 | Layer | What it is | Where |
 | --- | --- | --- |
-| Session layer | Events, participants, messages, context, artifacts, permissions | `apps/server` |
+| Session layer | Events, participants, messages, context, artifacts, outputs, permissions | `apps/server` |
 | Interaction layer | Web UI; later, desktop | `apps/web`, `apps/desktop` |
 | Connection layer | Remote MCP endpoint (lane A) + bridge CLI (lane B) | `apps/server/src/mcp`, `packages/bridge` |
 
@@ -127,16 +127,19 @@ Agent runtimes are deliberately **not** a layer we own.
 
 ## Realtime
 
-Two independent transports, which should not be conflated:
+Independent transports, which should not be conflated:
 
 - **Browser ↔ server:** WebSocket, carrying the session event stream for the UI.
 - **Bridge ↔ server:** WebSocket, carrying mention delivery and agent presence.
+- **Browser ↔ server, per open output** *(M12)*: WebSocket speaking the Yjs sync
+  protocol, so humans co-edit a document in real time. Agents do not use it; their
+  edits arrive over MCP and are applied server-side as one more editor (ADR 0019).
 
-MCP connections are separate from both. An agent on lane A has no realtime connection at all.
+MCP connections are separate from all of them. An agent on lane A has no realtime connection at all.
 
 ## What we are deliberately not building
 
-No built-in LLM provider. No Fabrikka-hosted Claude or Codex. No autonomous orchestration, agent marketplace, workflows, RAG, vector database, public sessions, organizations, billing, mobile, SSO, or elaborate RBAC.
+No built-in LLM provider. No Fabrikka-hosted Claude or Codex. No autonomous orchestration, agent marketplace (the output catalogue of ADR 0019 lists built-in document kinds; it does not load anyone else's code), workflows, RAG, vector database, public sessions, organizations, billing, mobile, SSO, or elaborate RBAC.
 
 The MVP answers one question: *does it feel useful to have a private room where I work with my existing agents and other people?*
 

@@ -272,11 +272,11 @@ session_agents  (addition)
   activity_visible boolean not null default true
 ```
 
-`resume_handle` exists but is **not written yet** — M12 fills it, because a
+`resume_handle` exists but is **not written yet** — M15 (steering) fills it, because a
 correction can only continue a run that remembered how to be continued. The column
 is here rather than in a later migration so `runs` has one shape.
 
-**M13 adds (specced, not built):**
+**M16 adds (specced, not built):**
 
 ```
 session_agents  (addition)
@@ -347,3 +347,63 @@ session, not of whose token is behind it. Keying by row would mean re-granting p
 member, and a session where Alice can merge because nobody denied it on her row.
 
 Credentials belong to a **user**, not a session. A tool call routes to the *calling participant's* credential; a server a participant hasn't attached is absent from their tool list entirely. Grants are **tool-level and default-deny** — server-level granularity cannot express "GitHub read but not merge", which is the actual requirement. See `docs/security.md`.
+
+### M12–M14 — outputs (specced, not built)
+
+```
+outputs
+  id              uuid pk
+  session_id      uuid -> sessions.id not null
+  kind            text not null           -- doc | latex | gdoc
+  name            text not null           -- display name; collisions are fine
+  main_file       text not null           -- "document.md", "main.tex"
+  state           bytea                   -- doc, latex: encoded Yjs document (all files)
+  external_ref    text                    -- gdoc: the Google file id
+  version         int not null default 0  -- increments on every applied edit
+  build           jsonb                   -- latex: latest build report from a viewer
+  created_by_participant_id uuid -> participants.id not null
+  created_at      timestamptz not null
+  updated_at      timestamptz not null
+  index (session_id)
+
+output_edits                              -- the changes log; append-only
+  id              uuid pk
+  output_id       uuid -> outputs.id not null
+  file            text not null
+  participant_id  uuid -> participants.id -- null for a Google edit by someone not in the session
+  run_id          uuid -> runs.id         -- set when an agent edited inside a run
+  external_author text                    -- gdoc: the Google account Drive reported
+  version         int not null            -- the output's version after this edit
+  added_lines     int not null
+  removed_lines   int not null
+  diff            text not null           -- unified diff of the file, before → after
+  created_at      timestamptz not null
+  index (output_id, created_at)
+
+google_accounts                           -- M14; a user's own connection
+  user_id         uuid -> users.id pk
+  google_email    text not null
+  sealed_refresh_token text not null      -- AES-256-GCM; never returned by any API
+  created_at      timestamptz not null
+```
+
+**One `state` blob per output, not a row per file.** A `latex` output's files are
+`Y.Text`s inside one Yjs document, so a single edit spanning `main.tex` and
+`refs.bib` is one transaction. Splitting files into rows would split that.
+
+**`state` is the source of truth for native kinds; `version` is a counter beside
+it**, bumped on every applied edit so `if_version` has something to compare. It is
+not a Yjs concept, and a human's keystrokes bump it too — which is why agents edit
+by anchor rather than by version
+([ADR 0019](decisions/0019-outputs-are-live-documents-behind-adapters.md)).
+
+**`output_edits.diff` is stored, not recomputed.** For native kinds the history
+needed to recompute it is in the Yjs document only until it is garbage-collected;
+for `gdoc` it is in Google's history, which may later be unreachable. "What did
+claude-alice change at 14:02" has to be answerable afterwards. Human typing is
+coalesced per participant into one row after ten seconds idle, so this table grows
+with *edits*, not keystrokes.
+
+**`google_accounts` belongs to a user, not a session**, for the same reason as
+`mcp_servers`: a credential is a person's. See
+[ADR 0021](decisions/0021-google-docs-writes-use-the-editors-own-account.md).

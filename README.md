@@ -20,7 +20,7 @@ Pre-MVP. **M0–M11 built**: auth and private sessions, participants and mention
 the remote session MCP endpoint, the bridge channel, spawn-on-mention with Claude
 Code and Codex, safety rails, session context and artifacts, per-participant MCP
 aggregation, a Tauri shell, live activity, and the three-pane session screen.
-Next is M12 (steering) — see [`docs/roadmap.md`](docs/roadmap.md).
+Next is M12 (outputs: live, shared documents — then LaTeX and Google Docs, then steering) — see [`docs/roadmap.md`](docs/roadmap.md).
 
 ## How agents join
 
@@ -83,7 +83,7 @@ link*, and send it however you like. Forgot a password?
 | [`docs/security.md`](docs/security.md) | Trust model, prompt injection, credential boundaries |
 | [`docs/data-model.md`](docs/data-model.md) | Schema and what each table is for |
 | [`docs/operations.md`](docs/operations.md) | Running an instance: bootstrap, admin CLI, invites, backups |
-| [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M13 and their acceptance tests |
+| [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M16 and their acceptance tests |
 | [`docs/decisions/`](docs/decisions/) | ADRs — why each of the above is the way it is |
 
 ## License

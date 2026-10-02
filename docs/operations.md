@@ -183,6 +183,31 @@ do not collect that garbage, and say so rather than letting you discover it.
 
 Back up `ARTIFACT_DIR` alongside the database — the rows are useless without it.
 
+## Outputs (M12–M14, specced)
+
+Native outputs (`doc`, `latex`) are stored in the database as encoded Yjs state —
+the regular database backup covers them; there is nothing on disk.
+
+**LaTeX packages** are fetched by viewers' browsers on demand. By default the
+instance serves them itself, so a self-hosted instance does not tell a third party
+which packages its documents use. How to populate that package directory depends
+on the engine chosen at M13 and is documented then.
+
+**Google Docs** needs an OAuth client the operator registers in their own Google
+Cloud project:
+
+```bash
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+# redirect URI to register: https://<your-host>/api/google/callback
+```
+
+Request only the `drive.file` scope. Without these variables the `gdoc` kind is
+simply absent from **Add output**. Connecting a Google account also requires
+`FABRIKKA_ENCRYPTION_KEY` (above) — refresh tokens are sealed with it, and
+connecting is refused without it. Keep the client secret with the same care as the
+key.
+
 ## Desktop app
 
 A thin Tauri shell around the same web app. It adds no product surface — the

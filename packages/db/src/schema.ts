@@ -514,7 +514,7 @@ export const sessionMcpToolGrants = pgTable(
  * One unit of agent work, addressable.
  *
  * Exists so activity can group under something, and so a correction can name the
- * run it is correcting rather than racing it (M12). There is deliberately NO
+ * run it is correcting rather than racing it (M15, steering). There is deliberately NO
  * `activity` table: events live in a capped in-memory buffer and are discarded
  * when the run ends. Hundreds of rows per run, for something nobody re-reads, is
  * not worth storing — the run's OUTCOME is a durable message. See ADR 0015.

@@ -4,6 +4,10 @@ Milestones are **sequential**. Each ends in something manually exercisable. Do n
 
 The MVP answers one question: *does it feel useful to have a private room where I work with my existing agents and other people?*
 
+> **Renumbered 2026-10-01.** Outputs (M12–M14) were inserted before steering.
+> Steering was M12 and is now **M15**; four more agents was M13 and is now **M16**.
+> Accepted ADRs written before that date use the old numbers.
+
 ---
 
 ## M0 — One message, end to end
@@ -294,7 +298,7 @@ every tool call, the event bus already fans out, the browser already has a socke
 They are pointed at stderr instead of the session.
 
 - A **`run`** is addressable: id, agent, trigger message, started/ended, outcome.
-  Required here, and a prerequisite for M12.
+  Required here, and a prerequisite for M15 (steering).
 - Activity streams into the timeline as it happens: `Read src/retry.ts`,
   `Bash ran the test suite`, `github__list_issues`.
 - **Summary, never transcript** ([ADR 0015](decisions/0015-activity-is-a-redacted-summary.md)):
@@ -389,7 +393,133 @@ Three panes, each answering a different question
    nothing is clipped or unreachable.
 8. Activity still streams into the middle pane while the rail is collapsed.
 
-## M12 — Steering: redirect it
+## M12 — Outputs: work on the document, not about it
+
+> The right pane holds what the session produced, and none of it can be *worked
+> on*. Context is lists of sentences; artifacts are immutable. A group writing a
+> report talks about the report in the chat and edits it somewhere else. The
+> people this is for next — students, academics, office teams — are exactly the
+> people whose work is a shared document.
+
+An **output** is a live document that every member and their agents edit at the
+same time, with every change attributed. Kinds sit behind one adapter contract, so
+agents see the same four tools whatever the kind
+([ADR 0019](decisions/0019-outputs-are-live-documents-behind-adapters.md)). This
+milestone builds the contract, the catalogue and the first kind, **`doc`**: a
+native Markdown document that needs no account and no setup.
+
+- **Agents edit by anchor.** `edit_output` takes `{ old_text, new_text }` pairs;
+  each `old_text` must occur exactly once when the edit lands. A human typing in
+  another paragraph does not invalidate it; a human rewriting the quoted sentence
+  does. Wholesale replace needs `if_version` (the ADR 0013 rule).
+- **Humans co-edit in real time.** Yjs over a per-output WebSocket, cursors with
+  names. An agent's edit is applied server-side as one more editor, so it merges
+  with typing in flight instead of racing it.
+- **Every change is attributed** in a durable changes log: who, which run, +/−
+  lines, the diff. Human typing coalesces after ten seconds idle.
+- **The timeline shows edits as display-only frames** — *claude-alice edited
+  Report (+12 −3)* — never as messages. An edit wakes no agent and costs no turn
+  budget. To get an agent to react to a document, mention it.
+- **Add output** in the right pane lists the kinds this instance has — the
+  catalogue, and the seed of a marketplace. Built-in kinds only; third-party
+  adapters are not in scope.
+- Opening an output widens the right pane to its maximum; closing restores the
+  viewer's width. The conversation never collapses.
+
+**Test:**
+1. Create a `doc` output named *Report* from **Add output**. It appears first in the
+   right pane.
+2. Two browsers, two members, typing in the same paragraph at once. Both see each
+   other's text and cursors live; reload either one and nothing is lost.
+3. An agent calls `list_outputs`, `read_output`, then `edit_output` with an anchor
+   from a paragraph *while a human is typing in a different one*. Both changes
+   survive.
+4. Have the agent quote a sentence a human has just rewritten: it gets
+   `anchor_not_found` and the document is unchanged. Two edits in one call where
+   the second anchor is missing: neither applies.
+5. Wholesale replace without `if_version` is refused; with a stale one, refused.
+6. The timeline shows *claude-… edited Report (+n −m)*; clicking it shows the
+   diff. No agent was woken by it and the turn budget did not move.
+7. The changes view lists the agent's edit and the humans' coalesced edits, each
+   attributed to the right participant.
+8. A non-member's socket to the output is refused exactly like the session stream.
+
+## M13 — LaTeX: see the paper change as they change it
+
+A **`latex`** output: source files with a live PDF beside them, built for papers
+written by several people and their agents. Same CRDT and editor as `doc`; the new
+part is compilation, which happens **in the viewer's browser and never on the
+server** ([ADR 0020](decisions/0020-latex-compiles-in-the-browser.md)) — TeX is a
+programming language, and its source here is written by untrusted input.
+
+- **Choose the engine by running it.** Install SwiftLaTeX and BusyTeX, compile a
+  real paper with `amsmath`, `graphicx`, `hyperref` and a `.bib` bibliography, and
+  pick by result. Bar: under 10 s cold, under 2 s warm, on a laptop.
+- Multiple files (`main.tex`, `refs.bib`, sections); session artifacts are mounted
+  by name so `\includegraphics{figure1.png}` finds an upload.
+- Compiles debounce on edit and run in a Web Worker with a timeout.
+- **Agents learn whether they broke the build**: a viewer's browser reports each
+  compile, and `read_output` returns `build: { status, version, errors }` — or
+  `unknown` when nobody is viewing, never a guess.
+- **See what changed**: the changes view highlights each edit in the source; after
+  an agent edit the preview scrolls to the page it touched (via SyncTeX, if the
+  chosen engine emits it — stated either way).
+- Packages are served by the instance by default, not a third party.
+
+**Test:**
+1. Create a `latex` output from the catalogue; a template compiles and the PDF
+   appears in the pane.
+2. Upload `figure1.png` as an artifact and `\includegraphics` it: it renders.
+3. A member edits a sentence; the PDF updates within a couple of seconds. A second
+   member, watching, sees the same change.
+4. An agent introduces `\undefinedmacro`. `read_output` returns `build.status:
+   failed` with the line. It fixes it; the next read says `ok`.
+5. Close every browser; `read_output` reports `build.status: unknown`.
+6. `\input{/etc/passwd}` and `\write18{touch /tmp/pwned}` do nothing outside the
+   tab: nothing is read, nothing runs, on the server or the viewer's machine.
+7. `\def\x{\x}\x` hangs only that preview; the editor stays responsive and the
+   worker is restarted.
+
+## M14 — Google Docs: meet teams where they already write
+
+A **`gdoc`** output: a Google Doc that the team edits in Google Docs as usual and
+that agents edit through the session. Writes go through **the editor's own Google
+account** — a member's own, and an agent's owner's
+([ADR 0021](decisions/0021-google-docs-writes-use-the-editors-own-account.md)).
+
+> **Verify before building**, the way M16 verifies Cursor. Three claims come from
+> documentation, not use: a `drive.file` token can write a doc shared with you
+> after one Picker click; anchored edits map onto the Docs API with
+> `requiredRevisionId`; and whether the editor can be embedded or only previewed.
+> Run each against a real account first.
+
+- Members connect Google from Setup; tokens are sealed under
+  `FABRIKKA_ENCRYPTION_KEY` and connecting is refused without it.
+- Scope is `drive.file` only — never the whole Drive.
+- `claude-alice`'s edits land as Alice in Google's revision history and as
+  `claude-alice` in ours.
+- **Reads** fall back to the creator's credential so a member without Google can
+  still see the doc; **writes never borrow**.
+- Edits made directly in Google Docs are polled while the output is open and
+  appear in the changes log, attributed per revision.
+- Agents write plain text; the docs say so.
+- An instance with no Google OAuth client configured does not list `gdoc` at all.
+
+**Test:**
+1. Fede connects Google and creates a `gdoc` output; the doc exists in Fede's Drive
+   and is shared with members who have connected.
+2. `claude-fede` edits it with an anchor. Google's revision history shows Fede; the
+   changes log shows `claude-fede` and the run.
+3. Alice edits the doc **in Google Docs directly**; within the poll interval the pane
+   updates and the changes log shows an edit by Alice's Google account.
+4. Alice's agent edits it: the write goes out with Alice's token, not Fede's.
+5. Bob, with no Google connected: he sees the doc, and his agent's `edit_output`
+   gets `credential_missing` and changes nothing.
+6. Unset `FABRIKKA_ENCRYPTION_KEY` and try to connect Google: refused, nothing
+   stored.
+7. Remove the OAuth client config and restart: `gdoc` is absent from **Add output**.
+
+## M15 — Steering: redirect it
 
 > Today a mention arriving mid-run **queues a second run**, so the agent spends
 > minutes finishing work everyone can already see is wrong.
@@ -425,7 +555,7 @@ steering **stops and resumes**, and the UI says which
 5. A non-owner correction is refused, exactly like a mention.
 6. Fire five corrections in two seconds: they coalesce into one restart.
 
-## M13 — Four more agents, and model pass-through
+## M16 — Four more agents, and model pass-through
 
 > **Adding an agent is mostly free already.** Lane A (any MCP client) works today
 > for anything speaking MCP — zero code. An adapter buys only the **spawn path**,

@@ -51,3 +51,6 @@ What we rejected and why.
 | [0016](0016-steering-is-stop-and-resume.md) | Steering is stop-and-resume, not interruption | Proposed |
 | [0017](0017-model-selection-is-spawn-only.md) | Model selection is spawn-only, opaque, and reported | Proposed |
 | [0018](0018-session-screen-is-three-panes.md) | The session screen is three panes: configure, converse, produce | Accepted |
+| [0019](0019-outputs-are-live-documents-behind-adapters.md) | Outputs are live documents behind one adapter contract | Proposed |
+| [0020](0020-latex-compiles-in-the-browser.md) | LaTeX compiles in the browser, never on the server | Proposed |
+| [0021](0021-google-docs-writes-use-the-editors-own-account.md) | Google Docs writes go through the editor's own Google account | Proposed |

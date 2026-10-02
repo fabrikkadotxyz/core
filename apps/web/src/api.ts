@@ -20,6 +20,7 @@ import type {
   OutputEditSummary,
   OutputKindInfo,
   Participant,
+  TexConfig,
   PauseState,
   ServerEvent,
   SessionContext,
@@ -229,6 +230,13 @@ export const sessions = {
     call<{ ok: true }>(`${base(ref)}/outputs/${id}`, { method: 'PATCH', body: { name } }),
   deleteOutput: (ref: SessionRef, id: string) =>
     call<{ ok: true }>(`${base(ref)}/outputs/${id}`, { method: 'DELETE' }),
+  addOutputFile: (ref: SessionRef, id: string, path: string) =>
+    call<{ ok: true }>(`${base(ref)}/outputs/${id}/files`, { method: 'POST', body: { path } }),
+  removeOutputFile: (ref: SessionRef, id: string, path: string) =>
+    call<{ ok: true }>(`${base(ref)}/outputs/${id}/files?path=${encodeURIComponent(path)}`, {
+      method: 'DELETE',
+    }),
+  tex: (ref: SessionRef) => call<TexConfig | null>(`${base(ref)}/tex`),
   outputChanges: (ref: SessionRef, id: string) =>
     call<OutputEdit[]>(`${base(ref)}/outputs/${id}/changes`),
   recentAgentEdits: (ref: SessionRef) =>

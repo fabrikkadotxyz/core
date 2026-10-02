@@ -1,21 +1,23 @@
 /**
  * One open output: editor, preview and history. Loaded lazily — see Outputs.tsx.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { EditorView, keymap, placeholder as cmPlaceholder } from '@codemirror/view';
-import { EditorState, type Extension } from '@codemirror/state';
-import { defaultKeymap, indentWithTab } from '@codemirror/commands';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import type { EditorView } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
-import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 import * as Y from 'yjs';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import type { Output, OutputEdit, Participant } from '@fabrikka/types';
+import type { Output, OutputEditSummary, Participant } from '@fabrikka/types';
 import { sessions, type SessionRef } from '../api.ts';
-import { timeAgo, type OutputTab } from './Outputs.tsx';
+import type { OutputTab } from './Outputs.tsx';
 import { colorFor, connectOutput, type OutputSync, type SyncStatus } from './sync.ts';
+import { History } from './History.tsx';
+import { CollabEditor, useYFile, wrap, type ToolbarItem } from './CollabEditor.tsx';
+
+/** The TeX engine and PDF renderer are large; only papers pay for them. */
+const LatexBody = lazy(() => import('./latex/LatexBody.tsx'));
 
 /* -------------------------------------------------------------------------- */
 /* One open output                                                            */
@@ -28,7 +30,7 @@ export default function OutputView({
   canDelete,
   tab,
   onTab,
-  focusEditId,
+  focusEdit,
   renameOnOpen,
   editsVersion,
   onClose,
@@ -39,8 +41,8 @@ export default function OutputView({
   canDelete: boolean;
   tab: OutputTab;
   onTab: (t: OutputTab) => void;
-  /** An edit to expand in History — from "show me" in the timeline. */
-  focusEditId: string | null;
+  /** An edit to show — from "Show me" in the timeline or the notice. */
+  focusEdit: OutputEditSummary | null;
   renameOnOpen: boolean;
   /** Bumped whenever an edit to this output is published. */
   editsVersion: number;
@@ -70,6 +72,7 @@ export default function OutputView({
   }, [ref_, output.id, me.displayName, me.id]);
 
   const file = output.mainFile;
+  const isLatex = output.kind === 'latex';
 
   return (
     <section className="output-view" aria-label={`Document: ${output.name}`}>
@@ -98,8 +101,8 @@ export default function OutputView({
       <div className="tabs" role="tablist">
         {(
           [
-            ['edit', 'Edit'],
-            ['preview', 'Preview'],
+            ['edit', isLatex ? 'Source' : 'Edit'],
+            ['preview', isLatex ? 'PDF' : 'Preview'],
             ['history', 'History'],
           ] as const
         ).map(([key, label]) => (
@@ -117,10 +120,28 @@ export default function OutputView({
         <SyncBadge status={status} />
       </div>
 
-      {sync && tab === 'edit' && <Editor sync={sync} file={file} />}
-      {sync && tab === 'preview' && <Preview sync={sync} file={file} />}
-      {tab === 'history' && (
-        <History ref_={ref_} outputId={output.id} focusEditId={focusEditId} version={editsVersion} />
+      {isLatex ? (
+        sync && (
+          <Suspense fallback={<p className="muted small">Loading the LaTeX tools…</p>}>
+            <LatexBody
+              ref_={ref_}
+              output={output}
+              sync={sync}
+              tab={tab}
+              onTab={onTab}
+              focusEdit={focusEdit}
+              editsVersion={editsVersion}
+            />
+          </Suspense>
+        )
+      ) : (
+        <>
+          {sync && tab === 'edit' && <Editor sync={sync} file={file} />}
+          {sync && tab === 'preview' && <Preview sync={sync} file={file} />}
+          {tab === 'history' && (
+            <History ref_={ref_} outputId={output.id} focusEditId={focusEdit?.id ?? null} version={editsVersion} />
+          )}
+        </>
       )}
     </section>
   );
@@ -205,57 +226,6 @@ const markdownLook = HighlightStyle.define([
   { tag: [tags.processingInstruction, tags.meta], color: '#5d6375' },
 ]);
 
-const editorTheme = EditorView.theme(
-  {
-    '&': { color: 'var(--text)', backgroundColor: 'transparent', fontSize: '15px' },
-    '.cm-content': {
-      fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-      lineHeight: '1.65',
-      padding: '0.75rem 0 3rem',
-      caretColor: 'var(--accent)',
-    },
-    '.cm-line': { padding: '0 0.25rem' },
-    '&.cm-focused': { outline: 'none' },
-    '.cm-cursor': { borderLeftColor: 'var(--accent)' },
-    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': {
-      backgroundColor: '#7c9cff44',
-    },
-    '.cm-placeholder': { color: 'var(--muted)' },
-    '.cm-ySelectionInfo': {
-      fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-      fontSize: '11px',
-      padding: '1px 4px',
-      borderRadius: '4px',
-      opacity: '1',
-      top: '-1.4em',
-    },
-  },
-  { dark: true },
-);
-
-/** Wrap the selection in a marker, or remove it if it is already wrapped. */
-function wrap(view: EditorView, mark: string, fallback: string) {
-  const { from, to } = view.state.selection.main;
-  const text = view.state.sliceDoc(from, to) || fallback;
-  const before = view.state.sliceDoc(from - mark.length, from);
-  const after = view.state.sliceDoc(to, to + mark.length);
-  if (from !== to && before === mark && after === mark) {
-    view.dispatch({
-      changes: [
-        { from: from - mark.length, to: from, insert: '' },
-        { from: to, to: to + mark.length, insert: '' },
-      ],
-    });
-  } else {
-    view.dispatch({
-      changes: { from, to, insert: `${mark}${text}${mark}` },
-      selection: { anchor: from + mark.length, head: from + mark.length + text.length },
-    });
-  }
-  view.focus();
-  return true;
-}
-
 /** Toggle a prefix on every selected line: headings, lists, quotes. */
 function linePrefix(view: EditorView, prefix: string | ((i: number) => string)) {
   const { from, to } = view.state.selection.main;
@@ -288,86 +258,38 @@ function insertLink(view: EditorView) {
   return true;
 }
 
-const TOOLBAR: { label: string; title: string; run: (v: EditorView) => boolean; className?: string }[] = [
-  { label: 'B', title: 'Bold (⌘B)', run: (v) => wrap(v, '**', 'bold text'), className: 'b' },
-  { label: 'I', title: 'Italic (⌘I)', run: (v) => wrap(v, '_', 'italic text'), className: 'i' },
+const MARKDOWN_TOOLBAR: ToolbarItem[] = [
+  { label: 'B', title: 'Bold (⌘B)', run: (v) => wrap(v, '**', '**', 'bold text'), className: 'b' },
+  { label: 'I', title: 'Italic (⌘I)', run: (v) => wrap(v, '_', '_', 'italic text'), className: 'i' },
   { label: 'H1', title: 'Big heading', run: (v) => linePrefix(v, '# ') },
   { label: 'H2', title: 'Heading', run: (v) => linePrefix(v, '## ') },
   { label: '•', title: 'Bulleted list', run: (v) => linePrefix(v, '- ') },
   { label: '1.', title: 'Numbered list', run: (v) => linePrefix(v, (i) => `${i}. `) },
   { label: '❝', title: 'Quote', run: (v) => linePrefix(v, '> ') },
   { label: '🔗', title: 'Link (⌘K)', run: insertLink },
-  { label: '</>', title: 'Code', run: (v) => wrap(v, '`', 'code') },
+  { label: '</>', title: 'Code', run: (v) => wrap(v, '`', '`', 'code') },
 ];
 
+const MARKDOWN_KEYS = [
+  { key: 'Mod-b', run: (v: EditorView) => wrap(v, '**', '**', 'bold text') },
+  { key: 'Mod-i', run: (v: EditorView) => wrap(v, '_', '_', 'italic text') },
+  { key: 'Mod-k', run: insertLink },
+];
+
+const MARKDOWN_LANGUAGE = [markdown(), syntaxHighlighting(markdownLook)];
+
 function Editor({ sync, file }: { sync: OutputSync; file: string }) {
-  const host = useRef<HTMLDivElement>(null);
-  const view = useRef<EditorView | null>(null);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const files = sync.doc.getMap<Y.Text>('files');
-    let destroyed = false;
-
-    // The file arrives with the first sync; mount the editor once it exists.
-    const mount = () => {
-      const ytext = files.get(file);
-      if (!ytext || view.current || destroyed || !host.current) return;
-      const undoManager = new Y.UndoManager(ytext);
-      const extensions: Extension[] = [
-        keymap.of([
-          { key: 'Mod-b', run: (v) => wrap(v, '**', 'bold text') },
-          { key: 'Mod-i', run: (v) => wrap(v, '_', 'italic text') },
-          { key: 'Mod-k', run: insertLink },
-          ...yUndoManagerKeymap,
-          indentWithTab,
-          ...defaultKeymap,
-        ]),
-        markdown(),
-        syntaxHighlighting(markdownLook),
-        EditorView.lineWrapping,
-        editorTheme,
-        cmPlaceholder('Start writing… Use the buttons above for headings and lists.'),
-        yCollab(ytext, sync.awareness, { undoManager }),
-      ];
-      view.current = new EditorView({
-        state: EditorState.create({ doc: ytext.toString(), extensions }),
-        parent: host.current,
-      });
-      setReady(true);
-    };
-
-    mount();
-    files.observe(mount);
-    return () => {
-      destroyed = true;
-      files.unobserve(mount);
-      view.current?.destroy();
-      view.current = null;
-    };
-  }, [sync, file]);
-
+  const ytext = useYFile(sync.doc, file);
+  if (!ytext) return <p className="muted small editor-loading">Opening…</p>;
   return (
-    <div className="editor-wrap">
-      <div className="toolbar" role="toolbar" aria-label="Formatting">
-        {TOOLBAR.map((t) => (
-          <button
-            key={t.label}
-            className={t.className}
-            title={t.title}
-            aria-label={t.title}
-            disabled={!ready}
-            // Keep the editor's selection: a toolbar click must not blur it first.
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => view.current && t.run(view.current)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {!ready && <p className="muted small editor-loading">Opening…</p>}
-      <div ref={host} className="editor" />
-    </div>
+    <CollabEditor
+      ytext={ytext}
+      awareness={sync.awareness}
+      language={MARKDOWN_LANGUAGE}
+      toolbar={MARKDOWN_TOOLBAR}
+      keys={MARKDOWN_KEYS}
+      placeholder="Start writing… Use the buttons above for headings and lists."
+    />
   );
 }
 
@@ -404,85 +326,5 @@ function Preview({ sync, file }: { sync: OutputSync; file: string }) {
     <article className="preview" dangerouslySetInnerHTML={{ __html: html }} />
   ) : (
     <p className="muted preview-empty">Nothing written yet.</p>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* History                                                                    */
-/* -------------------------------------------------------------------------- */
-
-function History({
-  ref_,
-  outputId,
-  focusEditId,
-  version,
-}: {
-  ref_: SessionRef;
-  outputId: string;
-  focusEditId: string | null;
-  version: number;
-}) {
-  const [edits, setEdits] = useState<OutputEdit[] | null>(null);
-  const [open, setOpen] = useState<string | null>(focusEditId);
-
-  useEffect(() => {
-    sessions.outputChanges(ref_, outputId).then(setEdits).catch(() => setEdits([]));
-  }, [ref_, outputId, version]);
-
-  useEffect(() => {
-    if (focusEditId) setOpen(focusEditId);
-  }, [focusEditId]);
-
-  if (!edits) return <p className="muted small">Loading…</p>;
-  if (edits.length === 0) {
-    return (
-      <p className="muted history-empty">
-        No changes yet. Edits by people and agents show up here, each with exactly
-        what changed. Typing is grouped after a few seconds' pause.
-      </p>
-    );
-  }
-
-  return (
-    <ol className="history">
-      {edits.map((e) => (
-        <li key={e.id} className={open === e.id ? 'open' : ''}>
-          <button className="history-row" onClick={() => setOpen(open === e.id ? null : e.id)}>
-            <span className="avatar" style={{ background: colorFor(e.participantId ?? e.displayName) }}>
-              {e.displayName.slice(0, 1).toUpperCase()}
-            </span>
-            <span className="history-who">
-              @{e.displayName}
-              {e.participantKind === 'agent' && <span className="badge">agent</span>}
-            </span>
-            <span className="history-delta">
-              <span className="plus">+{e.added}</span> <span className="minus">−{e.removed}</span>
-            </span>
-            <time className="muted small" dateTime={e.at} title={new Date(e.at).toLocaleString()}>
-              {timeAgo(e.at)}
-            </time>
-          </button>
-          {open === e.id && <Diff diff={e.diff} />}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Diff({ diff }: { diff: string }) {
-  return (
-    <pre className="diff">
-      {diff.split('\n').map((line, i) => (
-        <span
-          key={i}
-          className={
-            line.startsWith('+') ? 'add' : line.startsWith('-') ? 'del' : line.startsWith('@@') ? 'hunk' : ''
-          }
-        >
-          {line.startsWith('@@') ? '⋯' : line}
-          {'\n'}
-        </span>
-      ))}
-    </pre>
   );
 }

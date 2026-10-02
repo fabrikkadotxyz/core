@@ -470,11 +470,15 @@ part is compilation, which happens **in the viewer's browser and never on the
 server** ([ADR 0020](decisions/0020-latex-compiles-in-the-browser.md)) — TeX is a
 programming language, and its source here is written by untrusted input.
 
-- **Choose the engine by running it.** Install SwiftLaTeX and BusyTeX, compile a
-  real paper with `amsmath`, `graphicx`, `hyperref` and a `.bib` bibliography, and
-  pick by result. Bar: under 10 s cold, under 2 s warm, on a laptop.
-- Multiple files (`main.tex`, `refs.bib`, sections); session artifacts are mounted
-  by name so `\includegraphics{figure1.png}` finds an upload.
+- **Choose the engine by running it.** Done: four candidates compiled a real paper;
+  Typeward's `texlive-wasm` (TeX Live 2026, MIT) passed — cold 0.9 s, warm 0.6 s for
+  the full pdfLaTeX → BibTeX → pdfLaTeX ×2 build — and the others did not. Pinned
+  exactly; Fabrikka drives the passes and the long-tail fetch itself. See ADR 0020.
+- Every TeX asset is **served by the instance** (`/tex-assets/`, installed with
+  `pnpm tex:install`). Without them, `latex` is absent from the catalogue.
+- Multiple files (`main.tex`, `refs.bib`, sections). Appending to a file that does
+  not exist creates it. Session artifacts are mounted by name so
+  `\includegraphics{figure1.png}` finds an upload.
 - Compiles debounce on edit and run in a Web Worker with a timeout.
 - **Agents learn whether they broke the build**: a viewer's browser reports each
   compile, and `read_output` returns `build: { status, version, errors }` — or
@@ -482,7 +486,17 @@ programming language, and its source here is written by untrusted input.
 - **See what changed**: the changes view highlights each edit in the source; after
   an agent edit the preview scrolls to the page it touched (via SyncTeX, if the
   chosen engine emits it — stated either way).
-- Packages are served by the instance by default, not a third party.
+- **Easy to understand, easy to manipulate**, same bar as M12:
+  - A new paper starts from a working template (title, author, a section, a
+    citation and `refs.bib`), so the first thing anyone sees is a PDF, not an error.
+  - **Source · PDF · History** tabs, a file strip (`main.tex`, `refs.bib`, *+ file*),
+    and a LaTeX toolbar (bold, italic, section, list, equation, cite, figure) for
+    people who do not know the commands.
+  - One status line always says where the build is: *Building…*, *✓ Up to date*,
+    or *✗ Line 12: Undefined control sequence* — click it to jump to the line, which
+    is marked in the editor.
+  - When an agent edits the paper you are viewing, **Show me** opens the PDF at the
+    page it changed, with the changed region outlined.
 
 **Test:**
 1. Create a `latex` output from the catalogue; a template compiles and the PDF

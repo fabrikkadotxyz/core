@@ -9,6 +9,7 @@
  * In-process only, like the event bus: a multi-instance deployment would need
  * a shared Yjs backend behind this same interface. Deliberately not built.
  */
+import { createHash } from 'node:crypto';
 import * as Y from 'yjs';
 import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
@@ -18,6 +19,8 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import { outputEdits, outputs, participants, runs } from '@fabrikka/db';
 import type {
+  BuildError,
+  BuildReport,
   Output,
   OutputEdit,
   OutputEditSummary,
@@ -25,12 +28,15 @@ import type {
   OutputKindInfo,
 } from '@fabrikka/types';
 import { publish } from './bus.ts';
+import { texAvailable } from './tex.ts';
 import {
   applyAnchoredEdits,
   AttributionTracker,
   deltaToSplices,
   type AnchoredEdit,
   type FlushedBurst,
+  lineDiff,
+  linesOf,
   type Splice,
 } from './output-text.ts';
 
@@ -46,9 +52,10 @@ const MAX_NAME = 120;
 /* -------------------------------------------------------------------------- */
 
 interface KindDef {
-  info: OutputKindInfo;
+  info: Omit<OutputKindInfo, 'available'>;
+  available: () => boolean;
   mainFile: string;
-  template: () => Record<string, string>;
+  template: (name: string) => Record<string, string>;
 }
 
 /**
@@ -61,21 +68,74 @@ const KINDS: Record<string, KindDef> = {
       kind: 'doc',
       name: 'Document',
       description: 'Write together in real time. Headings, lists, links — Markdown underneath.',
-      available: true,
+      multiFile: false,
     },
+    available: () => true,
     mainFile: 'document.md',
     // Empty: the name is the title, and a heading copied from it would go stale
     // the first time someone renamed the document.
     template: () => ({ 'document.md': '' }),
   },
+  latex: {
+    info: {
+      kind: 'latex',
+      name: 'LaTeX paper',
+      description: 'A paper with a live PDF beside it. Compiled in your browser; citations included.',
+      multiFile: true,
+    },
+    // Absent, not broken, on an instance without the TeX assets (ADR 0020).
+    available: texAvailable,
+    mainFile: 'main.tex',
+    // A working paper, so the first thing anyone sees is a PDF, not an error.
+    template: (name) => ({
+      'main.tex': [
+        '\\documentclass{article}',
+        '\\usepackage{amsmath}',
+        '\\usepackage{graphicx}',
+        '\\usepackage{hyperref}',
+        '',
+        `\\title{${texSafe(name)}}`,
+        '\\author{}',
+        '\\date{\\today}',
+        '',
+        '\\begin{document}',
+        '\\maketitle',
+        '',
+        '\\section{Introduction}',
+        'Start writing here. Cite sources from \\texttt{refs.bib} like this~\\cite{knuth1984}.',
+        '',
+        '\\bibliographystyle{plain}',
+        '\\bibliography{refs}',
+        '',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+      'refs.bib': [
+        '@article{knuth1984,',
+        '  author  = {Donald E. Knuth},',
+        '  title   = {Literate Programming},',
+        '  journal = {The Computer Journal},',
+        '  volume  = {27},',
+        '  number  = {2},',
+        '  pages   = {97--111},',
+        '  year    = {1984}',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  },
 };
 
-export function outputKinds(): OutputKindInfo[] {
-  return Object.values(KINDS).map((k) => k.info);
+/** Text files a multi-file output may hold. Images come from artifacts. */
+const FILE_PATH =
+  /^(?:[A-Za-z0-9_-][A-Za-z0-9._-]*\/){0,3}[A-Za-z0-9_-][A-Za-z0-9._-]*\.(?:tex|bib|sty|cls|bst|txt)$/;
+
+export function isValidFilePath(path: string): boolean {
+  return FILE_PATH.test(path) && !path.includes('..') && path.length <= 120;
 }
 
-export function isKind(kind: string): kind is OutputKind {
-  return kind in KINDS;
+export function outputKinds(): OutputKindInfo[] {
+  return Object.values(KINDS).map((k) => ({ ...k.info, available: k.available() }));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -133,6 +193,9 @@ interface Hub {
   flushTimer: ReturnType<typeof setInterval>;
   /** Runs per participant, for agent rows. */
   runFor: Map<string, string | null>;
+  kind: string;
+  /** latex: the latest accepted build report. */
+  build: Omit<BuildReport, 'viewers'> | null;
 }
 
 const MSG_SYNC = 0;
@@ -193,6 +256,8 @@ async function load(db: Database, outputId: string): Promise<Hub | null> {
       void writeRows(db, hub, hub.tracker.flushIdle(BURST_IDLE_MS));
     }, 2_000),
     runFor: new Map(),
+    kind: row.kind,
+    build: (row.build as Hub['build']) ?? null,
   };
   // The server holds no awareness state of its own; only browsers have cursors.
   hub.awareness.setLocalState(null);
@@ -333,6 +398,7 @@ async function writeRows(db: Database, hub: Hub, rows: FlushedBurst[]) {
       })
       .returning();
     const p = byId.get(r.participantId);
+    const lines = linesOf(r.diff);
     // Display data, published to browsers only: an edit is not a message and is
     // not a mention, so it wakes nobody and costs no turn budget (ADR 0019).
     publish(hub.sessionId, {
@@ -349,6 +415,7 @@ async function writeRows(db: Database, hub: Hub, rows: FlushedBurst[]) {
         version: hub.version,
         added: r.added,
         removed: r.removed,
+        lines,
         at: row!.createdAt.toISOString(),
       },
     });
@@ -418,12 +485,15 @@ export async function createOutput(
   opts: { sessionId: string; participantId: string; kind: string; name: string; content?: string },
 ): Promise<Output> {
   const def = KINDS[opts.kind];
-  if (!def) throw new OutputError('invalid_edit', `unknown kind "${opts.kind}" — see list of kinds`);
+  if (!def || !def.available()) {
+    const offered = outputKinds().filter((k) => k.available).map((k) => k.kind);
+    throw new OutputError('invalid_edit', `unknown kind "${opts.kind}" — this instance offers: ${offered.join(', ')}`);
+  }
   const name = opts.name.trim().slice(0, MAX_NAME);
   if (!name) throw new OutputError('invalid_edit', 'a name is required');
 
   const doc = new Y.Doc();
-  const initial = def.template();
+  const initial = def.template(name);
   if (opts.content !== undefined) initial[def.mainFile] = opts.content;
   doc.transact(() => {
     for (const [file, text] of Object.entries(initial)) {
@@ -455,17 +525,40 @@ export async function renameOutput(
   sessionId: string,
   outputId: string,
   name: string,
+  participantId: string,
 ): Promise<boolean> {
   if (!isOutputId(outputId)) return false;
   const trimmed = name.trim().slice(0, MAX_NAME);
   if (!trimmed) return false;
-  const done = await db
-    .update(outputs)
-    .set({ name: trimmed })
+  const [before] = await db
+    .select({ name: outputs.name, kind: outputs.kind })
+    .from(outputs)
     .where(and(eq(outputs.id, outputId), eq(outputs.sessionId, sessionId)))
-    .returning({ id: outputs.id });
-  if (done.length) publish(sessionId, { type: 'output.changed', outputId });
-  return done.length > 0;
+    .limit(1);
+  if (!before) return false;
+  await db.update(outputs).set({ name: trimmed }).where(eq(outputs.id, outputId));
+
+  // A paper whose \title is still the old name follows the rename, so the PDF
+  // does not keep saying "Untitled paper". Only an exact match: a title someone
+  // has written themselves is theirs, not the document name's.
+  if (before.kind === 'latex' && before.name !== trimmed) {
+    await editOutput(db, {
+      sessionId,
+      outputId,
+      participantId,
+      request: {
+        kind: 'edits',
+        edits: [{ old_text: `\\title{${texSafe(before.name)}}`, new_text: `\\title{${texSafe(trimmed)}}` }],
+      },
+    }).catch(() => {});
+  }
+  publish(sessionId, { type: 'output.changed', outputId });
+  return true;
+}
+
+/** A document name as a LaTeX title: drop the characters TeX would choke on. */
+function texSafe(name: string): string {
+  return name.replace(/[\\{}$&#^_%~]/g, '');
 }
 
 /** Remove an output. The caller decides who may (creator or owner). */
@@ -504,6 +597,7 @@ export interface ReadResult {
   version: number;
   totalLines: number;
   startLine: number;
+  build: BuildReport | null;
 }
 
 export async function readOutput(
@@ -533,7 +627,43 @@ export async function readOutput(
     version: hub.version,
     totalLines: lines.length,
     startLine: start,
+    build: buildFor(hub),
   };
+}
+
+/**
+ * A report counts only for the version it was made against. Anything else is
+ * "unknown" — never "passed" (ADR 0020).
+ */
+function buildFor(hub: Hub): BuildReport | null {
+  if (hub.kind !== 'latex') return null;
+  const viewers = hub.conns.size;
+  if (hub.build && hub.build.version === hub.version) return { ...hub.build, viewers };
+  return { status: 'unknown', version: null, at: null, errors: [], viewers };
+}
+
+/** What a browser hashes to say what it compiled. See docs/protocol.md. */
+function sourceHash(doc: Y.Doc): string {
+  const pairs = [...files(doc).entries()]
+    .map(([path, text]) => [path, text.toString()] as const)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return createHash('sha256').update(JSON.stringify(pairs)).digest('hex');
+}
+
+async function acceptBuildReport(db: Database, hub: Hub, msg: Record<string, unknown>) {
+  if (hub.kind !== 'latex') return;
+  // Stale — someone typed since this browser compiled. Dropped, not mislabelled.
+  if (typeof msg.sourceHash !== 'string' || msg.sourceHash !== sourceHash(hub.doc)) return;
+  if (msg.status !== 'ok' && msg.status !== 'failed') return;
+  const errors: BuildError[] = (Array.isArray(msg.errors) ? msg.errors : [])
+    .slice(0, 20)
+    .map((e: Record<string, unknown>) => ({
+      file: String(e?.file ?? '').slice(0, 120),
+      line: typeof e?.line === 'number' && Number.isFinite(e.line) ? Math.trunc(e.line) : null,
+      message: String(e?.message ?? '').slice(0, 300),
+    }));
+  hub.build = { status: msg.status, version: hub.version, at: new Date().toISOString(), errors };
+  await db.update(outputs).set({ build: hub.build }).where(eq(outputs.id, hub.id));
 }
 
 export type EditRequest =
@@ -566,7 +696,21 @@ export async function editOutput(
     .where(eq(outputs.id, opts.outputId))
     .limit(1);
   const file = opts.file ?? row!.mainFile;
-  const text = files(hub.doc).get(file);
+  let text = files(hub.doc).get(file);
+  if (!text && opts.request.kind === 'append' && KINDS[hub.kind]?.info.multiFile) {
+    // Appending to a file that does not exist creates it (docs/protocol.md).
+    if (!isValidFilePath(file)) {
+      throw new OutputError(
+        'invalid_edit',
+        `"${file}" is not an allowed file name — use a relative path ending in .tex, .bib, .sty, .cls, .bst or .txt`,
+      );
+    }
+    text = new Y.Text();
+    const created = text;
+    hub.doc.transact(() => files(hub.doc).set(file, created), {
+      participantId: opts.participantId,
+    } satisfies Origin);
+  }
   if (!text) throw new OutputError('not_found', `no file "${file}" in this output`);
 
   // Synchronous from here: the check and the write cannot be interleaved.
@@ -593,10 +737,11 @@ export async function editOutput(
 
   const runId = await currentRun(db, opts.sessionId, opts.participantId);
   const origin: Origin = { participantId: opts.participantId, runId };
+  const target = text;
   hub.doc.transact(() => {
     for (const s of splices) {
-      if (s.deleteCount) text.delete(s.pos, s.deleteCount);
-      if (s.insert) text.insert(s.pos, s.insert);
+      if (s.deleteCount) target.delete(s.pos, s.deleteCount);
+      if (s.insert) target.insert(s.pos, s.insert);
     }
   }, origin);
 
@@ -669,9 +814,57 @@ export async function listEdits(
     version: e.version,
     added: e.addedLines,
     removed: e.removedLines,
+    lines: linesOf(e.diff),
     at: e.createdAt.toISOString(),
     diff: e.diff,
   }));
+}
+
+/* ---- files, for multi-file kinds (the browser's file strip) ---- */
+
+export async function addFile(
+  db: Database,
+  opts: { sessionId: string; outputId: string; participantId: string; path: string },
+) {
+  const hub = await acquire(db, opts.sessionId, opts.outputId);
+  if (!hub) throw new OutputError('not_found', 'no such output in this session');
+  if (!KINDS[hub.kind]?.info.multiFile) throw new OutputError('invalid_edit', 'this kind has one file');
+  if (!isValidFilePath(opts.path)) {
+    throw new OutputError('invalid_edit', 'use a name like section.tex or refs.bib');
+  }
+  if (files(hub.doc).has(opts.path)) throw new OutputError('invalid_edit', 'that file already exists');
+  hub.doc.transact(() => files(hub.doc).set(opts.path, new Y.Text()), {
+    participantId: opts.participantId,
+  } satisfies Origin);
+  await persist(db, hub);
+  scheduleUnload(db, hub);
+  publish(opts.sessionId, { type: 'output.changed', outputId: opts.outputId });
+}
+
+/** Remove a file. Recorded in the changes log as every line removed. */
+export async function removeFile(
+  db: Database,
+  opts: { sessionId: string; outputId: string; participantId: string; path: string },
+) {
+  const hub = await acquire(db, opts.sessionId, opts.outputId);
+  if (!hub) throw new OutputError('not_found', 'no such output in this session');
+  const [row] = await db.select({ mainFile: outputs.mainFile }).from(outputs).where(eq(outputs.id, hub.id));
+  if (opts.path === row?.mainFile) throw new OutputError('invalid_edit', 'the main file cannot be removed');
+  const text = files(hub.doc).get(opts.path);
+  if (!text) throw new OutputError('not_found', 'no such file');
+  const before = text.toString();
+  hub.doc.transact(() => files(hub.doc).delete(opts.path), {
+    participantId: opts.participantId,
+  } satisfies Origin);
+  // The tracker cannot see a removed file's text change; record it directly.
+  if (before) {
+    await writeRows(db, hub, [
+      { participantId: opts.participantId, file: opts.path, ...lineDiff(opts.path, before, '') },
+    ]);
+  }
+  await persist(db, hub);
+  scheduleUnload(db, hub);
+  publish(opts.sessionId, { type: 'output.changed', outputId: opts.outputId });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -709,8 +902,17 @@ export async function attachSocket(
 
   return {
     onMessage(data) {
-      // Text frames are control messages; none are defined for `doc` yet.
-      if (typeof data === 'string') return;
+      // Text frames are control messages: a LaTeX viewer's build report.
+      if (typeof data === 'string') {
+        let msg: Record<string, unknown>;
+        try {
+          msg = JSON.parse(data) as Record<string, unknown>;
+        } catch {
+          return;
+        }
+        if (msg.type === 'build.report') void acceptBuildReport(db, hub, msg);
+        return;
+      }
       try {
         const decoder = decoding.createDecoder(new Uint8Array(data));
         const type = decoding.readVarUint(decoder);

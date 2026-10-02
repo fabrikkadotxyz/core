@@ -150,8 +150,15 @@ is writing a native document, a LaTeX paper or a Google Doc.
 
 `file` defaults to the output's main file. `format` is `markdown` for `doc` and
 `gdoc`, `latex` for `latex`. `build` is present for `latex` only (ADR 0020):
-`{ status: ok | failed | unknown, version, at, errors: [{ file, line, message }] }`.
+`{ status: ok | failed | unknown, version, at, viewers, errors: [{ file, line, message }] }`.
 `unknown` means no viewer has compiled the current source — it never means "passed".
+`viewers` is how many browsers have the output open: with one or more, a compile is
+a couple of seconds away; with none, nobody is going to compile it.
+
+A `latex` output can have several files. **Appending to a file that does not exist
+creates it** — `{ "file": "sections/method.tex", "append": "…" }`. Paths are
+relative, `/`-separated, and limited to text files (`.tex`, `.bib`, `.sty`, `.cls`,
+`.bst`, `.txt`). Images come from the session's artifacts, by name.
 
 **Edit forms:**
 
@@ -652,8 +659,13 @@ and replayed once it is attached — a stock client sends its first sync step th
 moment the socket opens, and dropping it means the client never syncs.
 
 `latex` viewers *(M13)* additionally send one JSON text frame per compile:
-`{ type: 'build.report', version, status, errors }`. The server keeps the latest per
-output and serves it as `build` in `read_output`.
+`{ type: 'build.report', sourceHash, status, errors }`. `sourceHash` is the
+hex SHA-256 of `JSON.stringify` of the output's files as `[path, text]` pairs sorted
+by path — what the browser actually compiled. The server keeps a report only if
+that hash matches the current text, records it against the current version, and
+serves it as `build` in `read_output`. A report for source that has since changed is
+dropped. Reports are display data and a hint to agents, never an input to a
+permission decision.
 
 ## Presence
 

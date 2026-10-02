@@ -401,6 +401,8 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
           start_line: r.startLine,
           total_lines: r.totalLines,
           content: r.content,
+          // latex only: what the last viewer's compile found. "unknown" is never "passed".
+          ...(r.build ? { build: r.build } : {}),
         };
       }),
   );
@@ -414,8 +416,10 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
         'each old_text must appear EXACTLY ONCE in the file — quote enough ' +
         'surrounding text to be unique. All edits apply or none do. If you get ' +
         'anchor_not_found, someone changed that text: re-read and retry. Use ' +
-        '`append` to add at the end. Replacing the whole file needs `content` and ' +
-        'if_version, and is refused if anyone edited since you read it.',
+        '`append` to add at the end — appending to a file that does not exist creates ' +
+        'it, for multi-file kinds like latex. Replacing the whole file needs `content` ' +
+        'and if_version, and is refused if anyone edited since you read it. For latex, ' +
+        'read_output afterwards: its `build` says whether your edit compiled.',
       inputSchema: z.object({
         output_id: z.string(),
         file: z.string().optional().describe('Defaults to the main file.'),

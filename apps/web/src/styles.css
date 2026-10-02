@@ -1392,3 +1392,154 @@ button.edit-line::before {
 button.edit-line {
   font-weight: 400;
 }
+
+/* -------------------------------------------------- M13: LaTeX papers */
+
+.latex-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Always says whether the paper builds. */
+.build-line {
+  font-size: 0.82rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.build-line.ok {
+  color: #34d399;
+}
+
+.build-line.building::before {
+  content: '';
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-right: 0.45rem;
+  border: 2px solid var(--muted);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: -1px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.build-line.failed {
+  border-color: #f8717155;
+  background: #f871711a;
+  color: #fecaca;
+}
+
+.build-line.failed button.link {
+  color: #fecaca;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: #f8717188;
+}
+
+.build-line code {
+  background: var(--bg);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+}
+
+.file-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.file-tab {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.file-tab button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.55rem;
+}
+
+.file-tab.on {
+  border-color: var(--accent);
+}
+
+.file-tab.on button {
+  color: var(--text);
+}
+
+.file-tab .file-remove {
+  padding: 0.25rem 0.4rem;
+  border-left: 1px solid var(--border);
+}
+
+.file-tab .file-remove:hover {
+  color: #f87171;
+}
+
+.file-add {
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.55rem;
+}
+
+.file-add:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.pdf-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pdf-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Paper is white even in a dark app: it is what will be submitted. */
+.pdf-page {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+  line-height: 0;
+}
+
+.pdf-mark {
+  position: absolute;
+  border-radius: 3px;
+  background: #7c9cff33;
+  outline: 2px solid #7c9cff;
+  pointer-events: none;
+  transition: opacity 1.5s ease;
+}
+
+.pdf-mark.fade {
+  opacity: 0;
+}

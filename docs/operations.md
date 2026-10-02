@@ -188,10 +188,18 @@ Back up `ARTIFACT_DIR` alongside the database — the rows are useless without i
 Native outputs (`doc`, `latex`) are stored in the database as encoded Yjs state —
 the regular database backup covers them; there is nothing on disk.
 
-**LaTeX packages** *(M13)* are fetched by viewers' browsers on demand. By default the
-instance serves them itself, so a self-hosted instance does not tell a third party
-which packages its documents use. How to populate that package directory depends
-on the engine chosen at M13 and is documented then.
+**LaTeX** compiles in each viewer's browser (ADR 0020); the instance only serves
+the engine and the TeX Live tree, so no third party learns which packages a
+document uses. Install them once:
+
+```bash
+pnpm tex:install          # ~360 MB into .tex-assets/ (TEX_ASSETS_DIR to override)
+```
+
+They are served at `/tex-assets/`, uncompressed and cacheable forever (they are
+versioned by directory). Without them the `latex` kind is absent from **Add output**
+and from `create_output` — nothing is broken, it is just not offered. Back them up
+or not: they are reproducible from the pinned release.
 
 **Google Docs** *(M14, not built)* needs an OAuth client the operator registers in their own Google
 Cloud project:

@@ -14,6 +14,8 @@ export default defineConfig({
      */
     proxy: {
       '/api': { target: SERVER, changeOrigin: true, ws: true },
+      // TeX engine assets, served by the instance (ADR 0020).
+      '/tex-assets': { target: SERVER, changeOrigin: true },
     },
   },
 });

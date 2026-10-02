@@ -301,6 +301,8 @@ export interface OutputKindInfo {
   description: string;
   /** False when the instance lacks something the kind needs. */
   available: boolean;
+  /** Whether the kind holds several files (a paper's sections, its .bib). */
+  multiFile: boolean;
 }
 
 export interface Output {
@@ -329,6 +331,8 @@ export interface OutputEditSummary {
   version: number;
   added: number;
   removed: number;
+  /** Lines of the file this edit touched, after the edit — for "show me". */
+  lines: { start: number; end: number } | null;
   at: string;
 }
 
@@ -342,7 +346,20 @@ export interface BuildReport {
   status: 'ok' | 'failed' | 'unknown';
   version: number | null;
   at: string | null;
-  errors: { file: string; line: number | null; message: string }[];
+  /** Browsers with the output open: >0 means a compile is seconds away. */
+  viewers: number;
+  errors: BuildError[];
+}
+
+export interface BuildError {
+  file: string;
+  line: number | null;
+  message: string;
+}
+
+/** Where a viewer's browser loads the TeX engine from. See ADR 0020. */
+export interface TexConfig {
+  assetsPath: string;
 }
 
 export interface SessionView {

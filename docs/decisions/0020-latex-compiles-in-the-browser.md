@@ -1,6 +1,6 @@
 # 0020 — LaTeX compiles in the browser, never on the server
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-01
 
 ## Context
@@ -42,16 +42,23 @@ Worker. The server stores and syncs source; it never runs a TeX engine.**
 
 The server cannot compile, but an agent editing `main.tex` needs to know whether
 its edit broke the build. A viewer's browser reports the result of each compile —
-the version compiled, ok or failed, and the first errors with line numbers — and
-`read_output` returns the latest report:
+a hash of the source it compiled, ok or failed, and the first errors with line
+numbers — and `read_output` returns the latest report:
 
 ```jsonc
-"build": { "status": "failed", "version": 42, "at": "…",
+"build": { "status": "failed", "version": 42, "at": "…", "viewers": 2,
            "errors": [{ "file": "main.tex", "line": 118, "message": "Undefined control sequence" }] }
 ```
 
-With nobody viewing, `status` is `unknown`, and the agent is told so rather than
-told it passed. Agents that have a local TeX install can always compile for
+The browser does not know the server's version counter, so it reports **what it
+compiled** as a SHA-256 of the files. The server accepts a report only if that hash
+matches the current text, and records it against the current version. A report for
+source that has since changed is discarded rather than mislabelled.
+
+If no viewer has compiled the current version, `status` is `unknown`, and the agent
+is told so rather than told it passed. `viewers` says how many browsers have the
+output open, so an agent can tell "wait two seconds and re-read" from "nobody is
+going to compile this". Agents that have a local TeX install can always compile for
 themselves; this is for the ones that cannot.
 
 A build report comes from a member's browser, so it is trusted only as much as a
@@ -60,17 +67,37 @@ permission decision.
 
 ### Choose the engine by running it
 
-Two candidates exist, and the milestone starts by installing both and compiling a
-real paper, not by reading their READMEs (the lesson of Codex at M5 and Cursor at
-M16):
+The milestone started by installing the candidates and compiling a real paper, not
+by reading their READMEs (the lesson of Codex at M5 and Cursor at M16). The bar: an
+article using `amsmath`, `graphicx`, `hyperref` and a `.bib` bibliography compiles
+in under ten seconds on a laptop cold, and under two warm.
 
-| Engine | Shape | Question to answer |
-| --- | --- | --- |
-| SwiftLaTeX | pdfTeX / XeTeX in WASM, packages fetched on demand | Can its package server be self-hosted simply? |
-| BusyTeX | TeX Live tools in WASM, packages bundled as data files | How large is the download, and does it run BibTeX/Biber? |
+What running them found (2026-10-01, headless Chrome, Apple silicon):
 
-The bar: an article using `amsmath`, `graphicx`, `hyperref` and a `.bib`
-bibliography compiles in under ten seconds on a laptop, cold, and in under two warm.
+| Candidate | Result |
+| --- | --- |
+| **SwiftLaTeX** (2022) | Its engine fetches every package from `texlive2.swiftlatex.com`, which **is down** (Cloudflare 522). Self-hosting means rebuilding its TeX Live tree and a format file matching a 2022 binary. Unmaintained since 2024. Rejected. |
+| **BusyTeX** (upstream WASM build, 2024) | A 30 MB engine plus 105 MB of TeX Live data per viewer before the first page. The maintained npm wrapper, `texlyre-busytex`, is **AGPL-3.0**, a copyleft obligation Fabrikka does not take on for a build tool. Rejected. |
+| **Siglum** `@siglum/engine` 0.1.4 (MIT, TL 2025) | Compiles fast once loaded, but `hyperref` fails (`hycolor.sty` is not in its bundles) without a separate Bun CTAN-proxy service; **it never runs BibTeX**; and its `blake3-wasm` dependency does not resolve under Vite. Single maintainer, quiet since January. Rejected. |
+| **Typeward** `@typeward/texlive-wasm` 0.2.4-alpha (MIT, TL 2026) | pdfLaTeX + BibTeX compile the paper with citations and cross-references resolved, SyncTeX included. **Cold full build 0.94 s, warm full build (pdfLaTeX → BibTeX → pdfLaTeX ×2) 0.56 s, warm single pass 0.19 s.** `\input{/etc/passwd}` finds nothing; `\def\x{\x}\x` is killed by the run timeout. **Chosen.** |
+
+Typeward is pre-alpha with a tiny following, so the choice is hedged:
+
+- **Pinned exactly** (`0.2.4-alpha`, no range), as its own version contract demands.
+- **We use only `createEngine` and `run`.** Its `latexmk` driver and its lazy
+  long-tail fetch were both found wanting — `latexmk` never retries BibTeX's missing
+  `plain.bst`, and lazily fetched files are written but never visible to kpathsea on
+  the rerun. So Fabrikka drives the passes itself and handles the long tail itself:
+  when TeX reports a missing file, look it up in the full tree's `ls-R`, fetch it
+  from the instance, add it to the project directory (which TeX searches first), and
+  rerun. About sixty lines, and the whole surface we would have to replace if
+  Typeward disappeared.
+- **Every asset is served by the instance.** No CDN, no third party learns which
+  packages a document uses.
+
+First-open download for a viewer is about 39 MB (engine 0.5 MB, core TeX tree
+28 MB, BibTeX 0.4 MB, ICU data 9.7 MB), then cached. Long-tail files are fetched
+individually, typically a few kilobytes each.
 
 ## Consequences
 
@@ -78,9 +105,11 @@ bibliography compiles in under ten seconds on a laptop, cold, and in under two w
   is hang the preview tab of someone who opened it.
 - Every viewer compiles independently. Three people viewing a paper means three
   compiles; that is their CPU, not ours, and it scales with viewers, not sessions.
-- The first open downloads an engine of several megabytes and then packages.
-  Subsequent opens are cached. This is slower than Overleaf's first open; it is the
-  price of running nothing on the server.
+- The first open downloads about 39 MB, then packages on demand. Subsequent opens
+  are cached. This is slower than Overleaf's first open; it is the price of running
+  nothing on the server.
+- An instance that offers LaTeX stores about 360 MB of TeX Live assets on disk
+  (`pnpm tex:install`). An instance without them simply does not list the kind.
 - Build status depends on someone having the output open. Agents can be told this
   plainly; they cannot be told something we did not observe.
 - Desktop (M9) inherits it unchanged — the Tauri webview runs WASM.

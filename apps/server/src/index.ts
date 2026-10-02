@@ -81,7 +81,9 @@ import {
   redeemInvite,
   revokeInvite,
 } from './invites.ts';
+import { serveTexAsset, texAssetsPath } from './tex.ts';
 import {
+  addFile,
   attachSocket,
   createOutput,
   deleteOutput,
@@ -91,6 +93,7 @@ import {
   OutputError,
   outputCreator,
   outputKinds,
+  removeFile,
   renameOutput,
 } from './outputs.ts';
 import { createUser } from './users.ts';
@@ -143,6 +146,13 @@ app.use(
 );
 
 app.get('/health', (c) => c.json({ ok: true }));
+
+/**
+ * TeX engine and TeX Live tree for viewers' browsers (ADR 0020). Public on
+ * purpose: they are stock TeX Live files, the same for everyone, and a browser
+ * fetching them for a compile carries no session. The server never runs them.
+ */
+app.get('/tex-assets/*', (c) => serveTexAsset(c.req.path.slice('/tex-assets/'.length)));
 
 /* -------------------------------------------------------------------------- */
 /* Auth                                                                       */
@@ -812,7 +822,7 @@ sessionRoutes.patch('/outputs/:id', async (c) => {
   if (!s) return c.notFound();
   const { name } = await c.req.json<{ name?: string }>();
   if (!name?.trim()) return c.json({ error: 'a name is required' }, 400);
-  if (!(await renameOutput(db, s.id, c.req.param('id'), name))) return c.notFound();
+  if (!(await renameOutput(db, s.id, c.req.param('id'), name, s.participantId))) return c.notFound();
   return c.json({ ok: true });
 });
 
@@ -828,6 +838,41 @@ sessionRoutes.delete('/outputs/:id', async (c) => {
   if (!creator || (creator !== s.participantId && s.role !== 'owner')) return c.notFound();
   await deleteOutput(db, s.id, id);
   return c.json({ ok: true });
+});
+
+/** Files of a multi-file output (a paper's sections). Any member, like typing. */
+sessionRoutes.post('/outputs/:id/files', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const { path } = await c.req.json<{ path?: string }>();
+  try {
+    await addFile(db, { sessionId: s.id, outputId: c.req.param('id'), participantId: s.participantId, path: path?.trim() ?? '' });
+    return c.json({ ok: true }, 201);
+  } catch (err) {
+    if (err instanceof OutputError) return err.code === 'not_found' ? c.notFound() : c.json({ error: err.message }, 400);
+    throw err;
+  }
+});
+
+sessionRoutes.delete('/outputs/:id/files', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const path = c.req.query('path') ?? '';
+  try {
+    await removeFile(db, { sessionId: s.id, outputId: c.req.param('id'), participantId: s.participantId, path });
+    return c.json({ ok: true });
+  } catch (err) {
+    if (err instanceof OutputError) return err.code === 'not_found' ? c.notFound() : c.json({ error: err.message }, 400);
+    throw err;
+  }
+});
+
+/** Where browsers load the TeX engine from — null when LaTeX is not installed. */
+sessionRoutes.get('/tex', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const assetsPath = texAssetsPath();
+  return c.json(assetsPath ? { assetsPath } : null);
 });
 
 sessionRoutes.get('/outputs/:id/changes', async (c) => {

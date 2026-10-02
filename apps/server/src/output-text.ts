@@ -296,3 +296,31 @@ export function countLines(text: string): number {
   if (text === '') return 0;
   return text.split('\n').length;
 }
+
+/**
+ * The lines an edit actually changed, in the file as it is after the edit — not
+ * the hunks' context lines. A pure deletion points at where the text was.
+ */
+export function linesOf(diff: string): { start: number; end: number } | null {
+  let line = 0;
+  let start = Infinity;
+  let end = -Infinity;
+  for (const row of diff.split('\n')) {
+    const hunk = row.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunk) {
+      line = Number(hunk[1]);
+      continue;
+    }
+    if (row.startsWith('+')) {
+      start = Math.min(start, line);
+      end = Math.max(end, line);
+      line++;
+    } else if (row.startsWith('-')) {
+      start = Math.min(start, Math.max(1, line));
+      end = Math.max(end, Math.max(1, line));
+    } else {
+      line++;
+    }
+  }
+  return Number.isFinite(start) ? { start, end } : null;
+}

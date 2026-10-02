@@ -235,7 +235,7 @@ export function SessionPage() {
   /** Agent edits, for the timeline. Human typing lives in each document's History. */
   const [agentEdits, setAgentEdits] = useState<OutputEditSummary[]>([]);
   const [outputTab, setOutputTab] = useState<OutputTab>('edit');
-  const [focusEdit, setFocusEdit] = useState<string | null>(null);
+  const [focusEdit, setFocusEdit] = useState<OutputEditSummary | null>(null);
   const [renameOnOpen, setRenameOnOpen] = useState(false);
   /** An agent changed the document you are looking at: say so, once. */
   const [editToast, setEditToast] = useState<OutputEditSummary | null>(null);
@@ -259,13 +259,16 @@ export function SessionPage() {
   const railWidth = docOpen ? clampWidth(panes.docWidth, true) : panes.outputWidth;
   const bounds = railBounds(docOpen);
 
-  const openOutput = (id: string, opts: { tab?: OutputTab; edit?: string; rename?: boolean } = {}) => {
+  const openOutput = (id: string, opts: { tab?: OutputTab; edit?: OutputEditSummary; rename?: boolean } = {}) => {
     setOutputTab(opts.tab ?? 'edit');
     setFocusEdit(opts.edit ?? null);
     setRenameOnOpen(!!opts.rename);
     setEditToast(null);
     setPanes((prev) => ({ ...prev, output: true, openOutput: id }));
   };
+  /** "Show me" on a paper means the page it changed; on a document, the diff. */
+  const showTab = (e: OutputEditSummary): OutputTab =>
+    outputs.find((o) => o.id === e.outputId)?.kind === 'latex' ? 'preview' : 'history';
   const closeOutput = () => {
     setEditToast(null);
     setPanes((prev) => ({ ...prev, openOutput: null }));
@@ -668,7 +671,7 @@ export function SessionPage() {
             runs={runs}
             participants={view.participants}
             meParticipantId={view.me.participantId}
-            onShowEdit={(e) => openOutput(e.outputId, { tab: 'history', edit: e.id })}
+            onShowEdit={(e) => openOutput(e.outputId, { tab: showTab(e), edit: e })}
           />
           <MentionComposer
             participants={view.participants}
@@ -715,8 +718,8 @@ export function SessionPage() {
                       <button
                         className="link"
                         onClick={() => {
-                          setOutputTab('history');
-                          setFocusEdit(editToast.id);
+                          setOutputTab(showTab(editToast));
+                          setFocusEdit(editToast);
                           setEditToast(null);
                         }}
                       >
@@ -739,7 +742,7 @@ export function SessionPage() {
                       setOutputTab(t);
                       if (t !== 'history') setFocusEdit(null);
                     }}
-                    focusEditId={focusEdit}
+                    focusEdit={focusEdit}
                     renameOnOpen={renameOnOpen}
                     editsVersion={outputsVersion}
                     onClose={closeOutput}

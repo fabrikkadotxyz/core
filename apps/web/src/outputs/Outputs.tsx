@@ -53,7 +53,7 @@ export function OutputsPanel({
     setPicking(false);
     setError(null);
     try {
-      const o = await sessions.createOutput(ref_, kind.kind, `Untitled ${kind.name.toLowerCase()}`);
+      const o = await sessions.createOutput(ref_, kind.kind, kind.kind === 'latex' ? 'Untitled paper' : 'Untitled document');
       // Straight into it, with the name ready to type over: no dialog first.
       onOpen(o.id, { rename: true });
     } catch (err) {

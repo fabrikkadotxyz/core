@@ -1,4 +1,5 @@
 import {
+  linesOf,
   applyAnchoredEdits,
   AttributionTracker,
   deltaToSplices,
@@ -45,6 +46,18 @@ eq('an empty anchor is refused', !r.ok && r.code, 'invalid_edit');
 const d = lineDiff('a.md', 'one\ntwo\nthree\n', 'one\n2\nthree\nfour\n');
 eq('line diff counts added lines', d.added, 2);
 eq('line diff counts removed lines', d.removed, 1);
+
+/* ------------------------------------------------------------ line ranges */
+
+{
+  const one = lineDiff('m.tex', 'a\nb\nc\nd\ne\n', 'a\nb\nNEW\nc\nd\ne\n');
+  eq('a one-line insertion is that line, not the hunk context', linesOf(one.diff), { start: 3, end: 3 });
+  const del = lineDiff('m.tex', 'a\nb\nc\nd\n', 'a\nb\nd\n');
+  eq('a deletion points at where the text was', linesOf(del.diff), { start: 3, end: 3 });
+  const two = lineDiff('m.tex', 'a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n', 'A\nb\nc\nd\ne\nf\ng\nh\ni\nJ\n');
+  eq('two separate changes span from the first to the last', linesOf(two.diff), { start: 1, end: 10 });
+  eq('no change, no range', linesOf(''), null);
+}
 
 /* ------------------------------------------------------------ attribution */
 

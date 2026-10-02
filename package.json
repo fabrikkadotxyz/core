@@ -18,7 +18,8 @@
     "db:seed": "pnpm --filter @fabrikka/db seed",
     "acceptance": "for f in scripts/acceptance/*.mjs; do echo \"--- $f\"; node \"$f\" || exit 1; done",
     "admin": "pnpm --filter @fabrikka/server --silent admin",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --if-present test",
+    "tex:install": "node scripts/tex-install.mjs"
   },
   "devDependencies": {
     "@hono/node-server": "^1.19.17",

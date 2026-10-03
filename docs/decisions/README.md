@@ -54,3 +54,4 @@ What we rejected and why.
 | [0019](0019-outputs-are-live-documents-behind-adapters.md) | Outputs are live documents behind one adapter contract | Accepted |
 | [0020](0020-latex-compiles-in-the-browser.md) | LaTeX compiles in the browser, never on the server | Accepted |
 | [0021](0021-google-docs-writes-use-the-editors-own-account.md) | Google Docs writes go through the editor's own Google account | Proposed |
+| [0022](0022-nothing-leaves-a-session-without-a-members-deliberate-act.md) | Nothing leaves a session without a member's deliberate act | Proposed |

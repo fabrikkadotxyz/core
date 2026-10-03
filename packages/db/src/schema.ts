@@ -573,16 +573,14 @@ export const outputs = pgTable(
     sessionId: uuid('session_id')
       .notNull()
       .references(() => sessions.id, { onDelete: 'cascade' }),
-    /** doc | latex | gdoc */
+    /** A registered kind id. See apps/server/src/outputs/registry.ts. */
     kind: text('kind').notNull(),
     name: text('name').notNull(),
     mainFile: text('main_file').notNull(),
     state: bytea('state'),
-    /** gdoc: the Google file id. */
-    externalRef: text('external_ref'),
     version: integer('version').notNull().default(0),
-    /** latex: the latest build report from a viewer's browser. */
-    build: jsonb('build'),
+    /** Owned by the kind, opaque to core (ADR 0023). latex: `{ build }`. */
+    kindData: jsonb('kind_data'),
     createdByParticipantId: uuid('created_by_participant_id')
       .notNull()
       .references(() => participants.id, { onDelete: 'cascade' }),

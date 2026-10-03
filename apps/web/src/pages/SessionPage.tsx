@@ -26,6 +26,7 @@ import {
 import { useAuth } from '../auth-context.tsx';
 import { MentionComposer, MentionText } from '../mentions.tsx';
 import { OutputsPanel, timeAgo, type OutputTab } from '../outputs/Outputs.tsx';
+import { webKind } from '../outputs/kinds/registry.ts';
 
 /** The editor is most of the bundle; load it when a document is first opened. */
 const OutputView = lazy(() => import('../outputs/OutputView.tsx'));
@@ -266,9 +267,9 @@ export function SessionPage() {
     setEditToast(null);
     setPanes((prev) => ({ ...prev, output: true, openOutput: id }));
   };
-  /** "Show me" on a paper means the page it changed; on a document, the diff. */
+  /** "Show me" opens what the kind says: a paper's page, a document's diff. */
   const showTab = (e: OutputEditSummary): OutputTab =>
-    outputs.find((o) => o.id === e.outputId)?.kind === 'latex' ? 'preview' : 'history';
+    webKind(outputs.find((o) => o.id === e.outputId)?.kind ?? '').showEditIn;
   const closeOutput = () => {
     setEditToast(null);
     setPanes((prev) => ({ ...prev, openOutput: null }));

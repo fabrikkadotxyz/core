@@ -71,6 +71,20 @@
       "when": 1790903817964,
       "tag": "0009_supreme_joseph",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791004610440,
+      "tag": "0010_kind_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791004617256,
+      "tag": "0011_drop_kind_columns",
+      "breakpoints": true
     }
   ]
 }

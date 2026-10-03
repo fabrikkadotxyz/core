@@ -382,13 +382,12 @@ Credentials belong to a **user**, not a session. A tool call routes to the *call
 outputs
   id              uuid pk
   session_id      uuid -> sessions.id not null
-  kind            text not null           -- doc | latex | gdoc
+  kind            text not null           -- a registered kind id: doc | latex | gdoc …
   name            text not null           -- display name; collisions are fine
   main_file       text not null           -- "document.md", "main.tex"
   state           bytea                   -- doc, latex: encoded Yjs document (all files)
-  external_ref    text                    -- gdoc: the Google file id
   version         int not null default 0  -- increments on every applied edit
-  build           jsonb                   -- latex: latest build report from a viewer
+  kind_data       jsonb                   -- owned by the kind, opaque to core (ADR 0023)
   created_by_participant_id uuid -> participants.id not null
   created_at      timestamptz not null
   updated_at      timestamptz not null
@@ -431,6 +430,13 @@ for `gdoc` it is in Google's history, which may later be unreachable. "What did
 claude-alice change at 14:02" has to be answerable afterwards. Human typing is
 coalesced per participant into one row after ten seconds idle, so this table grows
 with *edits*, not keystrokes.
+
+**`kind_data` is the kind's, not core's** ([ADR 0023](decisions/0023-an-output-kind-is-a-plug-in-module.md)).
+Core stores it and never reads it. `latex` keeps `{ build }` there, the latest
+build report from a viewer, and `gdoc` will keep its Google file id. A per-kind
+column is what M13 had (`build`, and `external_ref` waiting for `gdoc`), and it
+meant a migration and a core change for every kind that needed to remember
+something about itself.
 
 **`google_accounts` belongs to a user, not a session**, for the same reason as
 `mcp_servers`: a credential is a person's. See

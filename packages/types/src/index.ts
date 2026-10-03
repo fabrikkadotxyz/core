@@ -292,13 +292,20 @@ export interface Artifact {
 
 /* ------------------------------------------------------------------ outputs */
 
-/** A kind of output this instance offers. The catalogue — see ADR 0019. */
-export type OutputKind = 'doc' | 'latex';
+/**
+ * A kind of output — a registered kind id. The catalogue, not this type, is the
+ * list: which kinds exist is decided by the instance at runtime (ADR 0023).
+ */
+export type OutputKind = string;
 
+/** A catalogue entry. See ADR 0019. */
 export interface OutputKindInfo {
   kind: OutputKind;
   name: string;
   description: string;
+  icon: string;
+  /** What a new one is called before anyone names it. */
+  defaultName: string;
   /** False when the instance lacks something the kind needs. */
   available: boolean;
   /** Whether the kind holds several files (a paper's sections, its .bib). */

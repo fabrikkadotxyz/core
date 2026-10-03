@@ -1,23 +1,16 @@
 /**
- * One open output: editor, preview and history. Loaded lazily — see Outputs.tsx.
+ * One open output. Loaded lazily — see Outputs.tsx.
+ *
+ * This file is what every kind shares: the title, presence, the tab strip and
+ * delete. What goes under the tabs is the kind's body, from its module in
+ * `kinds/` (ADR 0023). Nothing here knows which kinds exist.
  */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import type { EditorView } from '@codemirror/view';
-import { markdown } from '@codemirror/lang-markdown';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { tags } from '@lezer/highlight';
-import * as Y from 'yjs';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import type { Output, OutputEditSummary, Participant } from '@fabrikka/types';
 import { sessions, type SessionRef } from '../api.ts';
 import type { OutputTab } from './Outputs.tsx';
 import { colorFor, connectOutput, type OutputSync, type SyncStatus } from './sync.ts';
-import { History } from './History.tsx';
-import { CollabEditor, useYFile, wrap, type ToolbarItem } from './CollabEditor.tsx';
-
-/** The TeX engine and PDF renderer are large; only papers pay for them. */
-const LatexBody = lazy(() => import('./latex/LatexBody.tsx'));
+import { webKind } from './kinds/registry.ts';
 
 /* -------------------------------------------------------------------------- */
 /* One open output                                                            */
@@ -71,8 +64,13 @@ export default function OutputView({
     };
   }, [ref_, output.id, me.displayName, me.id]);
 
-  const file = output.mainFile;
-  const isLatex = output.kind === 'latex';
+  const kind = webKind(output.kind);
+  const tabs: [OutputTab, string][] = [
+    ['edit', kind.tabs.edit],
+    ...(kind.tabs.preview ? [['preview', kind.tabs.preview] as [OutputTab, string]] : []),
+    ['history', 'History'],
+  ];
+  const Body = kind.Body;
 
   return (
     <section className="output-view" aria-label={`Document: ${output.name}`}>
@@ -99,13 +97,7 @@ export default function OutputView({
       <TitleField ref_={ref_} output={output} autoFocus={renameOnOpen} />
 
       <div className="tabs" role="tablist">
-        {(
-          [
-            ['edit', isLatex ? 'Source' : 'Edit'],
-            ['preview', isLatex ? 'PDF' : 'Preview'],
-            ['history', 'History'],
-          ] as const
-        ).map(([key, label]) => (
+        {tabs.map(([key, label]) => (
           <button
             key={key}
             role="tab"
@@ -120,28 +112,18 @@ export default function OutputView({
         <SyncBadge status={status} />
       </div>
 
-      {isLatex ? (
-        sync && (
-          <Suspense fallback={<p className="muted small">Loading the LaTeX tools…</p>}>
-            <LatexBody
-              ref_={ref_}
-              output={output}
-              sync={sync}
-              tab={tab}
-              onTab={onTab}
-              focusEdit={focusEdit}
-              editsVersion={editsVersion}
-            />
-          </Suspense>
-        )
-      ) : (
-        <>
-          {sync && tab === 'edit' && <Editor sync={sync} file={file} />}
-          {sync && tab === 'preview' && <Preview sync={sync} file={file} />}
-          {tab === 'history' && (
-            <History ref_={ref_} outputId={output.id} focusEditId={focusEdit?.id ?? null} version={editsVersion} />
-          )}
-        </>
+      {sync && (
+        <Suspense fallback={<p className="muted small editor-loading">{kind.loading ?? 'Opening…'}</p>}>
+          <Body
+            ref_={ref_}
+            output={output}
+            sync={sync}
+            tab={tab}
+            onTab={onTab}
+            focusEdit={focusEdit}
+            editsVersion={editsVersion}
+          />
+        </Suspense>
       )}
     </section>
   );
@@ -206,125 +188,5 @@ function SyncBadge({ status }: { status: SyncStatus }) {
     <span className={`sync-badge ${status}`} title="Changes are saved and shared as you type">
       {label}
     </span>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* The editor                                                                 */
-/* -------------------------------------------------------------------------- */
-
-const markdownLook = HighlightStyle.define([
-  { tag: tags.heading1, fontSize: '1.5em', fontWeight: '700' },
-  { tag: tags.heading2, fontSize: '1.25em', fontWeight: '700' },
-  { tag: tags.heading3, fontSize: '1.1em', fontWeight: '700' },
-  { tag: tags.strong, fontWeight: '700' },
-  { tag: tags.emphasis, fontStyle: 'italic' },
-  { tag: tags.link, color: '#7c9cff', textDecoration: 'underline' },
-  { tag: tags.url, color: '#8b91a3' },
-  { tag: tags.monospace, fontFamily: 'ui-monospace, monospace', color: '#f0abfc' },
-  { tag: tags.quote, color: '#a5b4c8', fontStyle: 'italic' },
-  { tag: [tags.processingInstruction, tags.meta], color: '#5d6375' },
-]);
-
-/** Toggle a prefix on every selected line: headings, lists, quotes. */
-function linePrefix(view: EditorView, prefix: string | ((i: number) => string)) {
-  const { from, to } = view.state.selection.main;
-  const first = view.state.doc.lineAt(from).number;
-  const last = view.state.doc.lineAt(to).number;
-  const changes = [];
-  const strip = /^(#{1,6} |[-*] |\d+\. |> )/;
-  for (let n = first, i = 1; n <= last; n++, i++) {
-    const line = view.state.doc.line(n);
-    const want = typeof prefix === 'function' ? prefix(i) : prefix;
-    const has = line.text.match(strip)?.[0];
-    if (has === want) changes.push({ from: line.from, to: line.from + has.length, insert: '' });
-    else changes.push({ from: line.from, to: line.from + (has?.length ?? 0), insert: want });
-  }
-  // Map the cursor to AFTER an inserted prefix, or the next thing typed lands
-  // in front of the "## " instead of after it.
-  const set = view.state.changes(changes);
-  view.dispatch({ changes: set, selection: view.state.selection.map(set, 1) });
-  view.focus();
-  return true;
-}
-
-function insertLink(view: EditorView) {
-  const { from, to } = view.state.selection.main;
-  const text = view.state.sliceDoc(from, to) || 'link text';
-  const url = window.prompt('Link address', 'https://');
-  if (!url) return true;
-  view.dispatch({ changes: { from, to, insert: `[${text}](${url})` } });
-  view.focus();
-  return true;
-}
-
-const MARKDOWN_TOOLBAR: ToolbarItem[] = [
-  { label: 'B', title: 'Bold (⌘B)', run: (v) => wrap(v, '**', '**', 'bold text'), className: 'b' },
-  { label: 'I', title: 'Italic (⌘I)', run: (v) => wrap(v, '_', '_', 'italic text'), className: 'i' },
-  { label: 'H1', title: 'Big heading', run: (v) => linePrefix(v, '# ') },
-  { label: 'H2', title: 'Heading', run: (v) => linePrefix(v, '## ') },
-  { label: '•', title: 'Bulleted list', run: (v) => linePrefix(v, '- ') },
-  { label: '1.', title: 'Numbered list', run: (v) => linePrefix(v, (i) => `${i}. `) },
-  { label: '❝', title: 'Quote', run: (v) => linePrefix(v, '> ') },
-  { label: '🔗', title: 'Link (⌘K)', run: insertLink },
-  { label: '</>', title: 'Code', run: (v) => wrap(v, '`', '`', 'code') },
-];
-
-const MARKDOWN_KEYS = [
-  { key: 'Mod-b', run: (v: EditorView) => wrap(v, '**', '**', 'bold text') },
-  { key: 'Mod-i', run: (v: EditorView) => wrap(v, '_', '_', 'italic text') },
-  { key: 'Mod-k', run: insertLink },
-];
-
-const MARKDOWN_LANGUAGE = [markdown(), syntaxHighlighting(markdownLook)];
-
-function Editor({ sync, file }: { sync: OutputSync; file: string }) {
-  const ytext = useYFile(sync.doc, file);
-  if (!ytext) return <p className="muted small editor-loading">Opening…</p>;
-  return (
-    <CollabEditor
-      ytext={ytext}
-      awareness={sync.awareness}
-      language={MARKDOWN_LANGUAGE}
-      toolbar={MARKDOWN_TOOLBAR}
-      keys={MARKDOWN_KEYS}
-      placeholder="Start writing… Use the buttons above for headings and lists."
-    />
-  );
-}
-
-function Preview({ sync, file }: { sync: OutputSync; file: string }) {
-  const [source, setSource] = useState('');
-
-  useEffect(() => {
-    const files = sync.doc.getMap<Y.Text>('files');
-    let text: Y.Text | undefined;
-    const update = () => setSource(text?.toString() ?? '');
-    const attach = () => {
-      const next = files.get(file);
-      if (next === text) return;
-      text?.unobserve(update);
-      text = next;
-      text?.observe(update);
-      update();
-    };
-    attach();
-    files.observe(attach);
-    return () => {
-      files.unobserve(attach);
-      text?.unobserve(update);
-    };
-  }, [sync, file]);
-
-  // Written by every participant and their agents: sanitised, always.
-  const html = useMemo(
-    () => DOMPurify.sanitize(marked.parse(source, { async: false }) as string),
-    [source],
-  );
-
-  return source.trim() ? (
-    <article className="preview" dangerouslySetInnerHTML={{ __html: html }} />
-  ) : (
-    <p className="muted preview-empty">Nothing written yet.</p>
   );
 }

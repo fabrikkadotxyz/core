@@ -137,6 +137,27 @@ Independent transports, which should not be conflated:
 
 MCP connections are separate from all of them. An agent on lane A has no realtime connection at all.
 
+## Output kinds are plug-in modules
+
+An output kind (`doc`, `latex`, `gdoc`, …) is **one folder on the server and one
+on the web client, each registered by one line**
+([ADR 0023](docs/decisions/0023-an-output-kind-is-a-plug-in-module.md)):
+
+| Side | Folder | Registered in |
+| --- | --- | --- |
+| Server | `apps/server/src/outputs/kinds/<id>/` | `apps/server/src/outputs/registry.ts` |
+| Web | `apps/web/src/outputs/kinds/<id>/` | `apps/web/src/outputs/kinds/registry.ts` |
+
+A kind declares its catalogue entry, its file model, which **store** holds its
+content (the shared Yjs store, or its own), and optional hooks: rename, extra
+`read_output` fields, viewer socket messages, and HTTP routes. Hooks get a narrow
+context whose only way to write is the attributed edit path. Kind-owned data
+lives in `outputs.kind_data`, which core never reads.
+
+**Nothing outside those folders and the registries names a kind.** A unit test
+enforces it. A kind with no web module still works through a generic text editor.
+Adding a kind means adding its folders, its two registry lines and its docs.
+
 ## What we are deliberately not building
 
 No built-in LLM provider. No Fabrikka-hosted Claude or Codex. No autonomous orchestration, agent marketplace (the output catalogue of ADR 0019 lists built-in document kinds; it does not load anyone else's code), workflows, RAG, vector database, public sessions, organizations, billing, mobile, SSO, or elaborate RBAC.

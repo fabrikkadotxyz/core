@@ -81,7 +81,6 @@ import {
   redeemInvite,
   revokeInvite,
 } from './invites.ts';
-import { serveTexAsset, texAssetsPath } from './tex.ts';
 import {
   addFile,
   attachSocket,
@@ -90,12 +89,13 @@ import {
   isOutputId,
   listEdits,
   listOutputs,
+  mountKindRoutes,
   OutputError,
   outputCreator,
   outputKinds,
   removeFile,
   renameOutput,
-} from './outputs.ts';
+} from './outputs/core.ts';
 import { createUser } from './users.ts';
 import {
   countOwners,
@@ -147,12 +147,6 @@ app.use(
 
 app.get('/health', (c) => c.json({ ok: true }));
 
-/**
- * TeX engine and TeX Live tree for viewers' browsers (ADR 0020). Public on
- * purpose: they are stock TeX Live files, the same for everyone, and a browser
- * fetching them for a compile carries no session. The server never runs them.
- */
-app.get('/tex-assets/*', (c) => serveTexAsset(c.req.path.slice('/tex-assets/'.length)));
 
 /* -------------------------------------------------------------------------- */
 /* Auth                                                                       */
@@ -867,13 +861,8 @@ sessionRoutes.delete('/outputs/:id/files', async (c) => {
   }
 });
 
-/** Where browsers load the TeX engine from — null when LaTeX is not installed. */
-sessionRoutes.get('/tex', async (c) => {
-  const s = await resolve(c);
-  if (!s) return c.notFound();
-  const assetsPath = texAssetsPath();
-  return c.json(assetsPath ? { assetsPath } : null);
-});
+/** Each output kind's own routes: public assets, session-scoped config (ADR 0023). */
+mountKindRoutes(app, sessionRoutes, resolve);
 
 sessionRoutes.get('/outputs/:id/changes', async (c) => {
   const s = await resolve(c);

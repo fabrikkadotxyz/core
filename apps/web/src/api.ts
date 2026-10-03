@@ -20,7 +20,6 @@ import type {
   OutputEditSummary,
   OutputKindInfo,
   Participant,
-  TexConfig,
   PauseState,
   ServerEvent,
   SessionContext,
@@ -236,7 +235,8 @@ export const sessions = {
     call<{ ok: true }>(`${base(ref)}/outputs/${id}/files?path=${encodeURIComponent(path)}`, {
       method: 'DELETE',
     }),
-  tex: (ref: SessionRef) => call<TexConfig | null>(`${base(ref)}/tex`),
+  /** A route an output kind mounts for itself (ADR 0023), e.g. `/tex`. */
+  kindGet: <T>(ref: SessionRef, path: string) => call<T>(`${base(ref)}${path}`),
   outputChanges: (ref: SessionRef, id: string) =>
     call<OutputEdit[]>(`${base(ref)}/outputs/${id}/changes`),
   recentAgentEdits: (ref: SessionRef) =>

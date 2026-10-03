@@ -8,7 +8,7 @@
     "start": "tsx --env-file-if-exists=../../.env src/index.ts",
     "typecheck": "tsc --noEmit",
     "admin": "tsx --env-file-if-exists=../../.env src/cli.ts",
-    "test": "tsx src/__tests__/mentions.test.mts && tsx src/__tests__/output-text.test.mts"
+    "test": "tsx src/__tests__/mentions.test.mts && tsx src/__tests__/output-text.test.mts && tsx src/__tests__/output-kinds.test.mts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.17",

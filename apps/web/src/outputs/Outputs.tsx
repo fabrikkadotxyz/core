@@ -14,8 +14,6 @@ import { useEffect, useState } from 'react';
 import type { Output, OutputKindInfo } from '@fabrikka/types';
 import { sessions, type SessionRef } from '../api.ts';
 
-export const KIND_ICON: Record<string, string> = { doc: '📝', latex: '∑' };
-
 export type OutputTab = 'edit' | 'preview' | 'history';
 
 export function timeAgo(iso: string): string {
@@ -48,12 +46,14 @@ export function OutputsPanel({
   }, [ref_]);
 
   const available = kinds.filter((k) => k.available);
+  // From the catalogue, so a new kind brings its own icon (ADR 0023).
+  const iconOf = (kind: string) => kinds.find((k) => k.kind === kind)?.icon ?? '📄';
 
   const create = async (kind: OutputKindInfo) => {
     setPicking(false);
     setError(null);
     try {
-      const o = await sessions.createOutput(ref_, kind.kind, kind.kind === 'latex' ? 'Untitled paper' : 'Untitled document');
+      const o = await sessions.createOutput(ref_, kind.kind, kind.defaultName);
       // Straight into it, with the name ready to type over: no dialog first.
       onOpen(o.id, { rename: true });
     } catch (err) {
@@ -80,7 +80,7 @@ export function OutputsPanel({
           {available.map((k) => (
             <li key={k.kind}>
               <button role="menuitem" onClick={() => create(k)}>
-                <span className="kind-icon">{KIND_ICON[k.kind] ?? '📄'}</span>
+                <span className="kind-icon">{k.icon}</span>
                 <span>
                   <strong>{k.name}</strong>
                   <span className="muted small">{k.description}</span>
@@ -109,7 +109,7 @@ export function OutputsPanel({
             <li key={o.id}>
               <button className="output-card" onClick={() => onOpen(o.id)}>
                 <span className="kind-icon" aria-hidden>
-                  {KIND_ICON[o.kind] ?? '📄'}
+                  {iconOf(o.kind)}
                 </span>
                 <span className="output-card-text">
                   <span className="output-name">{o.name}</span>

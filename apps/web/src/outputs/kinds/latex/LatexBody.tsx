@@ -12,12 +12,12 @@ import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 import { tags } from '@lezer/highlight';
 import * as Y from 'yjs';
-import type { Artifact, BuildError, Output, OutputEditSummary } from '@fabrikka/types';
-import { sessions, type SessionRef } from '../../api.ts';
-import { CollabEditor, goToLine, insertBlock, useYFile, wrap, type ToolbarItem } from '../CollabEditor.tsx';
-import { History } from '../History.tsx';
-import type { OutputTab } from '../Outputs.tsx';
-import type { OutputSync } from '../sync.ts';
+import type { Artifact, BuildError, Output, OutputEditSummary, TexConfig } from '@fabrikka/types';
+import { sessions, type SessionRef } from '../../../api.ts';
+import { CollabEditor, goToLine, insertBlock, useYFile, wrap, type ToolbarItem } from '../../CollabEditor.tsx';
+import { History } from '../../History.tsx';
+import type { OutputTab } from '../../Outputs.tsx';
+import type { OutputSync } from '../../sync.ts';
 import { LatexCompiler } from './compiler.ts';
 import { PdfView } from './PdfView.tsx';
 import { SyncTex, type SyncHit } from './synctex.ts';
@@ -216,7 +216,7 @@ export default function LatexBody({
       timer = setTimeout(() => void compile(), ms);
     };
 
-    void sessions.tex(ref_).then((tex) => {
+    void sessions.kindGet<TexConfig | null>(ref_, '/tex').then((tex) => {
       if (stopped) return;
       if (!tex) {
         setBuild({ status: 'unavailable' });

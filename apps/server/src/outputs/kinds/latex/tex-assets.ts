@@ -10,7 +10,7 @@ import { extname, join, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 
 const BASE = resolve(
-  process.env.TEX_ASSETS_DIR ?? join(import.meta.dirname, '..', '..', '..', '.tex-assets'),
+  process.env.TEX_ASSETS_DIR ?? join(import.meta.dirname, '..', '..', '..', '..', '..', '..', '.tex-assets'),
 );
 
 /** The installed version directory, or null. Checked once: install, then restart. */

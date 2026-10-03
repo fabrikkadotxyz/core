@@ -28,13 +28,15 @@ import {
   readArtifact,
 } from './artifacts.ts';
 import {
+  agentHints,
   createOutput,
   editOutput,
   listOutputs,
+  multiFileKinds,
   OutputError,
   outputKinds,
   readOutput,
-} from './outputs.ts';
+} from './outputs/core.ts';
 import {
   createMessage,
   getSessionContext,
@@ -396,13 +398,13 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
           output_id: r.output.id,
           name: r.output.name,
           file: r.file,
-          format: r.output.kind === 'latex' ? 'latex' : 'markdown',
+          format: r.format,
           version: r.version,
           start_line: r.startLine,
           total_lines: r.totalLines,
           content: r.content,
-          // latex only: what the last viewer's compile found. "unknown" is never "passed".
-          ...(r.build ? { build: r.build } : {}),
+          // Whatever the kind adds — latex's `build`, what the last viewer's compile found.
+          ...r.extras,
         };
       }),
   );
@@ -416,10 +418,13 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
         'each old_text must appear EXACTLY ONCE in the file — quote enough ' +
         'surrounding text to be unique. All edits apply or none do. If you get ' +
         'anchor_not_found, someone changed that text: re-read and retry. Use ' +
-        '`append` to add at the end — appending to a file that does not exist creates ' +
-        'it, for multi-file kinds like latex. Replacing the whole file needs `content` ' +
-        'and if_version, and is refused if anyone edited since you read it. For latex, ' +
-        'read_output afterwards: its `build` says whether your edit compiled.',
+        '`append` to add at the end' +
+        (multiFileKinds().length
+          ? ` — appending to a file that does not exist creates it, for multi-file kinds like ${multiFileKinds().join(', ')}`
+          : '') +
+        '. Replacing the whole file needs `content` and if_version, and is refused if ' +
+        'anyone edited since you read it.' +
+        agentHints().map((h) => ` ${h}`).join(''),
       inputSchema: z.object({
         output_id: z.string(),
         file: z.string().optional().describe('Defaults to the main file.'),

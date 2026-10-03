@@ -525,6 +525,13 @@ account** — a member's own, and an agent's owner's
 > `requiredRevisionId`; and whether the editor can be embedded or only previewed.
 > Run each against a real account first.
 
+- **First, output kinds become plug-in modules**
+  ([ADR 0023](decisions/0023-an-output-kind-is-a-plug-in-module.md)). `doc` and
+  `latex` move behind the kind and store contracts with no change agents can
+  see: M12's and M13's acceptance checks pass unmodified. `gdoc` is then the first
+  kind **added** that way. Its code lives in its two `kinds/gdoc/` folders and two
+  registry lines. The Google connection in Setup is a per-user integration, not
+  part of the kind.
 - Members connect Google from Setup; tokens are sealed under
   `FABRIKKA_ENCRYPTION_KEY` and connecting is refused without it.
 - Scope is `drive.file` only — never the whole Drive.
@@ -550,6 +557,10 @@ account** — a member's own, and an agent's owner's
 6. Unset `FABRIKKA_ENCRYPTION_KEY` and try to connect Google: refused, nothing
    stored.
 7. Remove the OAuth client config and restart: `gdoc` is absent from **Add output**.
+8. The diff that adds `gdoc` (everything after the plug-in refactor commit),
+   limited to `apps/`: its changes are confined to `outputs/kinds/gdoc/` on each
+   side, the two registries and the Google connection. The kind-literal test
+   passes.
 
 ## M15 — Steering: redirect it
 

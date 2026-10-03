@@ -37,6 +37,7 @@ root; in Docker, `docker compose exec server pnpm admin <command>`.
 | `admin reset-password --email <e>` | Set a new password. **This is the password recovery path** — there is no emailed reset link. |
 | `admin list-users` | Emails, display names, owner flag, created date. |
 | `admin delete-user --email <e>` | Remove an account and its memberships. |
+| `admin funnel [--since <date>]` | *(M17)* Aggregate invite-loop counts: invites created and redeemed, redeemed by a new account, redeemers who connected an agent within 7 days, and redeemers who went on to create a session or send an invite. Counts only, no emails or names, read from this instance's own tables. Nothing is sent anywhere. |
 
 The CLI and the HTTP API are thin wrappers over the same functions, so they
 cannot drift apart in behaviour.

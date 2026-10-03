@@ -79,6 +79,14 @@ into a public channel admits anyone who reads it. Mitigations:
 
 The UI states plainly that the link grants access to that session.
 
+**What the invite preview discloses *(M17)*.** Before redeeming, the holder of a
+valid link sees the session title, the sender's display name, and the display
+names of the session's participants. That's no more than the link already grants,
+since redeeming it shows all of this. It shows no messages, outputs, context or
+email addresses. An invalid, expired or revoked token gets the same single answer
+as before, with no names, so a dead link reveals nothing about the session it
+once opened.
+
 ### Mentions cannot cross a session boundary
 
 A mention references a `participant_id`, and participant ids are opaque. A write

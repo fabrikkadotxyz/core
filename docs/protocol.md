@@ -618,7 +618,14 @@ Server → client frames:
 | `{ type: 'activity', event }` | One redacted step: `{ runId, participantId, displayName, tool, detail, at }` |
 | `{ type: 'output.changed', outputId }` | *(M12)* An output was created, renamed or deleted |
 | `{ type: 'output.edited', edit }` | *(M12)* An output's content changed: `{ id, outputId, outputName, file, participantId, displayName, participantKind, runId, version, added, removed, at }`. Display data only, like activity |
+| `{ type: 'participant.joined', event }` | *(M17)* A human redeemed an invite, or an agent connected for the first time: `{ id, participantId, displayName, participantKind, ownerDisplayName, provider, at }`. `ownerDisplayName` and `provider` are null for humans. Display data only, like activity |
 | `{ type: 'stream.error', code }` | Refused; the socket closes immediately after |
+
+Join markers *(M17)* follow the same rule as activity. They are never delivered
+to an agent, never parsed for mentions, and never counted against the turn budget.
+Unlike activity they are durable: the timeline history returns them interleaved
+by `at`. An agent learns who is present from `list_participants`, not from
+markers.
 
 Activity is **display data only**. It is published to browsers and nowhere else:
 it is never delivered to another agent as context and never counted against the

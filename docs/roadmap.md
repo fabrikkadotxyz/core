@@ -646,6 +646,89 @@ is that we mostly cannot choose, and the interface says so:
    config chose.
 6. Two agents in one session on different models both work.
 
+## M17 — First run: from an invite link to your own agent in the room
+
+> Every session needs a second person, so every use of Fabrikka sends an invite.
+> That's the growth loop, and today it leaks at the step that matters. The invitee
+> lands in a session that only says what it's called, joins a conversation already
+> under way, and has to find out on their own that the **Agents** panel in Setup is
+> where their agent comes in. The moment worth telling someone about is watching
+> *your own* agent work beside someone else's, and right now nothing leads the
+> invitee there.
+
+The goal is to get from opening an invite link to the invitee's own agent showing
+up in the timeline in as few steps as possible, and to make that arrival
+something the rest of the room sees.
+
+- **The invite page says who and what.** The preview shows who sent the invite
+  and who is already in the session: humans and agents, by display name. The link
+  already lets its holder join, and joining shows them all of this, so the preview
+  reveals nothing new. An invalid, expired or revoked invite still shows nothing
+  at all. Message content, outputs and context are never shown before joining.
+- **Joining leads into "Bring your agent".** After signup, or after *Join session*
+  for an existing account, the invitee lands on the session with a step open:
+  - The agent's name is pre-filled as `<provider-short>-<display name>`, for
+    example `claude-alice`. If that name is taken, a number is appended.
+  - The provider defaults to Claude Code. One click creates the session agent
+    through the same path M11 opened to members, so there is no new permission
+    and no new API.
+  - The setup block for the recommended lane shows next to a copy button: Lane A's
+    one-liner for a Claude Code or Codex agent, and the endpoint and header for
+    anything else. The other lanes stay one click away.
+- **The step waits for the agent and says so.** It shows *Waiting for
+  claude-alice to connect…* and flips to *claude-alice is here* on the first
+  authenticated connection, from any lane. This screen is where the invitee
+  succeeds or gives up, so it never just goes quiet.
+- **Skipping is allowed.** *Not now* closes the step. It stays reachable from
+  Setup, and the choice is remembered per session.
+- **Arrivals are marked in the timeline.** When a human redeems an invite, and
+  when a session agent connects **for the first time ever**, every member sees a
+  durable marker: *alice joined*, and *claude-alice joined: Alice's Claude Code*.
+  - The server writes the marker. The agent is never asked to introduce itself,
+    for three reasons. Fabrikka does not drive the agent. A forced greeting costs
+    the user a model turn they didn't ask for. And a Lane A client takes no turn
+    until its user prompts it.
+  - A marker is written once per participant, never on reconnect.
+  - Like activity, markers are **display data**. They are never delivered to an
+    agent, never a mention, and never counted against the turn budget. An agent
+    that wants to know who is present calls `list_participants`.
+- **The operator can see whether the loop works.** `admin funnel` prints
+  aggregate counts from this instance's own tables:
+  - invites created, redeemed, and redeemed by a new account;
+  - redeemers who connected an agent within 7 days;
+  - redeemers who later created a session or sent an invite of their own.
+
+  These are counts only, never per-user rows, and nothing leaves the instance.
+  There is no telemetry.
+
+Out of scope: a share-anywhere link (an invite is a single-use bearer
+credential, so it stays one), email nudges (ADR 0007), and anything visible
+outside the instance. Outward attribution and shareable recaps change the
+privacy model and get their own ADR.
+
+**Test:**
+1. As fede, create an invite and open it in a private window. The page names fede
+   as the sender and lists the session's participants, but no messages.
+2. Revoke a second invite and open it: the page shows only *This invite can't be
+   used*, with no names.
+3. Redeem the first invite as a new account, alice. She lands in the session with
+   *Bring your agent* open, the name `claude-alice` filled in, and Claude Code
+   selected.
+4. Fede, in his own window, sees *alice joined* in the timeline without reloading.
+5. Alice clicks create, copies the one-liner and runs it in a real Claude Code.
+   Her step flips to *claude-alice is here*. Fede sees *claude-alice joined:
+   Alice's Claude Code*.
+6. Restart alice's Claude Code. No second marker appears.
+7. Mention `@claude-fede`. The run's context contains no join markers, and the
+   turn budget is unchanged by them.
+8. Invite bob, who already has `claude-bob` in another session and picks *Not
+   now*. The step closes, stays closed after a reload, and *Agents* in Setup
+   still offers it.
+9. Create the name collision on purpose: a member named alice whose
+   `claude-alice` already exists gets `claude-alice-2`.
+10. `pnpm admin funnel` shows invites created 2, redeemed 2, new accounts 1,
+    connected an agent 1. No email addresses or names are printed.
+
 ---
 
 ## MVP acceptance

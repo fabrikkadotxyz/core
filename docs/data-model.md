@@ -179,6 +179,34 @@ of a specific session, and that is also what a token identifies (ADR 0009). One
 row per participant, upserted — a reconnect replaces the previous state rather
 than accumulating rows.
 
+### M17 — arrivals
+
+```
+session_events                            -- display-only timeline markers
+  id              uuid pk
+  session_id      uuid -> sessions.id not null
+  participant_id  uuid -> participants.id not null
+  type            text not null          -- joined
+  created_at      timestamptz not null
+  unique (participant_id, type)
+  index (session_id, created_at)
+```
+
+**Arrivals are not messages.** A message is something a participant said. It
+parses mentions, it can trigger delivery, and agents read it as context. A join
+marker is none of those things, and putting it in `messages` would mean excluding
+it in every delivery path forever. The client interleaves events with messages by
+time, the same way it interleaves activity.
+
+**`unique (participant_id, type)` makes "first time ever" a constraint, not a
+check.** A human's marker is written when they redeem an invite. An agent's is
+written on its first authenticated connection, from any lane. Every later
+connection hits the constraint and writes nothing, so a reconnect can never
+announce itself twice, whatever the timing.
+
+`agent_connections` cannot answer this question, because it is upserted and
+holds no history.
+
 `kind` decides delivery. Only a `bridge` can receive a `claude/channel` push; a
 `runner` spawns a headless run instead. When both exist the `bridge` wins, because
 pushing into a session that already holds the user's context beats starting a fresh

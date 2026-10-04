@@ -6,10 +6,10 @@
  * It shows exactly what the session list already showed, arranged by team. No
  * new permission lives here.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import type { SessionSummary, TemplateSummary } from '@fabrikka/types';
-import { chats, sessions as sessionsApi, templates } from '../api.ts';
+import type { SessionSummary } from '@fabrikka/types';
+import { chats, sessions as sessionsApi } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { byActivity, useWorkspace } from './workspace.tsx';
 
@@ -36,7 +36,8 @@ function SessionLink({ s, onNavigate }: { s: SessionSummary; onNavigate: () => v
 
 /**
  * Start a session where the sessions are (M28): in the current team, or just
- * for you. A title, and optionally a template; Enter starts it and opens it.
+ * for you. A title; Enter starts it and opens it. (Session types — templates —
+ * are parked for now: the server keeps them, the UI doesn't offer them.)
  */
 function NewSession({
   teamId,
@@ -50,12 +51,7 @@ function NewSession({
   onCreated: (s: SessionSummary) => void;
 }) {
   const [title, setTitle] = useState('');
-  const [templateRef, setTemplateRef] = useState('');
-  const [tpls, setTpls] = useState<TemplateSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (open) templates.list().then(setTpls).catch(() => {});
-  }, [open]);
   if (!open) return null;
   return (
     <form
@@ -65,9 +61,8 @@ function NewSession({
         if (!title.trim()) return;
         setError(null);
         try {
-          const s = await sessionsApi.create(title.trim(), teamId ?? undefined, templateRef || undefined);
+          const s = await sessionsApi.create(title.trim(), teamId ?? undefined);
           setTitle('');
-          setTemplateRef('');
           onCreated(s);
         } catch (err) {
           setError((err as Error).message);
@@ -76,16 +71,6 @@ function NewSession({
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
     >
       <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" aria-label="New session title" />
-      {tpls.length > 0 && (
-        <select value={templateRef} onChange={(e) => setTemplateRef(e.target.value)} aria-label="Start from a template">
-          <option value="">Blank</option>
-          {tpls.map((t) => (
-            <option key={t.ref} value={t.ref}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      )}
       <div className="side-form-row">
         <button type="submit" disabled={!title.trim()}>
           Start

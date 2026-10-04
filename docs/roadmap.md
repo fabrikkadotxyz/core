@@ -955,6 +955,12 @@ couldn't answer, and mentions Alice. Her *Waiting for you* has it in the morning
 
 ## M25 — Session templates
 
+> **UI parked, 2026-10-04.** For now a session has no type: the new-session form
+> asks only for a title, and *Save as template* and the suggested connections
+> are hidden. Templates come back later, when a team or a person defines session
+> types of their own. The server, the API and the m25 check stay as built, so
+> bringing them back is a UI change.
+
 - A **template** is a session's structure without its content: the objective,
   constraints, starter open questions, starter outputs (a pitch with empty
   sections, an incident report's headings), and recommended connection
@@ -1046,7 +1052,8 @@ decision, with who decided and when, and opens in any editor.
   position (M24).
 - **Starting a session happens where the sessions are.** A **+** beside *Team
   sessions* starts one in the current team, and a **+** beside *Personal sessions*
-  starts one just for you. Either way you give a title and, optionally, a template.
+  starts one just for you. Either way you give a title (session types come later;
+  see M25).
 - **The home's main area**, with nothing open, shows *Waiting for you* (M24).
 - Nothing here is a new permission. The sidebar shows exactly what the session
   list already showed, arranged by team.

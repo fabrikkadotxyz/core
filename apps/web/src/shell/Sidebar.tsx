@@ -75,7 +75,7 @@ function NewSession({
       }}
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
     >
-      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What's the problem?" aria-label="New session title" />
+      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" aria-label="New session title" />
       {tpls.length > 0 && (
         <select value={templateRef} onChange={(e) => setTemplateRef(e.target.value)} aria-label="Start from a template">
           <option value="">Blank</option>

@@ -2142,7 +2142,7 @@ function SpinOff({ ref_, onDone }: { ref_: SessionRef; onDone: (to: string) => v
         onDone(`/o/${s.ownerSlug}/s/${s.publicId}`);
       }}
     >
-      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What is the session about?" aria-label="New session title" />
+      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" aria-label="New session title" />
       <button type="submit" disabled={!title.trim()}>
         Start
       </button>

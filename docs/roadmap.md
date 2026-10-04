@@ -740,6 +740,291 @@ privacy model and get their own ADR.
 10. `pnpm admin funnel` shows invites created 2, redeemed 2, new accounts 1,
     connected an agent 1. No email addresses or names are printed.
 
+## M18–M27 — The stories
+
+> **Added 2026-10-03.** Ten milestones, each finished by a **user story**. The story
+> is the acceptance test, run end to end with real accounts. Where a story needs
+> a capability that isn't built yet, the capability is the milestone and the story
+> is its gate. The twelve stories, and which milestone completes each one:
+>
+> | # | Story | Completed at |
+> | --- | --- | --- |
+> | S1 | Team debugging: GitHub, Sentry/Grafana/Rollbar, a PR, a ticket moved, Confluence checked | M18 |
+> | S2 | A team, and a session every teammate can view | M22 |
+> | S3 | A team, and a session just for yourself | M21 |
+> | S4 | A private session, then add a teammate | M21 |
+> | S5 | A Confluence page, two repos, a PDF, tickets created in an epic | M20 |
+> | S6 | The 2 a.m. incident, picked up by another time zone from the record | M24 |
+> | S7 | The async handoff: my agent finishes overnight and hands the work to Alice | M24 |
+> | S8 | Shaping a pitch before anyone builds | M25 |
+> | S9 | A student group writes a paper; the advisor comments without editing | M23 |
+> | S10 | Leaving the cloud: a six-month decision with its history intact | M27 |
+> | S11 | Onboarding by doing, with a senior's agent lent read-only | M26 |
+> | S12 | An agency and its client in one room, and no more | M23 |
+>
+> **What none of them needs:** dashboards, kanban, analytics, digests or "AI
+> insights". A story that seems to need a new screen is probably the wrong story.
+
+## M18 — Connections: connect a category, not a vendor
+
+> M8 aggregates any MCP server, but connecting one means pasting a URL and a
+> bearer token, and most vendors' MCP servers authenticate with **OAuth**. Nobody
+> on a team will do the first, and the second is impossible today.
+
+Connections are offered **by category**, and each one is the **vendor's own MCP
+server** ([ADR 0024](decisions/0024-connections-are-categories-over-vendor-mcp-servers.md)).
+Fabrikka writes no vendor adapters, and agents use the vendor's tools directly.
+
+| Category | Catalogue entries (verify each before listing it) |
+| --- | --- |
+| Code host | GitHub, GitLab |
+| Issue tracker | Jira, Linear, ClickUp |
+| Observability | Sentry, Grafana, Rollbar |
+| Docs | Confluence, Notion |
+
+- **Add a connection → Issue tracker → Jira.** Each catalogue entry knows its
+  endpoint and how it authenticates. You never paste a URL for a listed vendor.
+- **OAuth per the MCP authorization spec**: discovery, dynamic client
+  registration where the vendor supports it, PKCE. It works on `localhost`, so a
+  local instance needs no domain.
+- Credentials stay **per user and sealed** (ADRs 0004, 0014, unchanged). Every
+  call still runs under the calling participant's own account.
+- **Grant presets per category**, *Read* and *Read & write*, expand to the per-tool
+  default-deny grants M8 already enforces. A preset is a shortcut, not a new
+  permission model.
+- **Custom connection** stays: any streamable-HTTP MCP server, URL and token, as at
+  M8.
+- **A vendor whose MCP server is stdio-only can't be connected through the
+  session** (ADR 0014). Its catalogue entry says so, and shows the snippet that
+  adds it to your own agent's config instead.
+
+> **Verify before building**, the way M16 verifies Cursor. From documentation,
+> not use: GitHub, Atlassian (Jira and Confluence), Linear and Sentry have remote
+> HTTP MCP servers with OAuth. Grafana's and Rollbar's are believed to be
+> self-hosted or stdio. ClickUp's and Notion's are unknown. Connect each one for
+> real before it gets a catalogue entry. An unverified vendor is absent, not
+> broken.
+
+**Test — S1, run twice:** Fede invites three coworkers. He connects GitHub and
+adds `claude-fede`; Alice adds `codex-alice`. Connect Sentry and Grafana (and
+Rollbar, by whichever path its entry gives). The agents find the bug from the
+error, open a PR, link the bug ticket in it, and move the ticket to its next
+status, asking the tracker which transitions exist rather than assuming one.
+They then check Confluence for docs that need updating. **Run the whole story
+once with Jira and once with Linear.** Nothing in Fabrikka changes between the
+two runs except which entry was picked.
+
+## M19 — Session links: what this session is about, outside it
+
+The session gets a small, **vendor-neutral** record of the outside things it
+touches:
+
+```
+{ type: issue | pr | repo | doc | dashboard | error, provider, url, title, status, status_at }
+```
+
+- Agents add links with a `link` tool, and humans add them in the right pane.
+  Links are **append-first**, like context (ADR 0013).
+- `status` is **as last reported**, with its time. Fabrikka never polls a vendor
+  on its own; status refreshes when an agent or a person looks.
+- A session can link **several repos**, and the session preamble lists them, so
+  an agent starts knowing which code the session is about.
+- A link is a pointer, never a copy: no ticket bodies or PR diffs are stored. The
+  vendor is the source of truth.
+
+**Test:** in S1's session, the right pane shows the ticket, the PR, the Confluence
+page and the Sentry issue, each with its provider and status. The agent's ticket
+move updates the ticket's status. Link two repos: a fresh run's preamble names
+both.
+
+## M20 — Agents read what you upload
+
+M7 stores a PDF; an agent can't read it.
+
+- Text is extracted **on the server** from uploaded PDFs, page by page, with size
+  limits. `read_artifact` gains `pages`. The extractor is `pdf.js`, already in
+  the web app, so the server is its second consumer.
+- A scanned PDF with no text layer says so. It is never silently empty.
+- The text is data, not instructions, like every other piece of content (security.md).
+
+**Test — S5:** connect Confluence, Jira and GitHub. Link two repos, upload a PDF
+spec, and ask an agent to review the Confluence page against the PDF and both
+codebases. It creates several Jira tickets under one epic, and each appears in
+the session's links. Then run it again with Linear, using a project in place of
+the epic.
+
+## M21 — Teams
+
+> A team is a list of people who already trust each other, plus nothing else.
+> Not billing, SSO or a permission matrix: those stay off the roadmap.
+
+([ADR 0025](decisions/0025-teams-and-who-can-see-a-session.md))
+
+- Create a team, and invite people to it with the same single-use links (M1). A
+  team invite is a second way to get an account. There is still no open signup.
+- Team roles: `owner | member`. Owners invite and remove; that is the difference.
+- **Add from the roster**: a session owner adds a teammate directly, with no link,
+  because the server already knows they're allowed to be added.
+- A session belongs to a person, and **optionally** to a team. Sessions are still
+  **private by default**: belonging to a team changes who can be added, not who
+  can see.
+- Leaving or being removed from a team removes **team-granted** access only.
+  Membership granted by a direct invite stays.
+
+**Test — S3 and S4:** Fede creates a team and invites Alice and Bob. He creates a
+session for himself in the team: Alice and Bob can't see it, and get a 404 on its
+URL. He adds Alice from the roster: she's in, with no link. Remove Alice from the
+team: she's out of that session, since her access came from the team.
+
+## M22 — Who can see a session: team-visible, and guests
+
+([ADR 0025](decisions/0025-teams-and-who-can-see-a-session.md), plus a new threat
+section in `docs/security.md`)
+
+- A session's visibility is `private` (default) or **`team`**. A team-visible
+  session is visible to every member of its team as a **viewer**.
+- **Viewers read.** They see the timeline, outputs, context and links. They
+  can't post, can't mention, can't trigger an agent and don't see Setup. Joining
+  as a participant still takes an owner's say-so.
+- **Guests**: an owner can invite someone **outside** the team as a viewer of one
+  session, for a client or an advisor. A guest sees one session and nothing else
+  about the team.
+- The word is **"team-visible", never "public"**. "Public" means outside the
+  instance (ADR 0022), and confusing the two would be a security bug.
+- A team-visible session is still a 404 for anyone outside the team.
+- An agent's activity follows its owner's `activity_visible`. Viewers see no more
+  than members do.
+
+**Test — S2:** Fede creates a team-visible session. Every teammate sees it in
+their list and can read along live; none of them can post or mention. Carol,
+outside the team, gets a 404. Fede invites a guest viewer: she sees that one
+session and nothing else of the team.
+
+## M23 — Comments on outputs
+
+> Review is a conversation *about a passage*, not about the document. The
+> timeline is the wrong place for "this paragraph contradicts section 2".
+
+- Comments **anchor to a passage** of an output, by quoted text like anchored
+  edits (ADR 0019). A comment whose passage has been rewritten is marked
+  *outdated*, never silently moved.
+- **Guests and viewers can comment**; only participants edit. "Comment, don't
+  edit" is the most common thing a reviewer wants.
+- Agents read comments (`list_comments`) and can resolve them by editing, with
+  the edit linked to the comment. Comments are data, not instructions, and a
+  comment never triggers an agent.
+- Threads resolve; resolved threads collapse, they don't disappear.
+
+**Test — S9:** four students write a LaTeX paper (M13), each with their own
+agent. Their advisor is a guest. She comments on two passages; an agent fixes one
+and resolves it; the other gets marked outdated when a student rewrites the
+paragraph. The changes log says who wrote what.
+
+**Test — S12:** an agency opens one session per client. The client is a guest on
+the client session: they see the proposal, the decisions and the agents drafting,
+and comment on the proposal. The agency's internal session doesn't exist as far
+as the client can tell (404).
+
+## M24 — Since you were away
+
+> Most of the work in a session happens while someone is asleep. The record
+> exists; the problem is finding where you left off.
+
+- **Catch-up on return**: opening a session after an absence shows what changed
+  since you last looked. That means new decisions, answered and new open
+  questions, outputs edited (and by whom), links whose status moved. It is built
+  from the record, not generated: Fabrikka has no built-in model.
+- **Waiting for you**: one list, across your sessions, of mentions of you and of
+  open questions addressed to you. It is the only cross-session view, and it
+  holds nothing a session doesn't.
+- **Handoffs**: an agent finishing work can mention a human. That mention waits
+  in their list like any other. No new mechanism: an agent mentioning a human
+  wakes no one and costs no turn budget.
+- Email stays optional (ADR 0007). With a notifier configured, *Waiting for you*
+  can be mailed. Without one, it's a page.
+
+**Test — S6:** Fede opens "Checkout 500s" at 2 a.m., connects Sentry and Grafana,
+and his agent records what it found as facts and decisions. Alice opens it eight
+hours later: the catch-up shows the decisions and the one open question, and she
+continues without reading the timeline.
+
+**Test — S7:** Fede writes "@claude-fede finish the migration, then hand it to
+@alice" and logs off. The run finishes, opens the PR, records the question it
+couldn't answer, and mentions Alice. Her *Waiting for you* has it in the morning.
+
+## M25 — Session templates
+
+- A **template** is a session's structure without its content: the objective
+  prompt, context sections, starter outputs, recommended connections, and agent
+  setup notes.
+- **Save as template** from any session; **New session from template** fills the
+  structure and nothing else. No messages, credentials or members are copied.
+- Templates belong to a person or a team. Fabrikka ships a few: *Shaping*,
+  *Incident*, *Onboarding*. They are plain data, editable, and not special.
+
+**Test — S8:** a product lead starts from *Shaping*: problem, appetite, solution,
+rabbit holes, no-gos, and a pitch output. Agents add rabbit holes to the context
+and draft the pitch; reviewers comment on it (M23). The team decides to bet on
+it, or not, and records that decision in the session.
+
+## M26 — Lend your agent, read-only
+
+> The senior engineer's agent knows the codebase. The new hire should be able to
+> ask it anything, and it should be able to change nothing.
+
+**ADR before building**: this sits on the trust model (security.md) and ADR 0011.
+
+- An agent's owner can **lend** it in one session with a **profile**:
+  `read-only`, meaning trusted to be mentioned by session members but run with no
+  write access.
+- The profile is **enforced where the run starts**: the owner's runner passes the
+  runtime's own read-only flags (Claude Code's plan mode or a restricted tool
+  list, Codex's read-only sandbox). The runner already builds that command line
+  (ADR 0011).
+- **A live session can't be lent this way.** Fabrikka can't restrict tools in
+  someone's open terminal, so a lent agent answers on the spawn path only. The UI
+  says so, as steering does (ADR 0016).
+- Lending is per session, revocable, and visible to everyone in the session.
+
+**Test — S11:** a new hire is invited to a session made from *Onboarding*, with
+three real tickets and a senior's agent lent read-only. They ask it about the
+codebase all day; when they ask it to edit a file, the run is refused by its own
+sandbox, and the session says so. On Friday their PR merges, and the session is
+saved as the next hire's template.
+
+## M27 — Export: the record is yours
+
+> A decision you can't get out of the tool that holds it isn't yours.
+
+- **Export a session** as Markdown plus a folder of files: objective, context
+  with its history, decisions, links, outputs at their current version with
+  their changes log, artifacts, and the timeline.
+- Also **JSON**, for anything that wants to read it programmatically.
+- Owners export; it is a deliberate act, and the file says who exported it and
+  when. Activity is excluded, as it is everywhere (ADR 0015).
+- No proprietary format and no "import into Fabrikka" lock: the export reads
+  fine in a text editor.
+
+**Test — S10:** a CTO runs "Cloud exit" over weeks: infra repo linked, bills
+uploaded and read (M20), one decision per managed service, a migration plan as a
+live doc. Export it. The Markdown answers "why did we choose this" for every
+decision, with who decided and when, and opens in any editor.
+
+## Later — Shared agents on infrastructure the team runs
+
+> Not scheduled. Recorded so that when it comes, it starts from the rule rather
+> than around it.
+
+A team wants an agent that belongs to the **team**, not to one person, running
+somewhere safe: a VM, a container, a sandbox. This fits the architectural rule
+**if the team operates the machine**. The team runs `fabrikka watch` on its own
+VM, with the agent runtime it installed and the credentials it chose. The agent
+still spawns the bridge, and Fabrikka still installs, updates and supervises
+nothing (ADRs 0002, 0011). What's new is an agent whose owner is a team, a trust
+tier for team members, and team-scoped credentials. Fabrikka *hosting* that VM
+would break the rule, and would need an ADR that supersedes 0002, not one that
+extends it.
+
 ---
 
 ## MVP acceptance
@@ -760,11 +1045,11 @@ Security checks that gate this are listed in `docs/security.md`.
 
 ## Explicitly not MVP
 
-No built-in LLM provider. No Fabrikka-hosted Claude or Codex. No autonomous orchestration, agent marketplace, workflows, tasks/kanban, shared browser, RAG, vector database, sophisticated memory, public sessions, organizations, billing, mobile, enterprise SSO, elaborate RBAC, or local-only execution.
+No built-in LLM provider. No Fabrikka-hosted Claude or Codex. No autonomous orchestration, agent marketplace, workflows, tasks/kanban, shared browser, RAG, vector database, sophisticated memory, public sessions (team-visible sessions, M22, are not public), billing, mobile, enterprise SSO, elaborate RBAC, or local-only execution. Organizations were on this list until 2026-10-03; they are M21 as **teams**, deliberately without billing, SSO or a permission matrix.
 
 ## Phase I — the useful problem-solving environment
 
-Structured context, richer artifacts, search across messages/artifacts/decisions, better agent presence UX, per-tool MCP permissions UI, session templates, session export to Markdown/JSON.
+Structured context, richer artifacts, search across messages/artifacts/decisions, better agent presence UX, per-tool MCP permissions UI. (Session templates and export are now M25 and M27.)
 
 ## Phase II — Fabrikka as infrastructure
 

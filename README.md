@@ -83,7 +83,7 @@ link*, and send it however you like. Forgot a password?
 | [`docs/security.md`](docs/security.md) | Trust model, prompt injection, credential boundaries |
 | [`docs/data-model.md`](docs/data-model.md) | Schema and what each table is for |
 | [`docs/operations.md`](docs/operations.md) | Running an instance: bootstrap, admin CLI, invites, backups |
-| [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M17 and their acceptance tests |
+| [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M27 and their acceptance tests |
 | [`docs/decisions/`](docs/decisions/) | ADRs — why each of the above is the way it is |
 
 ## License

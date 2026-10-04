@@ -137,6 +137,15 @@ Independent transports, which should not be conflated:
 
 MCP connections are separate from all of them. An agent on lane A has no realtime connection at all.
 
+## Two ways to run it, one code path
+
+Fabrikka runs in an organization's own cloud, or as a hosted instance for
+anyone who doesn't want to self-host. **They are the same code.** A hosted
+instance is a self-hosted instance with more configuration: a mail notifier, a
+pre-registered OAuth client per connection vendor, and so on. There is no
+deployment-mode flag. Features appear when what they need is configured, and are
+absent, not broken, when it isn't (ADR 0007).
+
 ## Output kinds are plug-in modules
 
 An output kind (`doc`, `latex`, `gdoc`, …) is **one folder on the server and one

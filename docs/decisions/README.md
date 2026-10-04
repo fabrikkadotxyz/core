@@ -56,3 +56,5 @@ What we rejected and why.
 | [0021](0021-google-docs-writes-use-the-editors-own-account.md) | Google Docs writes go through the editor's own Google account | Proposed |
 | [0022](0022-nothing-leaves-a-session-without-a-members-deliberate-act.md) | Nothing leaves a session without a member's deliberate act | Proposed |
 | [0023](0023-an-output-kind-is-a-plug-in-module.md) | An output kind is a plug-in module | Accepted |
+| [0024](0024-connections-are-categories-over-vendor-mcp-servers.md) | Connections are categories over vendors' own MCP servers | Proposed |
+| [0025](0025-teams-and-who-can-see-a-session.md) | Teams, and who can see a session | Proposed |

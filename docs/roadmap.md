@@ -1017,6 +1017,122 @@ uploaded and read (M20), one decision per managed service, a migration plan as a
 live doc. Export it. The Markdown answers "why did we choose this" for every
 decision, with who decided and when, and opens in any editor.
 
+## M28–M30 — The home: a place to come back to
+
+> **Added 2026-10-04.** Until now the home page has been a list of sessions. A team
+> that lives in Fabrikka needs what a team chat tool gives it: one place where its
+> ongoing conversations, its pieces of work and its people are a click away. These
+> three milestones make the home feel like that, without making sessions into
+> chat rooms or chat rooms into sessions.
+
+## M28 — The home: a sidebar, and a team switcher
+
+- **A sidebar that stays.** It's on the left of the home page *and* beside every
+  open session, so moving between pieces of work never means going back to a
+  list. It collapses on narrow screens.
+- **A team switcher** at the top, like a chat tool's workspace switcher: one team
+  at a time, remembered per browser. Personal sessions and direct chats (M29)
+  show under every team, because they aren't any team's.
+- **Sections:**
+  - **Team sessions**: the team's 5 most recently active sessions you can open
+    (as a member, or as a viewer of a team-visible one), plus **All team
+    sessions**, a full list you can filter by title.
+  - **Personal sessions**: sessions in no team, most recent first.
+  - **Personal integrations**: your own connections, on a page of their own.
+    You connect, see and remove them here, not inside a session; attaching one to
+    a session stays in that session's Setup (M8).
+- "Most recently active" means the latest message, or the session's creation if
+  it has none. Fabrikka doesn't track who looked at what beyond your own read
+  position (M24).
+- **The home's main area**, with nothing open, shows *Waiting for you* (M24) and a
+  way to start a session in the current team or for yourself.
+- Nothing here is a new permission. The sidebar shows exactly what the session
+  list already showed, arranged by team.
+
+**Test:**
+1. Fede is on two teams. The switcher lists both. Choosing one shows its sessions
+   in **Team sessions**, at most 5, newest activity first, and a reload remembers
+   the choice.
+2. Post a message in the 6th most recent team session: it moves into the top 5.
+3. **All team sessions** lists every one; typing in the filter narrows it.
+4. A personal session (no team) appears under **Personal sessions** whichever team
+   is selected.
+5. Open a session: the sidebar is still there, and clicking another session
+   switches without going home.
+6. **Personal integrations** lists Fede's connections. Connect one there, then
+   open a session's Setup: it's offered to attach. Remove it on the page: it's
+   gone from the list.
+7. A team-visible session Fede can only view appears under Team sessions, marked
+   as view-only.
+8. At phone width the sidebar is a drawer, and nothing is clipped.
+
+## M29 — Team chats and direct chats
+
+> A chat is where a team talks; a session is where it works on one problem. They
+> share an engine ([ADR 0026](decisions/0026-chats-are-a-light-kind-of-session.md)),
+> so agents can be mentioned in a chat, and a conversation that turns into real
+> work can become a session without being copied anywhere.
+
+- **Team chats.** A team has chats, like a chat tool's channels: *#general* is
+  created with the team, and any member can add more. **Every team member is a
+  member of every team chat**, through the team (M21's `via_team_id`): joining
+  the team brings you in, and leaving takes you out.
+- **Direct chats.** A 1:1 chat with someone you share a team with. There is one
+  per pair of people, and it belongs to no team, so it shows under every team.
+  The sidebar lists your most recent ones.
+- **A chat is a light session.** It has the timeline, mentions and agents, and no
+  output pane. Its Setup shows only members and agents. Mentioning an agent in a
+  chat follows the same delivery gate and trust tiers as anywhere else (security.md).
+- **Turn a chat into a session.** When a thread becomes real work, a member starts
+  a session from it, and the new session's opening context links back to the
+  chat. Nothing is copied: the chat keeps its history.
+- Unread markers come from M24's read positions: a chat with messages since your
+  last visit shows as unread in the sidebar.
+
+**Test:**
+1. Create a team: it has *#general*, and every member sees it in **Team chats**.
+2. Alice joins the team through an invite: *#general* is in her sidebar, and she
+   can post there.
+3. Fede creates *#incidents*. Alice sees it without being added.
+4. Remove Alice from the team: she's out of both chats (404), and her old
+   messages stay, attributed to her.
+5. Fede opens a direct chat with Bob, a teammate. Bob sees it under every team
+   he's on. Opening it again from either side reaches the same chat.
+6. Fede can't open a direct chat with Carol, with whom he shares no team.
+7. In *#general*, `@claude-fede what broke?` is delivered to Fede's agent when
+   Fede writes it, and refused when Alice does (owner_only), exactly as in a
+   session.
+8. A chat shows no output pane, and its Setup has only members and agents.
+9. Start a session from a chat: it opens with a link back to the chat, and the
+   chat is unchanged.
+10. Post in a chat while Alice is away: it shows unread in her sidebar until she
+    opens it.
+
+## M30 — Team integrations: credentials the whole team shares
+
+> **Last of the three, by design.** Credentials have belonged to one person since
+> ADR 0004, so that every call names the person behind it. Some connections are
+> genuinely the team's: a shared Sentry org token, a team's CI account. This
+> milestone admits those **as team credentials, marked as shared everywhere they
+> appear**, through an ADR that supersedes ADR 0004 for them specifically.
+
+**ADR before building.** It must answer:
+- who may add a team credential (team owners);
+- how a shared credential is shown to every agent and person who uses it, so
+  nobody mistakes it for their own;
+- how audit stays honest when the vendor's log names one account (the changes
+  log and activity name the participant, as now);
+- whether a person's own credential takes precedence over the team's when both
+  exist.
+
+- **Team integrations** joins the sidebar: the team's shared connections, managed
+  by team owners. Members see that they exist and what they're for, never the
+  secret.
+- Everything else about connections is unchanged: per-tool grants stay
+  default-deny, and credentials are sealed and never returned (ADR 0014).
+
+**Test:** written with the ADR.
+
 ## Later — Shared agents on infrastructure the team runs
 
 > Not scheduled. Recorded so that when it comes, it starts from the rule rather

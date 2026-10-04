@@ -58,3 +58,4 @@ What we rejected and why.
 | [0023](0023-an-output-kind-is-a-plug-in-module.md) | An output kind is a plug-in module | Accepted |
 | [0024](0024-connections-are-categories-over-vendor-mcp-servers.md) | Connections are categories over vendors' own MCP servers | Proposed |
 | [0025](0025-teams-and-who-can-see-a-session.md) | Teams, and who can see a session | Accepted |
+| [0026](0026-chats-are-a-light-kind-of-session.md) | Chats are a light kind of session | Proposed |

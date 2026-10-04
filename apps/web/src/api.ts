@@ -20,6 +20,7 @@ import type {
   OutputEditSummary,
   OutputKindInfo,
   Participant,
+  SessionLink,
   PauseState,
   ServerEvent,
   SessionContext,
@@ -201,6 +202,12 @@ export const sessions = {
     }),
 
   artifacts: (ref: SessionRef) => call<Artifact[]>(`${base(ref)}/artifacts`),
+  /** M19: pointers to tickets, PRs, repos, docs. Saving an existing URL updates it. */
+  links: (ref: SessionRef) => call<SessionLink[]>(`${base(ref)}/links`),
+  saveLink: (ref: SessionRef, link: { url: string; type: string; title?: string; status?: string }) =>
+    call<SessionLink>(`${base(ref)}/links`, { method: 'PUT', body: link }),
+  removeLink: (ref: SessionRef, url: string) =>
+    call<{ ok: true }>(`${base(ref)}/links?url=${encodeURIComponent(url)}`, { method: 'DELETE' }),
   addLink: (ref: SessionRef, name: string, url: string) =>
     call<Artifact>(`${base(ref)}/artifacts`, { method: 'POST', body: { name, url } }),
   deleteArtifact: (ref: SessionRef, id: string) =>

@@ -15,7 +15,10 @@ import type {
   OutputEditSummary,
   Participant,
   SessionView,
+  LinkType,
+  SessionLink,
 } from '@fabrikka/types';
+import { LINK_TYPES } from '@fabrikka/types';
 import {
   ApiError,
   openStream,
@@ -342,7 +345,7 @@ export function SessionPage() {
           // Patch the participant list rather than refetching messages: chips
           // resolve names from this list, so a rename updates every message on
           // screen at once. That is the point of storing ids, not names.
-          if (event.type === 'context.updated' || event.type === 'artifact.created') {
+          if (event.type === 'context.updated' || event.type === 'artifact.created' || event.type === 'links.changed') {
             // Panels own their own state; a bump is enough to make them refetch.
             setPanelsVersion((v) => v + 1);
           }
@@ -755,6 +758,7 @@ export function SessionPage() {
             return (
               <>
                 <OutputsPanel ref_={ref} outputs={outputs} onOpen={(id, o) => openOutput(id, o)} />
+                <LinksPanel ref_={ref} version={panelsVersion} />
                 <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
                 <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} />
               </>
@@ -1270,6 +1274,107 @@ function ContextPanel({ ref_ }: { ref_: SessionRef }) {
         </div>
       ))}
 
+      {error && <p className="error small">{error}</p>}
+    </Panel>
+  );
+}
+
+const LINK_ICON: Record<LinkType, string> = {
+  issue: '🎫',
+  pr: '🔀',
+  repo: '📦',
+  page: '📘',
+  dashboard: '📈',
+  error: '🐞',
+};
+
+/**
+ * What this session is about, outside it (M19). Pointers, never copies: the
+ * status is whatever was last reported, with its age, because Fabrikka never
+ * polls a vendor and should not look as if it did.
+ */
+function LinksPanel({ ref_, version }: { ref_: SessionRef; version: number }) {
+  const [list, setList] = useState<SessionLink[]>([]);
+  const [url, setUrl] = useState('');
+  const [type, setType] = useState<LinkType>('issue');
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    sessions.links(ref_).then(setList).catch(() => {});
+  }, [ref_]);
+  // Reload on any change, but never remount: someone else's link must not wipe
+  // the URL you are halfway through typing.
+  useEffect(load, [load, version]);
+
+  const add = async () => {
+    if (!url.trim()) return;
+    setError(null);
+    try {
+      await sessions.saveLink(ref_, { url: url.trim(), type });
+      setUrl('');
+      load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <Panel title="Links">
+      {list.length === 0 && (
+        <p className="muted small">Tickets, PRs, repos and docs this session is about. Agents add them too.</p>
+      )}
+      {list.length > 0 && (
+        <ul className="links-list">
+          {list.map((l) => (
+            <li key={l.url}>
+              <span aria-label={l.type} title={l.type}>{LINK_ICON[l.type]}</span>
+              <span className="link-text">
+                <a href={l.url} target="_blank" rel="noreferrer noopener">
+                  {l.title ?? l.url}
+                </a>
+                <span className="muted small">
+                  {l.provider}
+                  {l.status && (
+                    <>
+                      {' · '}
+                      <strong>{l.status}</strong>
+                      {l.statusAt && ` · ${timeAgo(l.statusAt)}`}
+                    </>
+                  )}
+                </span>
+              </span>
+              <button
+                className="link small"
+                aria-label={`Unlink ${l.title ?? l.url}`}
+                onClick={async () => {
+                  await sessions.removeLink(ref_, l.url).catch(() => {});
+                  load();
+                }}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="link-add">
+        <select value={type} onChange={(e) => setType(e.target.value as LinkType)} aria-label="Link type">
+          {LINK_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <input
+          value={url}
+          placeholder="Paste a URL and press Enter"
+          aria-label="Link URL"
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void add();
+          }}
+        />
+      </div>
       {error && <p className="error small">{error}</p>}
     </Panel>
   );

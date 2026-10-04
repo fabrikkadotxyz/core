@@ -820,7 +820,7 @@ The session gets a small, **vendor-neutral** record of the outside things it
 touches:
 
 ```
-{ type: issue | pr | repo | doc | dashboard | error, provider, url, title, status, status_at }
+{ type: issue | pr | repo | page | dashboard | error, provider, url, title, status, status_at }
 ```
 
 - Agents add links with a `link` tool, and humans add them in the right pane.

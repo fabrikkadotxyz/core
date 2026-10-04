@@ -95,6 +95,8 @@ export type ServerEvent =
   | { type: 'artifact.created'; artifact: Artifact }
   /** An output was created, renamed or removed. Panels refetch. See ADR 0019. */
   | { type: 'output.changed'; outputId: string }
+  /** A link was added, updated or removed. Clients re-read /links. See M19. */
+  | { type: 'links.changed' }
   /**
    * An output's content changed. Display data only, like activity: it is not a
    * message, wakes no agent and costs no turn budget (ADR 0019).
@@ -445,4 +447,23 @@ export interface SignupBody {
   email: string;
   password: string;
   displayName: string;
+}
+
+/* -------------------------------------------------------------------- links */
+
+/** What a link points at. See docs/protocol.md (M19). */
+export const LINK_TYPES = ['issue', 'pr', 'repo', 'page', 'dashboard', 'error'] as const;
+export type LinkType = (typeof LINK_TYPES)[number];
+
+/** A pointer to something outside the session. Never a copy. */
+export interface SessionLink {
+  type: LinkType;
+  provider: string;
+  url: string;
+  title: string | null;
+  /** As last reported. Fabrikka never polls a vendor. */
+  status: string | null;
+  statusAt: string | null;
+  addedBy: string | null;
+  updatedAt: string;
 }

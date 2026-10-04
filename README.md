@@ -20,7 +20,10 @@ Pre-MVP. **M0–M13 built**: auth and private sessions, participants and mention
 the remote session MCP endpoint, the bridge channel, spawn-on-mention with Claude
 Code and Codex, safety rails, session context and artifacts, per-participant MCP
 aggregation, a Tauri shell, live activity, the three-pane session screen, live shared documents, and LaTeX papers compiled in
-the browser. Next is M14 (Google Docs), then steering — see [`docs/roadmap.md`](docs/roadmap.md).
+the browser. Output kinds are plug-in modules (ADR 0023). Built ahead of order
+because they need no outside accounts: **M19** session links (its story waits on
+M18's connections). M14 (Google Docs) and M18 (connections) wait on real vendor
+accounts — see [`docs/roadmap.md`](docs/roadmap.md).
 
 ## How agents join
 

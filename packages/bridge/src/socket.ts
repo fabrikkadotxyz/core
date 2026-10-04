@@ -15,6 +15,8 @@ export interface MentionFrame {
     createdAt: string;
   };
   trust: 'owner' | 'session' | 'untrusted';
+  /** Repos linked to the session (M19). Absent when there are none. */
+  repos?: { url: string; title: string | null }[];
 }
 
 export type ServerFrame =

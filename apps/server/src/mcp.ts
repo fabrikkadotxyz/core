@@ -14,6 +14,7 @@ import type { StandardSchemaWithJSON } from '@modelcontextprotocol/server';
 import { createMcpHandler, fromJsonSchema, McpServer } from '@modelcontextprotocol/server';
 import { createMcpHonoApp } from '@modelcontextprotocol/hono';
 import { z } from 'zod';
+import { LINK_TYPES } from '@fabrikka/types';
 import type { Database } from '@fabrikka/db';
 import type { Mention, TrustTier } from '@fabrikka/types';
 import { resolveSessionToken, trustOf, type TokenActor } from './agents.ts';
@@ -37,6 +38,7 @@ import {
   outputKinds,
   readOutput,
 } from './outputs/core.ts';
+import { LinkError, listLinks, removeLink, saveLink } from './links.ts';
 import {
   createMessage,
   getSessionContext,
@@ -348,6 +350,58 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
     },
   );
 
+  /* ---- links (M19): what the session is about, outside it. ---- */
+
+  server.registerTool(
+    'list_links',
+    {
+      title: 'List links',
+      description:
+        'Tickets, PRs, repos, docs, dashboards and errors this session is about, in ' +
+        'whatever tools the team uses. Each is a pointer: open the URL with the ' +
+        "vendor's own tools for the current truth. `status` is as last reported.",
+      inputSchema: z.object({ type: z.enum(LINK_TYPES).optional() }),
+    },
+    async (args) => text(await listLinks(db, actor.sessionId, args.type)),
+  );
+
+  server.registerTool(
+    'link',
+    {
+      title: 'Link something to the session',
+      description:
+        'Record that this session is about a ticket, PR, repo, doc, dashboard or ' +
+        'error. Linking a URL that is already linked updates it — this is how to ' +
+        'report a new status, e.g. after moving a ticket: link it again with ' +
+        '`status`. Fields you leave out keep their value.',
+      inputSchema: z.object({
+        url: z.string().describe('Absolute http(s) URL.'),
+        type: z.enum(LINK_TYPES),
+        title: z.string().optional(),
+        status: z.string().optional().describe('As the vendor reports it, e.g. "In Review".'),
+        provider: z.string().optional().describe('e.g. jira, linear, github. Defaults to the hostname.'),
+      }),
+    },
+    async (args) =>
+      linkCall(() =>
+        saveLink(db, { sessionId: actor.sessionId, participantId: actor.participantId, input: args }),
+      ),
+  );
+
+  server.registerTool(
+    'unlink',
+    {
+      title: 'Unlink',
+      description: 'Remove a link from the session. The thing it pointed at is untouched.',
+      inputSchema: z.object({ url: z.string() }),
+    },
+    async (args) =>
+      linkCall(async () => {
+        if (!(await removeLink(db, actor.sessionId, args.url))) throw new LinkError('no such link in this session');
+        return { removed: true };
+      }),
+  );
+
   /* ---- outputs (M12): live documents. One set of tools for every kind. ---- */
 
   server.registerTool(
@@ -633,6 +687,15 @@ async function outputCall(fn: () => Promise<unknown>) {
     return text(await fn());
   } catch (err) {
     if (err instanceof OutputError) throw new Error(`${err.code}: ${err.message}`);
+    throw err;
+  }
+}
+
+async function linkCall(fn: () => Promise<unknown>) {
+  try {
+    return text(await fn());
+  } catch (err) {
+    if (err instanceof LinkError) throw new Error(`invalid_link: ${err.message}`);
     throw err;
   }
 }

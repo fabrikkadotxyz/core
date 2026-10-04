@@ -5,7 +5,7 @@
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
  * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation), M10 (runs) and
- * M12 (outputs).
+ * M12 (outputs) and M19 (links).
  */
 import {
   boolean,
@@ -618,4 +618,35 @@ export const outputEdits = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('output_edits_output_created_idx').on(t.outputId, t.createdAt)],
+);
+
+/**
+ * Pointers to things outside the session: tickets, PRs, repos, docs. See M19.
+ *
+ * Never a copy — the vendor is the source of truth. `unique (session_id, url)`
+ * makes linking an upsert, so reporting a new status is linking again.
+ */
+export const sessionLinks = pgTable(
+  'session_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    /** issue | pr | repo | page | dashboard | error */
+    type: text('type').notNull(),
+    /** Free text; defaults to the URL's hostname. */
+    provider: text('provider').notNull(),
+    url: text('url').notNull(),
+    title: text('title'),
+    /** As last reported. Fabrikka never polls a vendor. */
+    status: text('status'),
+    statusAt: timestamp('status_at', { withTimezone: true }),
+    addedByParticipantId: uuid('added_by_participant_id').references(() => participants.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('session_links_session_url').on(t.sessionId, t.url)],
 );

@@ -1543,3 +1543,12 @@ button.edit-line {
 .pdf-mark.fade {
   opacity: 0;
 }
+
+/* ---- links (M19) ---- */
+.links-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.links-list li { display: flex; align-items: flex-start; gap: 8px; }
+.links-list .link-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.links-list .link-text a { overflow-wrap: anywhere; }
+.link-add { display: flex; gap: 6px; }
+.link-add select { flex: 0 0 auto; }
+.link-add input { flex: 1; min-width: 0; }

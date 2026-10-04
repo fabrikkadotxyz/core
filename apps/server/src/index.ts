@@ -97,6 +97,7 @@ import {
   renameOutput,
 } from './outputs/core.ts';
 import { createUser } from './users.ts';
+import { cachedRepos, LinkError, linkedRepos, listLinks, removeLink, saveLink } from './links.ts';
 import {
   countOwners,
   createMessage,
@@ -777,6 +778,43 @@ sessionRoutes.delete('/artifacts/:id', async (c) => {
 
 /* ---- invites ---- */
 
+/* ---- links (M19): pointers to outside things. Any member, like context. ---- */
+
+sessionRoutes.get('/links', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  return c.json(await listLinks(db, s.id));
+});
+
+sessionRoutes.put('/links', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const body = await c.req.json<{ url?: string; type?: string; title?: string; status?: string; provider?: string }>();
+  try {
+    const link = await saveLink(db, {
+      sessionId: s.id,
+      participantId: s.participantId,
+      input: { url: body.url ?? '', type: body.type ?? '', title: body.title, status: body.status, provider: body.provider },
+    });
+    return c.json(link);
+  } catch (err) {
+    if (err instanceof LinkError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
+});
+
+sessionRoutes.delete('/links', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  try {
+    if (!(await removeLink(db, s.id, c.req.query('url') ?? ''))) return c.notFound();
+  } catch (err) {
+    if (err instanceof LinkError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
+  return c.json({ ok: true });
+});
+
 /* ---- outputs (M12): live documents. See ADR 0019. ---- */
 
 /** The catalogue: what kinds of output this instance offers. */
@@ -1029,12 +1067,11 @@ app.get(
 
           kind = frame.kind;
           unsubscribe?.();
+          const sessionId = actorRef.sessionId;
           unsubscribe = listenForMentions(
             actorRef.participantId,
             kind,
-            ({ message, trust }) => {
-              ws.send(JSON.stringify({ type: 'mention', message, trust }));
-            },
+            ({ message, trust }) => sendMention(ws, sessionId, message, trust),
           );
           await setConnectionStatus(db, { ...actorRef, kind, status: 'connected' });
           return;
@@ -1090,12 +1127,12 @@ app.get(
           }),
         );
 
+        // Warm the repo cache now, so the first mention is delivered synchronously.
+        void linkedRepos(db, actor.sessionId).catch(() => {});
         unsubscribe = listenForMentions(
           actor.participantId,
           kind,
-          ({ message, trust }) => {
-            ws.send(JSON.stringify({ type: 'mention', message, trust }));
-          },
+          ({ message, trust }) => sendMention(ws, actor.sessionId, message, trust),
         );
 
         // A pause asks connections to drop in-flight work. Cooperative by
@@ -1422,6 +1459,31 @@ function agentSetup(mcpUrl: string, token: string, provider: string) {
 }
 
 /** Resolve the session addressed by the current route, for the current user. */
+/**
+ * Deliver a mention to a bridge or runner, with the session's linked repos so a
+ * spawned run's preamble can name them (M19). Chained per socket: the repo
+ * lookup is async, and two mentions must still arrive in the order they fired.
+ */
+const mentionQueues = new WeakMap<object, Promise<void>>();
+function sendMention(ws: { send: (data: string) => void }, sessionId: string, message: unknown, trust: unknown) {
+  const frame = (repos: { url: string; title: string | null }[]) =>
+    JSON.stringify({ type: 'mention', message, trust, ...(repos.length ? { repos } : {}) });
+  // The common case is synchronous: repos cached, nothing queued ahead of us.
+  const cached = cachedRepos(sessionId);
+  if (cached && !mentionQueues.has(ws)) {
+    ws.send(frame(cached));
+    return;
+  }
+  const prev = mentionQueues.get(ws) ?? Promise.resolve();
+  const next = prev
+    .then(async () => ws.send(frame(await linkedRepos(db, sessionId).catch(() => []))))
+    .catch(() => {})
+    .finally(() => {
+      if (mentionQueues.get(ws) === next) mentionQueues.delete(ws);
+    });
+  mentionQueues.set(ws, next);
+}
+
 async function resolve(c: {
   req: { param: (k: string) => string | undefined };
   get: (k: 'user') => AuthEnv['Variables']['user'];

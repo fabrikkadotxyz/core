@@ -179,6 +179,32 @@ of a specific session, and that is also what a token identifies (ADR 0009). One
 row per participant, upserted — a reconnect replaces the previous state rather
 than accumulating rows.
 
+### M19 — links
+
+```
+session_links                             -- pointers to outside things; never copies
+  id              uuid pk
+  session_id      uuid -> sessions.id not null
+  type            text not null          -- issue | pr | repo | page | dashboard | error
+  provider        text not null          -- free text; defaults to the URL's hostname
+  url             text not null
+  title           text
+  status          text                   -- as last reported
+  status_at       timestamptz            -- when that status was reported
+  added_by_participant_id uuid -> participants.id
+  created_at      timestamptz not null
+  updated_at      timestamptz not null
+  unique (session_id, url)
+```
+
+**`unique (session_id, url)` makes `link` an upsert.** Reporting a ticket's new
+status is linking it again, and two agents linking the same PR produce one row.
+Removal is explicit (`unlink`), so adding can never delete anything, which is the
+context rule (ADR 0013) applied to links.
+
+**`provider` is free text, not an enum.** Which vendors exist is the catalogue's
+business (ADR 0024). Here a link only has to say where it points.
+
 ### M17 — arrivals
 
 ```

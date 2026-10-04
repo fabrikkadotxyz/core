@@ -455,6 +455,13 @@ export function SessionPage() {
   // M22: a teammate of a team-visible session, or a guest. They read; they don't
   // act. The server enforces that — this only stops offering what would fail.
   const isViewer = view.me.role === 'viewer';
+  // M29 (ADR 0026): a chat is a light session — no output pane, a Setup with
+  // only people and agents. A direct chat is titled by the other person.
+  const kind = view.session.kind ?? 'session';
+  const isChat = kind !== 'session';
+  const peer = view.participants.find((p) => p.kind === 'human' && p.id !== view.me.participantId)?.displayName;
+  const displayTitle = kind === 'chat' ? `#${view.session.title}` : kind === 'direct' ? (peer ?? 'Direct chat') : view.session.title;
+  const outputOpen = panes.output && !isChat;
 
   const send = async (content: string, mentions: string[]) => {
     await sessions.postMessage(ref, content, mentions);
@@ -479,7 +486,7 @@ export function SessionPage() {
         className="workspace"
         // A viewer has no Setup (M22): never reserve its column, whatever was remembered.
         data-setup={panes.setup && !isViewer ? 'open' : 'closed'}
-        data-output={panes.output ? 'open' : 'closed'}
+        data-output={outputOpen ? 'open' : 'closed'}
         data-doc={docOpen ? 'open' : 'closed'}
         style={{ '--rail-output-w': `${railWidth}px` } as React.CSSProperties}
       >
@@ -543,7 +550,7 @@ export function SessionPage() {
             myUserId={user?.id}
           />
 
-          <IntegrationsPanel ref_={ref} isOwner={isOwner} />
+          {!isChat && <IntegrationsPanel ref_={ref} isOwner={isOwner} />}
 
           <Panel title={`Members (${view.members.length})`}>
             <ul className="participants">
@@ -554,7 +561,7 @@ export function SessionPage() {
                     {m.role}
                     {m.viaTeam && <span title="Added from the team. Leaving the team ends this access."> · via team</span>}
                   </span>
-                  {isOwner && m.userId !== user?.id && (
+                  {isOwner && m.userId !== user?.id && kind !== 'chat' && (
                     <button
                       className="link small"
                       onClick={async () => {
@@ -570,7 +577,7 @@ export function SessionPage() {
             </ul>
           </Panel>
 
-          {isOwner && !!view.guests?.length && (
+          {!isChat && isOwner && !!view.guests?.length && (
             <Panel title={`Guests (${view.guests.length})`}>
               <p className="muted small">They can read this session and nothing else.</p>
               <ul className="participants">
@@ -593,11 +600,11 @@ export function SessionPage() {
             </Panel>
           )}
 
-          <TeamPanel ref_={ref} isOwner={isOwner} onChanged={reload} visibility={view.visibility} />
+          {!isChat && <TeamPanel ref_={ref} isOwner={isOwner} onChanged={reload} visibility={view.visibility} />}
 
-          {isOwner && <InvitesPanel ref_={ref} />}
+          {!isChat && isOwner && <InvitesPanel ref_={ref} />}
 
-          {isOwner && (
+          {!isChat && isOwner && (
             <Panel title="Settings">
               <SaveTemplate ref_={ref} />
               <div className="stack">
@@ -654,8 +661,8 @@ export function SessionPage() {
             )}
 
             <h1>
-              {view.session.title}{' '}
-              {view.visibility === 'team' ? (
+              {displayTitle}{' '}
+              {kind === 'chat' ? null : view.visibility === 'team' ? (
                 <span title="Team-visible: everyone on the team can read along">👥</span>
               ) : (
                 <span title="Private">🔒</span>
@@ -682,14 +689,17 @@ export function SessionPage() {
               </button>
             )}
 
-            <button
-              className={panes.output ? 'pane-toggle on' : 'pane-toggle'}
-              aria-expanded={panes.output}
-              title="What this session has produced: documents, context and files"
-              onClick={() => togglePane('output')}
-            >
-              Output
-            </button>
+            {isChat && !isViewer && <SpinOff ref_={ref} onDone={(to) => navigate(to)} />}
+            {!isChat && (
+              <button
+                className={panes.output ? 'pane-toggle on' : 'pane-toggle'}
+                aria-expanded={panes.output}
+                title="What this session has produced: documents, context and files"
+                onClick={() => togglePane('output')}
+              >
+                Output
+              </button>
+            )}
           </header>
 
           {view.agents.paused && (
@@ -771,7 +781,11 @@ export function SessionPage() {
               placeholder={
                 view.session.status === 'archived'
                   ? 'This session is archived'
-                  : 'Message everyone…  @ to mention'
+                  : kind === 'chat'
+                    ? `Message #${view.session.title} — everyone on the team reads this, now and later`
+                    : kind === 'direct'
+                      ? `Message ${peer ?? ''}…  @ to mention an agent`
+                      : 'Message everyone…  @ to mention'
               }
             />
           )}
@@ -784,7 +798,7 @@ export function SessionPage() {
         */}
         {/* A sibling of the rail, not a child: the rail scrolls, and a handle
             that scrolls away is a handle you cannot reach. */}
-        {panes.output && (
+        {outputOpen && (
           <RailHandle
             width={railWidth}
             min={bounds.min}
@@ -794,6 +808,7 @@ export function SessionPage() {
           />
         )}
 
+        {!isChat && (
         <aside className="rail output" aria-label="Session output" aria-hidden={!panes.output}>
           {(() => {
             const open = outputs.find((o) => o.id === panes.openOutput);
@@ -862,12 +877,13 @@ export function SessionPage() {
             );
           })()}
         </aside>
+        )}
 
         {/*
           On a narrow screen the rails are overlays, so a backdrop is the way out.
           Hidden by CSS at desktop widths, where nothing overlaps anything.
         */}
-        {((panes.setup && !isViewer) || panes.output) && (
+        {((panes.setup && !isViewer) || outputOpen) && (
           <button
             className="pane-backdrop"
             aria-label="Close panel"
@@ -2095,5 +2111,44 @@ function SuggestedConnections({ ref_ }: { ref_: SessionRef }) {
     <p className="muted small">
       {t.name} suggests: {t.body.connections.join(', ')}.
     </p>
+  );
+}
+
+/**
+ * Start a session from a chat (M29): when a thread becomes real work. The new
+ * session opens with a link back here; nothing is copied, the chat keeps its history.
+ */
+function SpinOff({ ref_, onDone }: { ref_: SessionRef; onDone: (to: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  if (!open) {
+    return (
+      <button
+        className="link"
+        title="When a thread becomes real work: a new session that links back here. Nothing is copied."
+        onClick={() => setOpen(true)}
+      >
+        Start a session from this
+      </button>
+    );
+  }
+  return (
+    <form
+      className="spin-off"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+        const s = await sessions.spinOff(ref_, title.trim());
+        onDone(`/o/${s.ownerSlug}/s/${s.publicId}`);
+      }}
+    >
+      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What is the session about?" aria-label="New session title" />
+      <button type="submit" disabled={!title.trim()}>
+        Start
+      </button>
+      <button type="button" className="link" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+    </form>
   );
 }

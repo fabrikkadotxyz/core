@@ -10,6 +10,7 @@ import type { Database } from '@fabrikka/db';
 import { sessionMembers, sessions, teamMembers, teams, users } from '@fabrikka/db';
 import type { TeamDetail, TeamMember, TeamRole, TeamSummary } from '@fabrikka/types';
 import { addMember } from './sessions.ts';
+import { ensureGeneral, joinTeamChats } from './chats.ts';
 
 const MAX_NAME = 80;
 
@@ -21,7 +22,11 @@ export async function createTeam(db: Database, userId: string, name: string): Pr
   return db.transaction(async (tx) => {
     const [team] = await tx.insert(teams).values({ name: trimmed, createdByUserId: userId }).returning();
     await tx.insert(teamMembers).values({ teamId: team!.id, userId, role: 'owner' });
-    return { id: team!.id, name: team!.name, role: 'owner', memberCount: 1 };
+    return { id: team!.id, name: team!.name, role: 'owner' as const, memberCount: 1 };
+  }).then(async (t) => {
+    // M29: every team starts with #general.
+    await ensureGeneral(db, t.id);
+    return t;
   });
 }
 
@@ -77,6 +82,9 @@ export async function addTeamMember(
   role: TeamRole,
 ): Promise<{ id: string; name: string }> {
   await db.insert(teamMembers).values({ teamId, userId, role }).onConflictDoNothing();
+  // M29: joining a team brings you into every one of its chats.
+  await ensureGeneral(db, teamId);
+  await joinTeamChats(db, teamId, userId);
   const [team] = await db.select({ id: teams.id, name: teams.name }).from(teams).where(eq(teams.id, teamId)).limit(1);
   return team!;
 }

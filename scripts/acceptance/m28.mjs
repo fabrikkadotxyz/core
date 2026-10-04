@@ -81,7 +81,8 @@ for (let i = 1; i <= 6; i++) {
 const personal = (await req('/sessions', { method: 'POST', body: { title: `Mine ${stamp}` }, jar: fede })).json;
 
 let list = (await req('/sessions', { jar: fede })).json;
-const teamOnes = () => list.filter((s) => s.team?.id === T);
+// Sessions, not chats: since M29 every team also has #general (ADR 0026).
+const teamOnes = () => list.filter((s) => s.team?.id === T && (s.kind ?? 'session') === 'session');
 check(teamOnes().length === 6 && teamOnes().every((s) => s.lastActivityAt), 'every team session says when it was last active');
 check(teamOnes()[0].title === `S6 ${stamp}`, 'with no messages yet, the newest session is first');
 check(!teamOnes().slice(0, 5).some((s) => s.title === `S1 ${stamp}`), 'the oldest is not in the top 5');

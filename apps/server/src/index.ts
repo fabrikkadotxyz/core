@@ -117,6 +117,7 @@ import { cachedRepos, LinkError, linkedRepos, listLinks, removeLink, saveLink } 
 import { addComment, listComments, reply, setResolved, threadAuthor } from './outputs/comments.ts';
 import { getCatchUp, markSeen, waitingFor } from './catchup.ts';
 import { exportSession } from './export.ts';
+import { ChatError, createChat, directCandidates, ensureGeneral, listTeamChats, openDirect } from './chats.ts';
 import { applyTemplate, deleteTemplate, findTemplate, listTemplates, saveTemplate, sessionTemplate, TemplateError } from './templates/templates.ts';
 import {
   countOwners,
@@ -299,7 +300,12 @@ app.post('/api/sessions', requireUser(db), async (c) => {
 /* Every route is a 404 to someone who isn't on the team.                      */
 /* -------------------------------------------------------------------------- */
 
-app.get('/api/teams', requireUser(db), async (c) => c.json(await listTeamsForUser(db, c.get('user').id)));
+app.get('/api/teams', requireUser(db), async (c) => {
+  const mine = await listTeamsForUser(db, c.get('user').id);
+  // Teams from before M29 get their #general the first time anyone looks.
+  for (const t of mine) await ensureGeneral(db, t.id);
+  return c.json(mine);
+});
 
 app.post('/api/teams', requireUser(db), async (c) => {
   const { name } = await c.req.json<{ name?: string }>().catch(() => ({ name: undefined }));
@@ -387,6 +393,39 @@ app.delete('/api/me/connections/:slug', requireUser(db), async (c) =>
   (await removeConnection(db, c.get('user').id, c.req.param('slug'))) ? c.json({ ok: true }) : c.notFound(),
 );
 
+/* ---- chats (M29, ADR 0026): team chats and direct chats, light sessions ---- */
+
+app.get('/api/teams/:id/chats', requireUser(db), async (c) => {
+  if (!(await teamRole(db, c.req.param('id'), c.get('user').id))) return c.notFound();
+  return c.json(await listTeamChats(db, c.req.param('id'), c.get('user').id));
+});
+
+/** Any team member may add a chat; everyone on the team is in it. */
+app.post('/api/teams/:id/chats', requireUser(db), async (c) => {
+  const teamId = c.req.param('id');
+  if (!(await teamRole(db, teamId, c.get('user').id))) return c.notFound();
+  const { name } = await c.req.json<{ name?: string }>().catch(() => ({ name: undefined }));
+  try {
+    return c.json(await createChat(db, { teamId, userId: c.get('user').id, name: name ?? '' }), 201);
+  } catch (err) {
+    if (err instanceof ChatError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
+});
+
+/** Open (or create) the 1:1 chat with someone you share a team with. */
+app.post('/api/directs', requireUser(db), async (c) => {
+  const { userId } = await c.req.json<{ userId?: string }>().catch(() => ({ userId: undefined }));
+  try {
+    return c.json(await openDirect(db, c.get('user').id, userId ?? ''));
+  } catch (err) {
+    if (err instanceof ChatError) return c.json({ error: err.message }, err.message === 'no such person' ? 404 : 400);
+    throw err;
+  }
+});
+
+app.get('/api/directs/people', requireUser(db), async (c) => c.json(await directCandidates(db, c.get('user').id)));
+
 const sessionRoutes = new Hono<AuthEnv>();
 
 sessionRoutes.use('*', requireUser(db));
@@ -426,6 +465,7 @@ sessionRoutes.patch('/', async (c) => {
 
   // M22: making a session team-visible is the owner's deliberate act.
   if (body.visibility !== undefined) {
+    if ((s.view.kind ?? 'session') !== 'session') return c.json({ error: 'not available for chats' }, 400);
     const set = await setVisibility(db, s.id, body.visibility as 'private' | 'team');
     if (!set.ok) return c.json({ error: set.error }, 400);
   }
@@ -539,6 +579,8 @@ sessionRoutes.get('/members', async (c) => {
 sessionRoutes.delete('/members/:userId', async (c) => {
   const s = await resolve(c);
   if (!s || s.role !== 'owner') return c.notFound();
+  // A team chat's members are the team (ADR 0026): leave the team to leave it.
+  if (s.view.kind === 'chat') return c.json({ error: "a team chat's members are the team" }, 400);
 
   const userId = c.req.param('userId');
   const members = await listMembers(db, s.id);
@@ -617,6 +659,29 @@ sessionRoutes.get('/export', async (c) => {
   });
 });
 
+/* ---- start a session from a chat (M29): a link back, nothing copied ---- */
+
+sessionRoutes.post('/spin-off', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  if ((s.view.kind ?? 'session') === 'session') return c.json({ error: 'this is already a session' }, 400);
+  const { title } = await c.req.json<{ title?: string }>();
+  if (!title?.trim()) return c.json({ error: 'title is required' }, 400);
+  const created = await createSession(db, c.get('user'), title.trim(), { teamId: s.view.kind === 'chat' ? (s.view.teamId ?? null) : null });
+  const fresh = await resolveSessionForUser(db, created.ownerSlug, created.publicId, c.get('user').id);
+  await saveLink(db, {
+    sessionId: fresh!.id,
+    participantId: fresh!.participantId,
+    input: {
+      url: `${PUBLIC_URL}/o/${s.view.ownerSlug}/s/${s.view.publicId}`,
+      type: 'page',
+      title: s.view.kind === 'chat' ? `Started from #${s.view.title}` : 'Started from a direct chat',
+      provider: 'fabrikka',
+    },
+  });
+  return c.json(created, 201);
+});
+
 /* ---- guests (M22): a viewer of this one session, from outside its team ---- */
 
 sessionRoutes.delete('/guests/:userId', async (c) => {
@@ -637,6 +702,8 @@ sessionRoutes.get('/team', async (c) => {
 sessionRoutes.put('/team', async (c) => {
   const s = await resolve(c);
   if (!s || s.role !== 'owner') return c.notFound();
+  // Chats (M29) don't take invites, roster adds, a team change or visibility.
+  if ((s.view.kind ?? 'session') !== 'session') return c.json({ error: 'not available for chats' }, 400);
   const { teamId } = await c.req.json<{ teamId?: string | null }>();
   if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such team' }, 404);
   await setSessionTeam(db, s.id, teamId ?? null);
@@ -654,6 +721,8 @@ sessionRoutes.get('/roster', async (c) => {
 sessionRoutes.post('/members', async (c) => {
   const s = await resolve(c);
   if (!s || s.role !== 'owner') return c.notFound();
+  // Chats (M29) don't take invites, roster adds, a team change or visibility.
+  if ((s.view.kind ?? 'session') !== 'session') return c.json({ error: 'not available for chats' }, 400);
   const { userId } = await c.req.json<{ userId?: string }>();
   try {
     await addFromRoster(db, s.id, userId ?? '');
@@ -1259,6 +1328,8 @@ sessionRoutes.get('/invites', async (c) => {
 sessionRoutes.post('/invites', async (c) => {
   const s = await resolve(c);
   if (!s || s.role !== 'owner') return c.notFound();
+  // Chats (M29) don't take invites, roster adds, a team change or visibility.
+  if ((s.view.kind ?? 'session') !== 'session') return c.json({ error: 'not available for chats' }, 400);
 
   type InviteBody = {
     invitedEmail?: string;

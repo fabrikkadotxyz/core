@@ -37,13 +37,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(() => {
-    Promise.all([sessionsApi.list(), teamsApi.list()])
-      .then(([s, t]) => {
-        setSessions(s);
-        setTeams(t);
-        setLoaded(true);
-      })
-      .catch(() => setLoaded(true));
+    // Teams first: listing them makes sure each has its #general (M29).
+    (async () => {
+      const t = await teamsApi.list();
+      const s = await sessionsApi.list();
+      setTeams(t);
+      setSessions(s);
+    })()
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, []);
 
   useEffect(refresh, [refresh]);

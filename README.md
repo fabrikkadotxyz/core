@@ -25,7 +25,8 @@ because they need no outside accounts: **M19** session links and **M20** agents
 reading uploaded PDFs (their stories wait on M18's connections), **M21** teams and
 **M22** team-visible sessions and guests, **M23** comments on outputs, and **M24**
 catch-up and handoffs (its stories' vendor half waits on M18), **M25** session
-templates, **M27** export, and **M28** a Slack-like home with a team switcher. M14 (Google Docs) and M18 (connections) wait on real vendor
+templates, **M27** export, **M28** a Slack-like home with a team switcher, and
+**M29** team chats and direct chats. M14 (Google Docs) and M18 (connections) wait on real vendor
 accounts — see [`docs/roadmap.md`](docs/roadmap.md).
 
 ## How agents join

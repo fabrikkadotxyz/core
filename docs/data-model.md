@@ -356,6 +356,29 @@ session as one readable document), `session.json` (the same data, for programs),
 each output's files and changes log, the artifacts, and the timeline. Agent
 activity is never included (ADR 0015). Nothing in it needs Fabrikka to read.
 
+### M29 — chats
+
+```
+sessions          + kind         text not null default 'session'   -- session | chat | direct
+                  + direct_key   text unique   -- direct chats: the two user ids, sorted, joined
+```
+
+**A chat is a session** (ADR 0026), so it reuses everything: messages, mentions,
+participants, tokens, read positions, privacy.
+
+**Team chat membership is eager, and always through the team.** Creating a team
+creates *#general*; creating a chat adds every team member; joining a team adds
+the joiner to every chat of that team. Each of those memberships has
+`via_team_id` set (M21), so leaving the team already removes exactly them.
+Nobody is ever half-in a team chat.
+
+**`direct_key` makes "one chat per pair" a constraint.** Opening a direct chat
+with someone looks up the key; two people opening it at the same moment can't
+create two.
+
+**Unread** is a read position (M24) older than the chat's latest message from
+someone else. It's derived, never stored.
+
 ### M19 — links
 
 ```

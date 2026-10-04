@@ -107,6 +107,14 @@ export const invites = {
 
 /* ---------------------------------------------------- personal integrations */
 
+export const chats = {
+  ofTeam: (teamId: string) => call<SessionSummary[]>(`/teams/${teamId}/chats`),
+  create: (teamId: string, name: string) => call<SessionSummary>(`/teams/${teamId}/chats`, { method: 'POST', body: { name } }),
+  /** Open (or create) the 1:1 chat with someone you share a team with. */
+  direct: (userId: string) => call<SessionSummary>('/directs', { method: 'POST', body: { userId } }),
+  people: () => call<{ id: string; displayName: string }[]>('/directs/people'),
+};
+
 export const connections = {
   list: () =>
     call<{
@@ -150,6 +158,9 @@ export const sessions = {
   list: () => call<SessionSummary[]>('/sessions'),
   create: (title: string, teamId?: string, templateRef?: string) =>
     call<SessionSummary>('/sessions', { method: 'POST', body: { title, teamId, templateRef } }),
+  /** M29: start a session from a chat — it links back; nothing is copied. */
+  spinOff: (ref: SessionRef, title: string) =>
+    call<SessionSummary>(`${base(ref)}/spin-off`, { method: 'POST', body: { title } }),
   /** M27: the export download — a plain link, so the browser handles the file. */
   exportUrl: (ref: SessionRef) => `/api${base(ref)}/export`,
   /** M25: the template this session started from, and saving it as one. */

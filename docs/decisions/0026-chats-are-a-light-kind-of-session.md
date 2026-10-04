@@ -1,6 +1,6 @@
 # 0026 — Chats are a light kind of session
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-04
 
 ## Context

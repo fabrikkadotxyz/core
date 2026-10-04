@@ -6,27 +6,99 @@
  * It shows exactly what the session list already showed, arranged by team. No
  * new permission lives here.
  */
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import type { SessionSummary } from '@fabrikka/types';
+import { chats } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { byActivity, useWorkspace } from './workspace.tsx';
 
 const RECENT = 5;
 
 function SessionLink({ s, onNavigate }: { s: SessionSummary; onNavigate: () => void }) {
+  const label = s.kind === 'direct' ? (s.peer ?? 'Direct chat') : s.title;
+  const icon = s.kind === 'chat' ? '#' : s.kind === 'direct' ? '●' : s.role === 'viewer' ? '👥' : '▤';
   return (
     <NavLink
       to={`/o/${s.ownerSlug}/s/${s.publicId}`}
-      className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')}
+      className={({ isActive }) => `side-item${isActive ? ' on' : ''}${s.unread ? ' unread' : ''}`}
       onClick={onNavigate}
-      title={s.title}
+      title={label}
     >
       <span className="side-icon" aria-hidden>
-        {s.role === 'viewer' ? '👥' : '#'}
+        {icon}
       </span>
-      <span className="side-label">{s.title}</span>
+      <span className="side-label">{label}</span>
       {s.role === 'viewer' && <span className="side-meta">view</span>}
     </NavLink>
+  );
+}
+
+/** Add a team chat inline: a name, Enter. Everyone on the team is in it. */
+function AddChat({ teamId, onAdded }: { teamId: string; onAdded: (s: SessionSummary) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  if (!open) {
+    return (
+      <button className="side-item side-more side-button" onClick={() => setOpen(true)}>
+        + Add a chat
+      </button>
+    );
+  }
+  return (
+    <form
+      className="side-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setError(null);
+        try {
+          const s = await chats.create(teamId, name);
+          setName('');
+          setOpen(false);
+          onAdded(s);
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      }}
+    >
+      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="chat name" aria-label="Chat name" onBlur={() => !name && setOpen(false)} />
+      {error && <p className="side-empty error">{error}</p>}
+    </form>
+  );
+}
+
+/** Start a 1:1 chat with someone you share a team with. */
+function NewDirect({ onOpened }: { onOpened: (s: SessionSummary) => void }) {
+  const [people, setPeople] = useState<{ id: string; displayName: string }[] | null>(null);
+  if (!people) {
+    return (
+      <button className="side-item side-more side-button" onClick={() => chats.people().then(setPeople).catch(() => setPeople([]))}>
+        + New message
+      </button>
+    );
+  }
+  return (
+    <div className="side-picker">
+      {people.length === 0 && <p className="side-empty">Nobody shares a team with you yet.</p>}
+      {people.map((p) => (
+        <button
+          key={p.id}
+          className="side-item side-button"
+          onClick={async () => {
+            const s = await chats.direct(p.id);
+            setPeople(null);
+            onOpened(s);
+          }}
+        >
+          <span className="side-icon" aria-hidden>●</span>
+          <span className="side-label">{p.displayName}</span>
+        </button>
+      ))}
+      <button className="side-item side-more side-button" onClick={() => setPeople(null)}>
+        Cancel
+      </button>
+    </div>
   );
 }
 
@@ -35,9 +107,21 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const { sessions, teams, team, selectTeam } = useWorkspace();
   const navigate = useNavigate();
 
+  const { refresh } = useWorkspace();
   const active = sessions.filter((s) => s.status === 'active');
-  const teamSessions = team ? active.filter((s) => s.team?.id === team.id).sort(byActivity) : [];
-  const personal = active.filter((s) => !s.team).sort(byActivity);
+  // Sessions and chats are different things (ADR 0026): each has its own section.
+  const work = active.filter((s) => (s.kind ?? 'session') === 'session');
+  const teamSessions = team ? work.filter((s) => s.team?.id === team.id).sort(byActivity) : [];
+  const personal = work.filter((s) => !s.team).sort(byActivity);
+  const teamChats = team
+    ? active.filter((s) => s.kind === 'chat' && s.team?.id === team.id).sort((a, b) => a.title.localeCompare(b.title))
+    : [];
+  const directs = active.filter((s) => s.kind === 'direct').sort(byActivity);
+  const open = (s: SessionSummary) => {
+    refresh();
+    navigate(`/o/${s.ownerSlug}/s/${s.publicId}`);
+    onNavigate();
+  };
 
   return (
     <nav className="sidebar" aria-label="Workspace">
@@ -69,6 +153,16 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
       </div>
 
       {team && (
+        <section className="side-section" aria-label="Team chats">
+          <h2>Team chats</h2>
+          {teamChats.map((s) => (
+            <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
+          ))}
+          <AddChat teamId={team.id} onAdded={open} />
+        </section>
+      )}
+
+      {team && (
         <section className="side-section" aria-label="Team sessions">
           <h2>Team sessions</h2>
           {teamSessions.length === 0 && <p className="side-empty">No sessions in {team.name} yet.</p>}
@@ -84,6 +178,14 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
           </NavLink>
         </section>
       )}
+
+      <section className="side-section" aria-label="Direct messages">
+        <h2>Direct messages</h2>
+        {directs.slice(0, 8).map((s) => (
+          <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
+        ))}
+        <NewDirect onOpened={open} />
+      </section>
 
       <section className="side-section" aria-label="Personal sessions">
         <h2>Personal sessions</h2>

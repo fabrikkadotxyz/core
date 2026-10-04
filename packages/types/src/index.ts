@@ -66,7 +66,14 @@ export interface Session {
   title: string;
   status: SessionStatus;
   createdAt: string;
+  /** session | chat | direct (M29, ADR 0026). Absent means session. */
+  kind?: SessionKind;
+  /** The team it belongs to, if any. */
+  teamId?: string | null;
 }
+
+/** A chat is a light session (ADR 0026): same engine, shown lighter. */
+export type SessionKind = 'session' | 'chat' | 'direct';
 
 /* -------------------------------------------------------------------------- */
 /* Realtime: browser <-> server                                               */
@@ -432,6 +439,12 @@ export interface SessionSummary {
   team?: { id: string; name: string } | null;
   /** The latest message, or creation if there is none (M28). */
   lastActivityAt?: string;
+  /** session | chat | direct (M29). */
+  kind?: SessionKind;
+  /** Direct chats: the other person's name. */
+  peer?: string | null;
+  /** Messages from someone else since your last visit (M24's read position). */
+  unread?: boolean;
 }
 
 /**

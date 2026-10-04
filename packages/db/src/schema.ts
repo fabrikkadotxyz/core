@@ -6,7 +6,7 @@
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
  * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation), M10 (runs) and
  * M12 (outputs), M19 (links), M21 (teams), M22 (guests), M23 (comments) and
- * M24 (catch-up), M25 (templates) and M27 (context history).
+ * M24 (catch-up), M25 (templates), M27 (context history) and M29 (chats).
  */
 import {
   bigserial,
@@ -97,6 +97,10 @@ export const sessions = pgTable('sessions', {
   visibility: text('visibility').notNull().default('private'),
   /** The template it started from (M25): "builtin:<id>" or a session_templates id. */
   templateRef: text('template_ref'),
+  /** session | chat | direct (M29, ADR 0026). A chat is a light session. */
+  kind: text('kind').notNull().default('session'),
+  /** Direct chats: the two user ids, sorted and joined — one chat per pair. */
+  directKey: text('direct_key').unique(),
   /** active | archived */
   status: text('status').notNull().default('active'),
   /**

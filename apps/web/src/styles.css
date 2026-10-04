@@ -1635,3 +1635,12 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
   }
   .shell-main > .page { padding-top: 40px; }
 }
+
+/* ---- chats in the sidebar (M29) ---- */
+.side-item.unread .side-label { font-weight: 700; color: #fff; }
+.side-button { background: none; border: 0; text-align: left; width: 100%; cursor: pointer; font: inherit; }
+.side-form { padding: 2px 8px; }
+.side-form input { width: 100%; }
+.side-picker { display: flex; flex-direction: column; gap: 1px; max-height: 240px; overflow-y: auto; }
+.spin-off { display: flex; gap: 6px; align-items: center; }
+.spin-off input { width: 16rem; }

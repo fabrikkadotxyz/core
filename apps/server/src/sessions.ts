@@ -31,6 +31,7 @@ import type {
   Session,
   SessionContext,
   SessionVisibility,
+  SessionKind,
   SessionSummary,
 } from '@fabrikka/types';
 import { resolveMentions } from './mentions.ts';
@@ -82,6 +83,8 @@ export async function resolveSessionForUser(
       createdAt: sessions.createdAt,
       ownerSlug: users.ownerSlug,
       role: sessionMembers.role,
+      kind: sessions.kind,
+      teamId: sessions.teamId,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.ownerId))
@@ -124,6 +127,8 @@ export async function resolveSessionForUser(
       title: row.title,
       status: row.status as Session['status'],
       createdAt: row.createdAt.toISOString(),
+      kind: row.kind as SessionKind,
+      teamId: row.teamId,
     },
   };
 }
@@ -148,6 +153,7 @@ export async function resolveSessionForViewer(
       ownerSlug: users.ownerSlug,
       teamId: sessions.teamId,
       visibility: sessions.visibility,
+      kind: sessions.kind,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.ownerId))
@@ -183,6 +189,8 @@ export async function resolveSessionForViewer(
       title: row.title,
       status: row.status as Session['status'],
       createdAt: row.createdAt.toISOString(),
+      kind: row.kind as SessionKind,
+      teamId: row.teamId,
     },
   };
 }
@@ -206,6 +214,9 @@ export async function listSessionsForUser(
         where sm.session_id = ${sessions.id}
       )`,
       lastActivityAt: sql<Date>`coalesce((select max(m.created_at) from ${messages} m where m.session_id = ${sessions.id}), ${sessions.createdAt})`,
+      kind: sessions.kind,
+      peer: sql<string | null>`(select p.display_name from ${participants} p where p.session_id = ${sessions.id} and p.kind = 'human' and p.user_id <> ${userId} limit 1)`,
+      unread: sql<boolean>`exists (select 1 from ${messages} m join ${participants} a on a.id = m.author_participant_id where m.session_id = ${sessions.id} and (a.user_id is null or a.user_id <> ${userId}) and m.created_at > coalesce((select sr.last_seen_at from session_reads sr where sr.session_id = ${sessions.id} and sr.user_id = ${userId}), 'epoch'::timestamptz))`,
     })
     .from(sessionMembers)
     .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
@@ -224,6 +235,9 @@ export async function listSessionsForUser(
     team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
     createdAt: r.createdAt.toISOString(),
     lastActivityAt: new Date(r.lastActivityAt).toISOString(),
+    kind: r.kind as SessionKind,
+    peer: r.peer,
+    unread: !!r.unread,
   }));
 
   // M22: sessions you can read without being in them — as a guest, or because
@@ -242,6 +256,9 @@ export async function listSessionsForUser(
       teamName: teams.name,
       memberCount: sql<number>`(select count(*) from ${sessionMembers} sm where sm.session_id = ${sessions.id})`,
       lastActivityAt: sql<Date>`coalesce((select max(m.created_at) from ${messages} m where m.session_id = ${sessions.id}), ${sessions.createdAt})`,
+      kind: sessions.kind,
+      peer: sql<string | null>`(select p.display_name from ${participants} p where p.session_id = ${sessions.id} and p.kind = 'human' and p.user_id <> ${userId} limit 1)`,
+      unread: sql<boolean>`exists (select 1 from ${messages} m join ${participants} a on a.id = m.author_participant_id where m.session_id = ${sessions.id} and (a.user_id is null or a.user_id <> ${userId}) and m.created_at > coalesce((select sr.last_seen_at from session_reads sr where sr.session_id = ${sessions.id} and sr.user_id = ${userId}), 'epoch'::timestamptz))`,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.ownerId))
@@ -265,6 +282,9 @@ export async function listSessionsForUser(
       team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
       createdAt: r.createdAt.toISOString(),
       lastActivityAt: new Date(r.lastActivityAt).toISOString(),
+      kind: r.kind as SessionKind,
+      peer: r.peer,
+      unread: !!r.unread,
     })),
     // Most recently active first (M28): the latest message, or creation.
   ].sort((a, b) => (a.lastActivityAt! < b.lastActivityAt! ? 1 : -1));
@@ -278,12 +298,19 @@ export async function createSession(
   db: Database,
   owner: { id: string; displayName: string; ownerSlug: string },
   title: string,
-  opts: { teamId?: string | null } = {},
+  opts: { teamId?: string | null; kind?: SessionKind; directKey?: string } = {},
 ): Promise<SessionSummary> {
   return db.transaction(async (tx) => {
     const [session] = await tx
       .insert(sessions)
-      .values({ publicId: await freePublicId(tx, title), ownerId: owner.id, title, teamId: opts.teamId ?? null })
+      .values({
+        publicId: await freePublicId(tx, title),
+        ownerId: owner.id,
+        title,
+        teamId: opts.teamId ?? null,
+        kind: opts.kind ?? 'session',
+        directKey: opts.directKey ?? null,
+      })
       .returning();
 
     await tx.insert(sessionMembers).values({
@@ -307,6 +334,8 @@ export async function createSession(
       role: 'owner' as SessionRole,
       memberCount: 1,
       createdAt: session!.createdAt.toISOString(),
+      lastActivityAt: session!.createdAt.toISOString(),
+      kind: session!.kind as SessionKind,
     };
   });
 }

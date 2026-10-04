@@ -148,6 +148,13 @@
       "when": 1791081457183,
       "tag": "0020_context_event_seq",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791087470414,
+      "tag": "0021_chats",
+      "breakpoints": true
     }
   ]
 }

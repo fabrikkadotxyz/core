@@ -320,6 +320,17 @@ session could also post in it, and every route assumed that.
   next request. A guest is removed by deleting one row. An already-open stream is
   not cut mid-flight; the same is true for a removed member today.
 
+## Team chats are open rooms (M29)
+
+A team chat's members are the whole team, now and later. Whatever is posted there,
+including an agent's answer, can be read by everyone on the team today and by
+whoever joins it tomorrow, along with the history. The UI says so before your
+first post. Mentioning an agent in a chat goes through the same delivery gate and
+trust tiers as in a session: a teammate's mention of your `owner_only` agent is
+refused (Threat 1). A direct chat holds exactly its two people and can't be
+joined by invite. Session-only features (invites, the roster, team visibility)
+are refused for chats by the server, not just hidden.
+
 ## Threat 7 — parsing uploaded files on the server (M20)
 
 Agents can read the text of an uploaded PDF, which means the server parses a file

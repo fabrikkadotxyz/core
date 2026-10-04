@@ -41,11 +41,16 @@ once per machine.
 
 In the host's own window, the user grants folders and picks a **policy** for each:
 
-| Policy | Means | Claude Code (to verify) | Codex (to verify) |
+| Policy | Means | Claude Code (**verified**, 2.1.289) | Codex (to verify) |
 | --- | --- | --- | --- |
-| **Read only** | Read files in this folder; change nothing | `--restricted --permission-mode plan --permission-prompts none` | `--sandbox read-only` |
-| **Edit in folder** (default) | Read and edit files in this folder; run no commands, no web | `--restricted --permission-mode acceptEdits --permission-prompts none` | `--sandbox workspace-write` |
+| **Read only** | Read files in this folder; change nothing | `--restricted --permission-mode dontAsk --permission-prompts none --strict-mcp-config --tools Read,Glob,Grep` | `--sandbox read-only` |
+| **Edit in folder** (default) | Read and edit files in this folder; run no commands, no web | `--restricted --permission-mode acceptEdits --permission-prompts none --strict-mcp-config --tools Read,Glob,Grep,Edit,Write` | `--sandbox workspace-write` |
 | **Full** | Commands, network, anything the tool can do | `--dangerously-skip-permissions` (today's behaviour) | `--approve-for-me` with `danger-full-access` |
+
+Every policy also passes the session's MCP config with only Fabrikka's tools
+allowed (`--mcp-config … --allowedTools mcp__fabrikka__*`). A policy governs
+**the machine**: files, commands, network. What the agent may do in the session
+is governed where it always was: trust tiers and grants (ADR 0010, 0014).
 
 - A grant has an opaque id and a label the user picks (default: the folder's
   name). The server learns the id and the label, **never the path**.
@@ -93,20 +98,31 @@ mode, Codex's sandbox), not by an operating-system sandbox.
   floor, and can be added under the same policy names later without changing
   this decision.
 
-### Must be verified before building
+### Verified before building (2026-10-04)
 
-The flags above come from each tool's `--help`, not from use. As M16 does for
-Cursor:
+`scripts/spikes/m31-policies.mjs` runs real headless `claude -p` runs in a
+scratch folder and judges by the disk and the tool results, not by what the model
+says. All 20 checks pass with the flags above. Three findings changed the design:
 
-1. Claude Code's `--restricted` mode refuses Bash and web tools and refuses file
-   access outside the working directory, including through symlinks.
-2. `--permission-prompts none` denies anything that would prompt, in a headless
-   run, without hanging.
-3. Codex's `--sandbox read-only` and `workspace-write` behave as named, with
-   `codex exec` and the MCP config the runner passes.
+1. **`--restricted` alone still offers too much:** `WebSearch`, `Task`
+   (sub-agents), `EnterWorktree`, `Skill`, `SendMessage` and more. So every
+   policy names its tools exactly with `--tools`. Anything not listed doesn't exist.
+2. **Without `--strict-mcp-config`, a restricted run loads the MCP connectors on
+   the user's own Claude account.** The spike found claude.ai connectors in the
+   tool list. An agent in a team session must never reach a member's personal
+   connectors, so every policy is strict and loads Fabrikka's tools only.
+3. **Plan mode refuses the Fabrikka tools,** so a read-only agent couldn't post
+   its answer. *Read only* uses `dontAsk` instead: the exact tool list already
+   removes every tool that writes.
 
-A policy whose flags fail verification isn't offered for that tool. *Read only*
-for a tool that can't enforce it is absent, not quietly *Full*.
+Also confirmed: a headless run with prompts set to `none` finishes rather than
+hanging; reads, writes and listings outside the folder are refused, including
+through a symlink inside it; shell and web aren't available.
+
+**Codex is not verified.** Only the Codex desktop app is installed here, not the
+`codex` CLI that headless runs use. Until it is verified, Codex offers no
+policies on the host. Rather than run unsandboxed, a Codex agent can't be bound
+to a host folder.
 
 ## Consequences
 

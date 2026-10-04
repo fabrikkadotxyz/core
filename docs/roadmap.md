@@ -1172,11 +1172,11 @@ itself enforces
 - The CLI runner stays, gains the same three policies as flags, and also
   defaults to *Edit in folder*.
 
-> **Verify before building** (ADR 0027): Claude Code's `--restricted` mode refuses
-> commands, web and files outside the folder, including through symlinks;
-> `--permission-prompts none` denies rather than hangs in a headless run; Codex's
-> `read-only` and `workspace-write` sandboxes behave as named. A policy whose flags
-> fail isn't offered for that tool.
+> **Verified for Claude Code** (ADR 0027, `scripts/spikes/m31-policies.mjs`): exact
+> tool lists, strict MCP config, refusals outside the folder including through
+> symlinks, no hang in headless runs, the session tools still work. **Codex isn't
+> verified yet**: its CLI isn't installed here. Until it is, Codex agents can't be
+> bound to a host folder rather than running unsandboxed.
 
 **Test:**
 1. Install and start the host. **Connect** (1 click), confirm the code in the

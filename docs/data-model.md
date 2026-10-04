@@ -379,6 +379,43 @@ create two.
 **Unread** is a read position (M24) older than the chat's latest message from
 someone else. It's derived, never stored.
 
+### M31 — devices (the local host)
+
+```
+devices                                   -- a paired machine running the host
+  id              uuid pk
+  user_id         uuid -> users.id not null
+  name            text not null           -- what the host calls itself ("Alice's laptop")
+  token_hash      text unique not null    -- SHA-256 of the device token; shown once to the host
+  last_seen_at    timestamptz
+  revoked_at      timestamptz
+  created_at      timestamptz not null
+
+device_pairings                           -- a code waiting to be confirmed in the browser
+  device_code_hash text pk                -- what the host polls with
+  user_code       text unique not null    -- the short code a person confirms
+  device_name     text not null
+  confirmed_by_user_id uuid -> users.id
+  expires_at      timestamptz not null
+
+device_grants                             -- what the host reports it may use; labels only
+  device_id       uuid -> devices.id
+  grant_id        text not null           -- opaque, minted by the host
+  label           text not null
+  providers       text[] not null         -- agent tools installed on that machine
+  primary key (device_id, grant_id)
+
+session_agent_hosts                       -- "this session agent runs on that device, in that grant"
+  session_agent_id uuid -> session_agents.id pk
+  device_id       uuid -> devices.id not null
+  grant_id        text not null
+```
+
+**The server never holds a path or a policy.** `device_grants` has what the host
+chose to report: an opaque id, a label, and which agent tools are installed. Paths
+and policies stay in the host's own config on the machine, which is what makes a
+run request incapable of pointing anywhere else (security.md, Threat 9).
+
 ### M19 — links
 
 ```

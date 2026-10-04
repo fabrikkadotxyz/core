@@ -1142,6 +1142,66 @@ decision, with who decided and when, and opens in any editor.
 
 **Test:** written with the ADR.
 
+## M31 — The local host: your agents, in folders you choose, safely
+
+> Adding your agent to a session means pasting a setup block, with a token, into a
+> terminal, once per session and per agent, and the runner dies with the terminal.
+> That fails the five-click rule outright (CLAUDE.md). And Claude Code runs with
+> no sandbox at all.
+
+A small app on your computer, paired with your account once, that runs your
+agents in **folders you grant on the machine**, each with a policy the agent tool
+itself enforces
+([ADR 0027](decisions/0027-a-paired-local-host-runs-agents-in-folders-granted-on-the-machine.md)).
+
+- **Pair once.** The host shows a code; **Connect** opens `/pair`, you confirm, and
+  it holds a device token, revocable on the web under *Your devices*. No token is
+  ever pasted.
+- **Grant folders in the host, never on the web.** Each grant has a label you pick
+  and a policy: *Read only*, *Edit in folder* (the default) or *Full*. Home
+  directories and filesystem roots are refused. The server sees the label, never
+  the path.
+- **Add my agent** in a session's Setup lists your devices and their grants. Pick
+  one and the agent is bound to it. The provider is detected from what's installed
+  on that machine, and the agent's name defaults to `claude-<you>`.
+- **A mention becomes a run request** (session, agent, grant id, message), never a
+  command or a path. The host builds the command from fixed templates and the
+  grant's local policy, with a per-run token.
+- **See and stop:** a tray icon while running, a local log of every run, and
+  **Stop all**. The session kill switch still works from the web.
+- The CLI runner stays, gains the same three policies as flags, and also
+  defaults to *Edit in folder*.
+
+> **Verify before building** (ADR 0027): Claude Code's `--restricted` mode refuses
+> commands, web and files outside the folder, including through symlinks;
+> `--permission-prompts none` denies rather than hangs in a headless run; Codex's
+> `read-only` and `workspace-write` sandboxes behave as named. A policy whose flags
+> fail isn't offered for that tool.
+
+**Test:**
+1. Install and start the host. **Connect** (1 click), confirm the code in the
+   browser (1 click). *Your devices* on the web lists the machine. Pairing: **2
+   clicks, once.**
+2. In the host, grant `~/code/demo` as *Edit in folder*. Try to grant `~`: refused.
+3. In a session: **Setup → Add my agent → demo → Add**. That's **4 clicks** (counting
+   opening Setup), with nothing copied. The agent shows as connected through the
+   host.
+4. Mention it to fix a typo in a file in `demo`: the run edits the file, posts its
+   answer, and the host's log shows the session, folder and policy.
+5. Ask it to run `ls ~` or fetch a URL: refused by the tool's restricted mode, and
+   the session says so. Ask it to read `../outside.txt`, a sibling of `demo`:
+   refused.
+6. Re-grant `demo` as *Read only* in the host and ask for an edit: refused. The web
+   never offered a way to change the policy.
+7. Send a run request naming a grant the host doesn't have (from a test script):
+   refused and reported. The host never runs a command the server composed.
+8. **Stop all** in the host during a run: it ends, and the session shows the run
+   stopped.
+9. Revoke the device on the web: the host disconnects, and the agent shows offline
+   in its session.
+10. A teammate's mention of your `owner_only` agent is refused before it ever
+    reaches the host, as today.
+
 ## Later — Shared agents on infrastructure the team runs
 
 > Not scheduled. Recorded so that when it comes, it starts from the rule rather

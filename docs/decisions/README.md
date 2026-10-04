@@ -59,3 +59,4 @@ What we rejected and why.
 | [0024](0024-connections-are-categories-over-vendor-mcp-servers.md) | Connections are categories over vendors' own MCP servers | Proposed |
 | [0025](0025-teams-and-who-can-see-a-session.md) | Teams, and who can see a session | Accepted |
 | [0026](0026-chats-are-a-light-kind-of-session.md) | Chats are a light kind of session | Accepted |
+| [0027](0027-a-paired-local-host-runs-agents-in-folders-granted-on-the-machine.md) | A paired local host runs agents in folders granted on the machine | Proposed |

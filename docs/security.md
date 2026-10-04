@@ -361,6 +361,32 @@ file says who exported it and when. It never includes agent activity (ADR 0015),
 credentials or tokens. Once downloaded it's out of Fabrikka's hands, like any
 copied text, and the export button says so.
 
+## Threat 9 — a paired machine that runs agents (M31)
+
+A paired host can start agent runs on someone's own computer when they aren't
+there. What holds the line
+([ADR 0027](decisions/0027-a-paired-local-host-runs-agents-in-folders-granted-on-the-machine.md)):
+
+- **The server can't choose where or how.** Folders and their policies are granted
+  in the host, on the machine. A run request names a grant by id and carries no
+  path, command, flag or policy. The host builds the command itself from fixed
+  templates. A compromised server can ask for runs in granted folders, under the
+  policies the owner chose, and nothing more.
+- **A grant is a project, not a machine.** Home directories and filesystem roots
+  can't be granted. The server stores labels, never paths.
+- **The default policy can't run commands.** *Edit in folder* uses the agent tool's
+  own restricted mode, so shell, web and files outside the folder are refused by
+  the tool, whatever a prompt-injected agent believes. *Full* is an explicit,
+  per-folder opt-in.
+- **Tool-enforced, not OS-enforced.** The policies stop an agent talked into
+  misbehaving. They don't stop a malicious agent binary, which is the user's own
+  install. An OS sandbox can be added beneath the same policies later.
+- **The delivery gate comes first.** Trust tiers decide whether a mention reaches
+  the host at all (Threat 1); the host never sees a mention the gate refused.
+- **Revocable and visible.** A device token is revoked from the web and stops
+  working at once. The host shows when it's running, logs every run locally, and
+  stops everything on one click.
+
 ## Declined capabilities
 
 **Permission relay** (`claude/channel/permission`). Claude Code can forward tool-approval prompts to a channel so they can be answered remotely. We do **not** declare this capability: anyone able to reply through the channel could approve tool use in the owner's session, which in a multi-participant room is a straightforward privilege escalation. Revisit only with per-participant verdict attribution.

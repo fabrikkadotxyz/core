@@ -758,6 +758,33 @@ serves it as `build` in `read_output`. A report for source that has since change
 dropped. Reports are display data and a hint to agents, never an input to a
 permission decision.
 
+## The local host socket (M31)
+
+A paired host keeps one WebSocket to the server, authenticated with its device
+token ([ADR 0027](decisions/0027-a-paired-local-host-runs-agents-in-folders-granted-on-the-machine.md)).
+
+```
+GET /host      (WebSocket, Authorization: Bearer <device token>)
+```
+
+Host → server:
+
+| Frame | Meaning |
+| --- | --- |
+| `{ type: 'grants', grants: [{ id, label, providers }] }` | What this machine may use. Sent on connect and whenever the user changes a grant. Labels only, never paths |
+| `{ type: 'run.refused', requestId, reason }` | `unknown_grant`, `grant_revoked`, `provider_missing`, `busy` |
+
+Server → host:
+
+| Frame | Meaning |
+| --- | --- |
+| `{ type: 'run.request', requestId, session, agent, grantId, provider, message, trust, repos?, runToken }` | Start one run. **Carries no path, command line, flag or policy**: the host resolves `grantId` against its own config and builds the command from fixed templates |
+| `{ type: 'abort', sessionId? }` | Stop runs (for one session, or all). The kill switch, as for the runner (ADR 0012) |
+
+From there a run behaves exactly like a CLI runner's run: the same run, activity and
+outcome frames (above), the same per-run token, and the same delivery gate in
+front of it.
+
 ## Presence
 
 `agent_connections.status`, reported to the UI and via `list_participants`:

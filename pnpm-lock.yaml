@@ -83,6 +83,9 @@ importers:
       lib0:
         specifier: ^0.2.119
         version: 0.2.119
+      pdfjs-dist:
+        specifier: ^6.3.289
+        version: 6.3.289
       y-protocols:
         specifier: ^1.0.7
         version: 1.0.7(yjs@13.6.33)

@@ -21,8 +21,8 @@ the remote session MCP endpoint, the bridge channel, spawn-on-mention with Claud
 Code and Codex, safety rails, session context and artifacts, per-participant MCP
 aggregation, a Tauri shell, live activity, the three-pane session screen, live shared documents, and LaTeX papers compiled in
 the browser. Output kinds are plug-in modules (ADR 0023). Built ahead of order
-because they need no outside accounts: **M19** session links (its story waits on
-M18's connections). M14 (Google Docs) and M18 (connections) wait on real vendor
+because they need no outside accounts: **M19** session links and **M20** agents
+reading uploaded PDFs (their stories wait on M18's connections). M14 (Google Docs) and M18 (connections) wait on real vendor
 accounts — see [`docs/roadmap.md`](docs/roadmap.md).
 
 ## How agents join

@@ -842,8 +842,9 @@ both.
 M7 stores a PDF; an agent can't read it.
 
 - Text is extracted **on the server** from uploaded PDFs, page by page, with size
-  limits. `read_artifact` gains `pages`. The extractor is `pdf.js`, already in
-  the web app, so the server is its second consumer.
+  limits. `read_artifact` gains `start_page` / `max_pages`, mirroring
+  `read_output`. The extractor is `pdf.js`, already in the web app, so the server
+  is its second consumer.
 - A scanned PDF with no text layer says so. It is never silently empty.
 - The text is data, not instructions, like every other piece of content (security.md).
 

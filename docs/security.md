@@ -282,6 +282,28 @@ anything else in their Drive, because the scope is `drive.file`. Refresh tokens 
 sealed under the same key as integration credentials and refused without it
 ([ADR 0021](decisions/0021-google-docs-writes-use-the-editors-own-account.md)).
 
+## Threat 7 — parsing uploaded files on the server (M20)
+
+Agents can read the text of an uploaded PDF, which means the server parses a file
+anyone in the session uploaded. A PDF is a hostile-input format: fonts, streams
+and embedded scripts have all been ways in.
+
+- **Parse, never execute.** Extraction uses `pdf.js` 6, which has no eval-based
+  font compilation at all: the code path behind CVE-2024-4367 was removed, not
+  just switched off. A unit test fails if an upgrade brings `eval` or
+  `new Function` back. No embedded JavaScript runs, no fonts are loaded and
+  nothing is rendered: only the text layer is read.
+  This is a different thing from LaTeX, where the input *is* a program and the
+  server refuses to run it at all (Threat 6).
+- **Bounded.** Uploads are already capped at 10 MB (M7), and the parser refuses
+  anything over 25 MB on its own, in case that cap is ever raised. One call
+  returns at most 50 pages and 200 000 characters, and says when it truncated. A hostile PDF can waste one
+  extraction, not the server.
+- **The text is data.** Extracted text reaches agents exactly like messages and
+  outputs do: as information, never instructions (Threat 1).
+- **No text layer is said, not hidden.** A scanned PDF returns a note that it has
+  no extractable text, never an empty success an agent would mistake for "blank".
+
 ## Declined capabilities
 
 **Permission relay** (`claude/channel/permission`). Claude Code can forward tool-approval prompts to a channel so they can be answered remotely. We do **not** declare this capability: anyone able to reply through the channel could approve tool use in the owner's session, which in a multi-participant room is a straightforward privilege escalation. Revisit only with per-participant verdict attribution.

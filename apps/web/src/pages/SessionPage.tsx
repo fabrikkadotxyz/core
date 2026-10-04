@@ -17,12 +17,15 @@ import type {
   SessionView,
   LinkType,
   SessionLink,
+  TeamMember,
+  TeamSummary,
 } from '@fabrikka/types';
 import { LINK_TYPES } from '@fabrikka/types';
 import {
   ApiError,
   openStream,
   sessions,
+  teams,
   type SessionRef,
   type TokenSummary,
 } from '../api.ts';
@@ -526,7 +529,10 @@ export function SessionPage() {
               {view.members.map((m) => (
                 <li key={m.userId}>
                   <span>{m.displayName}</span>
-                  <span className="muted small">{m.role}</span>
+                  <span className="muted small">
+                    {m.role}
+                    {m.viaTeam && <span title="Added from the team. Leaving the team ends this access."> · via team</span>}
+                  </span>
                   {isOwner && m.userId !== user?.id && (
                     <button
                       className="link small"
@@ -542,6 +548,8 @@ export function SessionPage() {
               ))}
             </ul>
           </Panel>
+
+          <TeamPanel ref_={ref} isOwner={isOwner} onChanged={reload} />
 
           {isOwner && <InvitesPanel ref_={ref} />}
 
@@ -788,6 +796,91 @@ export function SessionPage() {
  * The plaintext token exists only in the response that created it, so the UI
  * shows it once and offers a copy button. Delivery is out of band, by design.
  */
+/**
+ * The session's team, and adding a teammate without a link (M21, ADR 0025).
+ * A team decides who can be added — never who can see.
+ */
+function TeamPanel({ ref_, isOwner, onChanged }: { ref_: SessionRef; isOwner: boolean; onChanged: () => void }) {
+  const [team, setTeam] = useState<{ id: string; name: string } | null | undefined>(undefined);
+  const [mine, setMine] = useState<TeamSummary[]>([]);
+  const [roster, setRoster] = useState<TeamMember[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    sessions.team(ref_).then(setTeam).catch(() => setTeam(null));
+    if (isOwner) {
+      teams.list().then(setMine).catch(() => {});
+      sessions.roster(ref_).then(setRoster).catch(() => setRoster([]));
+    }
+  }, [ref_, isOwner]);
+  useEffect(load, [load]);
+
+  if (team === undefined) return null;
+  // Nothing to show a member when there's no team; nothing to offer an owner on no team.
+  if (!team && (!isOwner || mine.length === 0)) return null;
+
+  const change = async (teamId: string) => {
+    setError(null);
+    if (team && teamId !== team.id && !window.confirm(
+      'People added from the current team will lose access to this session. Continue?',
+    )) return;
+    try {
+      setTeam(await sessions.setTeam(ref_, teamId || null));
+      load();
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <Panel title="Team">
+      {isOwner ? (
+        <select value={team?.id ?? ''} onChange={(e) => change(e.target.value)} aria-label="Session team">
+          <option value="">No team</option>
+          {mine.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p className="small">{team!.name}</p>
+      )}
+      {isOwner && team && (
+        <>
+          <p className="muted small">
+            {roster.length ? 'Add a teammate — no link needed:' : 'Everyone on the team is already here.'}
+          </p>
+          <ul className="participants">
+            {roster.map((m) => (
+              <li key={m.userId}>
+                <span>{m.displayName}</span>
+                <button
+                  className="link small"
+                  onClick={async () => {
+                    setError(null);
+                    try {
+                      await sessions.addFromRoster(ref_, m.userId);
+                      load();
+                      onChanged();
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                >
+                  add
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {error && <p className="error small">{error}</p>}
+    </Panel>
+  );
+}
+
 function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
   const [list, setList] = useState<InviteSummary[]>([]);
   const [freshUrl, setFreshUrl] = useState<string | null>(null);

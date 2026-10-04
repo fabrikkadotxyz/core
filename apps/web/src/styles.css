@@ -1552,3 +1552,8 @@ button.edit-line {
 .link-add { display: flex; gap: 6px; }
 .link-add select { flex: 0 0 auto; }
 .link-add input { flex: 1; min-width: 0; }
+
+/* ---- teams (M21) ---- */
+.team-member { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.team-invite { margin: 16px 0; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.inline-form select { flex: 0 0 auto; }

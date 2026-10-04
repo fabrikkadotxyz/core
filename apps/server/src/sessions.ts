@@ -18,6 +18,7 @@ import {
   sessionContext,
   sessionMembers,
   sessions,
+  teams,
   users,
 } from '@fabrikka/db';
 import type {
@@ -122,6 +123,8 @@ export async function listSessionsForUser(
       createdAt: sessions.createdAt,
       ownerSlug: users.ownerSlug,
       role: sessionMembers.role,
+      teamId: teams.id,
+      teamName: teams.name,
       memberCount: sql<number>`(
         select count(*) from ${sessionMembers} sm
         where sm.session_id = ${sessions.id}
@@ -130,6 +133,7 @@ export async function listSessionsForUser(
     .from(sessionMembers)
     .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
     .innerJoin(users, eq(users.id, sessions.ownerId))
+    .leftJoin(teams, eq(teams.id, sessions.teamId))
     .where(eq(sessionMembers.userId, userId))
     .orderBy(desc(sessions.createdAt));
 
@@ -140,6 +144,7 @@ export async function listSessionsForUser(
     status: r.status as Session['status'],
     role: r.role as SessionRole,
     memberCount: Number(r.memberCount),
+    team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
     createdAt: r.createdAt.toISOString(),
   }));
 }
@@ -152,11 +157,12 @@ export async function createSession(
   db: Database,
   owner: { id: string; displayName: string; ownerSlug: string },
   title: string,
+  opts: { teamId?: string | null } = {},
 ): Promise<SessionSummary> {
   return db.transaction(async (tx) => {
     const [session] = await tx
       .insert(sessions)
-      .values({ publicId: await freePublicId(tx, title), ownerId: owner.id, title })
+      .values({ publicId: await freePublicId(tx, title), ownerId: owner.id, title, teamId: opts.teamId ?? null })
       .returning();
 
     await tx.insert(sessionMembers).values({
@@ -245,12 +251,21 @@ export async function addMember(
   sessionId: string,
   user: { id: string; displayName: string },
   role: SessionRole,
+  opts: { viaTeamId?: string } = {},
 ): Promise<void> {
   await db.transaction(async (tx) => {
-    await tx
+    const insert = tx
       .insert(sessionMembers)
-      .values({ sessionId, userId: user.id, role })
-      .onConflictDoNothing();
+      .values({ sessionId, userId: user.id, role, viaTeamId: opts.viaTeamId ?? null });
+    // A direct grant is the stronger one: it clears a roster origin (M21), so
+    // leaving the team later doesn't take away access someone was invited to.
+    // A roster add never downgrades an existing direct membership.
+    if (opts.viaTeamId) await insert.onConflictDoNothing();
+    else
+      await insert.onConflictDoUpdate({
+        target: [sessionMembers.sessionId, sessionMembers.userId],
+        set: { viaTeamId: null },
+      });
 
     const existing = await tx
       .select({ id: participants.id })

@@ -51,6 +51,10 @@ There is **no open registration**. After the first account:
 3. The operator sends that link however they like — Slack, Signal, in person.
 4. The recipient opens it and either signs up or logs in, and joins that session.
 
+**Teams** *(M21)* use the same links: a team owner creates a team invite, and
+whoever redeems it joins the team, creating an account if they need one. A team
+invite is the second way to get an account, and there is still no open signup.
+
 An invite is **single-use, expiring (7 days by default) and revocable**. It may
 optionally be **scoped to an email address**, in which case only a user
 authenticating as that address can redeem it — enforced at redemption, so it

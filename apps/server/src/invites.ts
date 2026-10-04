@@ -1,5 +1,5 @@
 /**
- * Session invites.
+ * Invites — to a session, or (M21) to a team. One table, one redemption path.
  *
  * An invite is a durable record plus a token link — never a message. This is
  * what lets Fabrikka run with no mail server at all: the system generates a
@@ -16,10 +16,18 @@ import {
   hashToken,
   sessionInvites,
   sessions as sessionsPublicId,
+  teams,
   users,
 } from '@fabrikka/db';
 import type { InviteSummary } from '@fabrikka/types';
 import { addMember, type SessionRole } from './sessions.ts';
+import { addTeamMember } from './teams.ts';
+
+/** What an invite joins. Exactly one — the database enforces it too. */
+export type InviteTarget = { sessionId: string } | { teamId: string };
+
+const targetWhere = (t: InviteTarget) =>
+  'sessionId' in t ? eq(sessionInvites.sessionId, t.sessionId) : eq(sessionInvites.teamId, t.teamId);
 
 const DEFAULT_TTL_DAYS = 7;
 
@@ -31,8 +39,7 @@ export interface CreatedInvite {
 
 export async function createInvite(
   db: Database,
-  opts: {
-    sessionId: string;
+  opts: InviteTarget & {
     createdByUserId: string;
     role?: SessionRole;
     /** Optional scope: only this address may redeem. Nothing is sent to it. */
@@ -48,7 +55,8 @@ export async function createInvite(
   const [row] = await db
     .insert(sessionInvites)
     .values({
-      sessionId: opts.sessionId,
+      sessionId: 'sessionId' in opts ? opts.sessionId : null,
+      teamId: 'teamId' in opts ? opts.teamId : null,
       tokenHash: hashToken(token),
       role: opts.role ?? 'member',
       invitedEmail: opts.invitedEmail?.trim().toLowerCase() || null,
@@ -62,12 +70,12 @@ export async function createInvite(
 
 export async function listInvites(
   db: Database,
-  sessionId: string,
+  target: InviteTarget,
 ): Promise<InviteSummary[]> {
   const rows = await db
     .select()
     .from(sessionInvites)
-    .where(eq(sessionInvites.sessionId, sessionId))
+    .where(targetWhere(target))
     .orderBy(desc(sessionInvites.createdAt));
 
   return rows.map(toSummary);
@@ -76,7 +84,7 @@ export async function listInvites(
 /** Revoking is idempotent and only affects unredeemed invites. */
 export async function revokeInvite(
   db: Database,
-  sessionId: string,
+  target: InviteTarget,
   inviteId: string,
 ): Promise<boolean> {
   const updated = await db
@@ -85,7 +93,7 @@ export async function revokeInvite(
     .where(
       and(
         eq(sessionInvites.id, inviteId),
-        eq(sessionInvites.sessionId, sessionId),
+        targetWhere(target),
         isNull(sessionInvites.redeemedAt),
         isNull(sessionInvites.revokedAt),
       ),
@@ -103,7 +111,8 @@ export type RedeemFailure =
   | 'wrong_email';
 
 export type RedeemResult =
-  | { ok: true; sessionPublicId: string; ownerSlug: string }
+  | { ok: true; session: { ownerSlug: string; publicId: string }; team?: undefined }
+  | { ok: true; team: { id: string; name: string }; session?: undefined }
   | { ok: false; reason: RedeemFailure };
 
 /**
@@ -154,7 +163,11 @@ export async function redeemInvite(
           isNull(sessionInvites.revokedAt),
         ),
       )
-      .returning({ sessionId: sessionInvites.sessionId, role: sessionInvites.role });
+      .returning({
+        sessionId: sessionInvites.sessionId,
+        teamId: sessionInvites.teamId,
+        role: sessionInvites.role,
+      });
 
     if (won.length === 0) {
       return { ok: false as const, reason: 'already_redeemed' as const };
@@ -163,13 +176,20 @@ export async function redeemInvite(
     return {
       ok: true as const,
       sessionId: won[0]!.sessionId,
+      teamId: won[0]!.teamId,
       role: won[0]!.role as SessionRole,
     };
   });
 
   if (!claimed.ok) return claimed;
 
-  await addMember(db, claimed.sessionId, user, claimed.role);
+  if (claimed.teamId) {
+    const team = await addTeamMember(db, claimed.teamId, user.id, claimed.role);
+    return { ok: true, team };
+  }
+
+  // A direct invite: the stronger grant, so it clears any roster origin (M21).
+  await addMember(db, claimed.sessionId!, user, claimed.role);
 
   const [row] = await db
     .select({
@@ -178,34 +198,29 @@ export async function redeemInvite(
     })
     .from(sessionsPublicId)
     .innerJoin(users, eq(users.id, sessionsPublicId.ownerId))
-    .where(eq(sessionsPublicId.id, claimed.sessionId))
+    .where(eq(sessionsPublicId.id, claimed.sessionId!))
     .limit(1);
 
-  return {
-    ok: true,
-    sessionPublicId: row!.publicId,
-    ownerSlug: row!.ownerSlug,
-  };
+  return { ok: true, session: { publicId: row!.publicId, ownerSlug: row!.ownerSlug } };
 }
 
 /** Public, non-secret description of an invite, for a pre-redemption preview. */
 export async function describeInvite(
   db: Database,
   token: string,
-): Promise<{ sessionTitle: string; invitedEmail: string | null } | null> {
+): Promise<{ kind: 'session' | 'team'; title: string; sessionTitle: string; invitedEmail: string | null } | null> {
   const [row] = await db
     .select({
-      title: sessionsPublicId.title,
+      sessionTitle: sessionsPublicId.title,
+      teamName: teams.name,
       invitedEmail: sessionInvites.invitedEmail,
       redeemedAt: sessionInvites.redeemedAt,
       revokedAt: sessionInvites.revokedAt,
       expiresAt: sessionInvites.expiresAt,
     })
     .from(sessionInvites)
-    .innerJoin(
-      sessionsPublicId,
-      eq(sessionsPublicId.id, sessionInvites.sessionId),
-    )
+    .leftJoin(sessionsPublicId, eq(sessionsPublicId.id, sessionInvites.sessionId))
+    .leftJoin(teams, eq(teams.id, sessionInvites.teamId))
     .where(eq(sessionInvites.tokenHash, hashToken(token)))
     .limit(1);
 
@@ -213,7 +228,10 @@ export async function describeInvite(
   if (row.redeemedAt || row.revokedAt) return null;
   if (row.expiresAt.getTime() <= Date.now()) return null;
 
-  return { sessionTitle: row.title, invitedEmail: row.invitedEmail };
+  const kind = row.teamName !== null ? 'team' : 'session';
+  const title = row.teamName ?? row.sessionTitle ?? '';
+  // `sessionTitle` stays for clients written before teams; it is the title either way.
+  return { kind, title, sessionTitle: title, invitedEmail: row.invitedEmail };
 }
 
 function toSummary(row: typeof sessionInvites.$inferSelect): InviteSummary {

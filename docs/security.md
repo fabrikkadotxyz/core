@@ -106,6 +106,11 @@ distinguishes "exists but you can't have it" from "doesn't exist", which leaks
 the existence and id of private sessions. This applies uniformly to the web API,
 the MCP endpoint, and a wrong `owner_id` path segment (ADR 0006).
 
+The same holds for **teams** *(M21)*: a team's page, roster and invites are a 404
+to anyone who isn't on it. Being on a team never reveals a teammate's sessions.
+A team session stays private until its owner adds someone, and only a session
+owner can add from the roster (ADR 0025).
+
 ## Threat 1 — prompt injection between participants
 
 This is the big one, and it is not a corner case: it is the product's core feature viewed from the other side.

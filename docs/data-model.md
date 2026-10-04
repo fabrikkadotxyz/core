@@ -179,6 +179,44 @@ of a specific session, and that is also what a token identifies (ADR 0009). One
 row per participant, upserted — a reconnect replaces the previous state rather
 than accumulating rows.
 
+### M21 — teams
+
+```
+teams                                     -- a list of people; nothing else (ADR 0025)
+  id              uuid pk
+  name            text not null
+  created_by_user_id uuid -> users.id not null
+  created_at      timestamptz not null
+
+team_members
+  team_id         uuid -> teams.id
+  user_id         uuid -> users.id
+  role            text not null          -- owner | member
+  created_at      timestamptz not null
+  primary key (team_id, user_id)
+
+sessions          + team_id      uuid -> teams.id   -- optional; null = no team
+session_members   + via_team_id  uuid -> teams.id   -- set when added from the roster
+session_invites   + team_id      uuid -> teams.id   -- a team invite; session_id is then null
+                  (exactly one of session_id, team_id)
+```
+
+**A team invite is a session invite with a different target.** Same table, same
+single-use claim, same hashing, same optional email scope, same signup path.
+`session_invites` keeps its name, but since M21 a row targets a session **or** a
+team, never both. One redemption path, not two (ADR 0007's rule).
+
+**`via_team_id` records where access came from.** A teammate added from the
+roster gets `via_team_id = <team>`. Leaving or being removed from that team deletes
+exactly those memberships, and access from a direct invite is untouched. If a
+roster-added member later redeems a direct invite, the membership becomes direct
+(`via_team_id` cleared): the stronger grant wins.
+
+**A session belongs to at most one team, and the team decides only who can be
+added.** Belonging to a team doesn't make a session visible to anyone (that's
+M22's `visibility`). Moving a session to another team, or out of one, removes the
+memberships the previous team granted.
+
 ### M19 — links
 
 ```

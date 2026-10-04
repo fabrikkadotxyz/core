@@ -21,6 +21,9 @@ import type {
   OutputKindInfo,
   Participant,
   SessionLink,
+  TeamDetail,
+  TeamMember,
+  TeamSummary,
   PauseState,
   ServerEvent,
   SessionContext,
@@ -78,24 +81,35 @@ export const auth = {
   login: (body: LoginBody) =>
     call<{ user: AuthUser }>('/auth/login', { method: 'POST', body }),
   logout: () => call<{ ok: true }>('/auth/logout', { method: 'POST' }),
+  /** A session invite returns `session`; a team invite (M21) returns `team`. */
   signup: (body: SignupBody) =>
-    call<{ user: AuthUser; session: { ownerSlug: string; publicId: string } }>(
-      '/auth/signup',
-      { method: 'POST', body },
-    ),
+    call<{ user: AuthUser } & InviteDestination>('/auth/signup', { method: 'POST', body }),
 };
 
 /* --------------------------------------------------------------- invites */
 
+/** Where redeeming an invite takes you: a session, or (M21) a team. */
+export interface InviteDestination {
+  session?: { ownerSlug: string; publicId: string };
+  team?: { id: string; name: string };
+}
+
 export const invites = {
-  /** Unauthenticated preview, so the invite page can name the session. */
+  /** Unauthenticated preview, so the invite page can name what it joins. */
   preview: (token: string) =>
-    call<{ sessionTitle: string; invitedEmail: string | null }>(`/invites/${token}`),
-  redeem: (token: string) =>
-    call<{ session: { ownerSlug: string; publicId: string } }>(
-      `/invites/${token}/redeem`,
-      { method: 'POST' },
-    ),
+    call<{ kind: 'session' | 'team'; title: string; invitedEmail: string | null }>(`/invites/${token}`),
+  redeem: (token: string) => call<InviteDestination>(`/invites/${token}/redeem`, { method: 'POST' }),
+};
+
+/* ----------------------------------------------------------------- teams */
+
+export const teams = {
+  list: () => call<TeamSummary[]>('/teams'),
+  create: (name: string) => call<TeamSummary>('/teams', { method: 'POST', body: { name } }),
+  get: (id: string) => call<TeamDetail>(`/teams/${id}`),
+  createInvite: (id: string) => call<CreatedInviteView>(`/teams/${id}/invites`, { method: 'POST', body: {} }),
+  removeMember: (id: string, userId: string) =>
+    call<{ ok: true }>(`/teams/${id}/members/${userId}`, { method: 'DELETE' }),
 };
 
 /* -------------------------------------------------------------- sessions */
@@ -110,8 +124,15 @@ const base = ({ owner, session }: SessionRef) =>
 
 export const sessions = {
   list: () => call<SessionSummary[]>('/sessions'),
-  create: (title: string) =>
-    call<SessionSummary>('/sessions', { method: 'POST', body: { title } }),
+  create: (title: string, teamId?: string) =>
+    call<SessionSummary>('/sessions', { method: 'POST', body: { title, teamId } }),
+  /** M21: the session's team, who can be added from it, and adding them. */
+  team: (ref: SessionRef) => call<{ id: string; name: string } | null>(`${base(ref)}/team`),
+  setTeam: (ref: SessionRef, teamId: string | null) =>
+    call<{ id: string; name: string } | null>(`${base(ref)}/team`, { method: 'PUT', body: { teamId } }),
+  roster: (ref: SessionRef) => call<TeamMember[]>(`${base(ref)}/roster`),
+  addFromRoster: (ref: SessionRef, userId: string) =>
+    call<{ ok: true }>(`${base(ref)}/members`, { method: 'POST', body: { userId } }),
   get: (ref: SessionRef) => call<SessionView>(base(ref)),
   update: (ref: SessionRef, body: { title?: string; status?: 'active' | 'archived' }) =>
     call<{ ok: true }>(base(ref), { method: 'PATCH', body }),

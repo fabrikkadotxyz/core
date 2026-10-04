@@ -402,6 +402,8 @@ export interface Member {
   email: string;
   displayName: string;
   role: SessionRole;
+  /** True when this access came from the team roster (M21): leaving the team ends it. */
+  viaTeam?: boolean;
 }
 
 export interface SessionSummary {
@@ -412,6 +414,8 @@ export interface SessionSummary {
   role: SessionRole;
   memberCount: number;
   createdAt: string;
+  /** The team it belongs to (M21), if any. */
+  team?: { id: string; name: string } | null;
 }
 
 /**
@@ -466,4 +470,31 @@ export interface SessionLink {
   statusAt: string | null;
   addedBy: string | null;
   updatedAt: string;
+}
+
+/* -------------------------------------------------------------------- teams */
+
+/** See ADR 0025. Owners invite and remove; that is the only difference. */
+export type TeamRole = 'owner' | 'member';
+
+export interface TeamSummary {
+  id: string;
+  name: string;
+  role: TeamRole;
+  memberCount: number;
+}
+
+export interface TeamMember {
+  userId: string;
+  displayName: string;
+  email: string;
+  role: TeamRole;
+}
+
+export interface TeamDetail {
+  id: string;
+  name: string;
+  /** The viewer's role. */
+  role: TeamRole;
+  members: TeamMember[];
 }

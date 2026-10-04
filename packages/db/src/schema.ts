@@ -5,10 +5,11 @@
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
  * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation), M10 (runs) and
- * M12 (outputs) and M19 (links).
+ * M12 (outputs), M19 (links) and M21 (teams).
  */
 import {
   boolean,
+  check,
   customType,
   index,
   integer,
@@ -20,6 +21,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 /* -------------------------------------------------------------------------- */
 /* M0 — messaging core                                                        */
@@ -50,6 +52,35 @@ export const users = pgTable('users', {
     .defaultNow(),
 });
 
+/**
+ * A team: a list of people who trust each other, and nothing else. See ADR 0025.
+ * No SSO or permission matrix — owners invite and remove, that is all.
+ */
+export const teams = pgTable('teams', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  createdByUserId: uuid('created_by_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const teamMembers = pgTable(
+  'team_members',
+  {
+    teamId: uuid('team_id')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** owner | member */
+    role: text('role').notNull().default('member'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.teamId, t.userId] })],
+);
+
 export const sessions = pgTable('sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
   /** Public id. Appears in the MCP endpoint path. Never sessions.id. */
@@ -58,6 +89,8 @@ export const sessions = pgTable('sessions', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
+  /** Optional (M21). Decides who can be added from the roster — not who can see. */
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
   /** active | archived */
   status: text('status').notNull().default('active'),
   /**
@@ -161,6 +194,11 @@ export const sessionMembers = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** owner | member */
     role: text('role').notNull().default('member'),
+    /**
+     * Set when this access came from the session's team roster (M21). Leaving
+     * that team removes exactly these rows; a direct invite clears it.
+     */
+    viaTeamId: uuid('via_team_id').references(() => teams.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -177,9 +215,10 @@ export const sessionInvites = pgTable(
   'session_invites',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    sessionId: uuid('session_id')
-      .notNull()
-      .references(() => sessions.id, { onDelete: 'cascade' }),
+    /** The session this invite joins — or null for a team invite (M21). */
+    sessionId: uuid('session_id').references(() => sessions.id, { onDelete: 'cascade' }),
+    /** The team this invite joins (M21). Exactly one of sessionId, teamId. */
+    teamId: uuid('team_id').references(() => teams.id, { onDelete: 'cascade' }),
     /** SHA-256. The plaintext is returned exactly once, at creation. */
     tokenHash: text('token_hash').notNull().unique(),
     /** Role granted on redemption. */
@@ -199,7 +238,10 @@ export const sessionInvites = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index('session_invites_session_idx').on(t.sessionId)],
+  (t) => [
+    index('session_invites_session_idx').on(t.sessionId),
+    check('session_invites_one_target', sql`(${t.sessionId} is null) <> (${t.teamId} is null)`),
+  ],
 );
 
 /* -------------------------------------------------------------------------- */

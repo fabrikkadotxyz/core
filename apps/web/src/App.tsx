@@ -5,6 +5,7 @@ import { InvitePage } from './pages/InvitePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { SessionListPage } from './pages/SessionListPage.tsx';
 import { SessionPage } from './pages/SessionPage.tsx';
+import { TeamPage } from './pages/TeamPage.tsx';
 
 export default function App() {
   return (
@@ -26,6 +27,14 @@ export default function App() {
           element={
             <RequireAuth>
               <SessionPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/teams/:id"
+          element={
+            <RequireAuth>
+              <TeamPage />
             </RequireAuth>
           }
         />

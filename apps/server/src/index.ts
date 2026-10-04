@@ -97,6 +97,19 @@ import {
   renameOutput,
 } from './outputs/core.ts';
 import { createUser } from './users.ts';
+import {
+  addFromRoster,
+  createTeam,
+  getTeam,
+  listTeamsForUser,
+  membershipOrigins,
+  removeTeamMember,
+  roster,
+  sessionTeam,
+  setSessionTeam,
+  TeamError,
+  teamRole,
+} from './teams.ts';
 import { cachedRepos, LinkError, linkedRepos, listLinks, removeLink, saveLink } from './links.ts';
 import {
   countOwners,
@@ -221,10 +234,8 @@ app.post('/api/auth/signup', async (c) => {
   const token = await login(db, body.email, body.password);
   if (token) issueCookie(c, token, SECURE_COOKIES);
 
-  return c.json({
-    user: created.user,
-    session: { ownerSlug: redeemed.ownerSlug, publicId: redeemed.sessionPublicId },
-  }, 201);
+  // A session invite lands you in the session; a team invite on the team (M21).
+  return c.json({ user: created.user, session: redeemed.session, team: redeemed.team }, 201);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -242,9 +253,7 @@ app.get('/api/invites/:token', async (c) => {
 app.post('/api/invites/:token/redeem', requireUser(db), async (c) => {
   const result = await redeemInvite(db, c.req.param('token'), c.get('user'));
   if (!result.ok) return c.json({ error: result.reason }, 400);
-  return c.json({
-    session: { ownerSlug: result.ownerSlug, publicId: result.sessionPublicId },
-  });
+  return c.json({ session: result.session, team: result.team });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -256,11 +265,77 @@ app.get('/api/sessions', requireUser(db), async (c) =>
 );
 
 app.post('/api/sessions', requireUser(db), async (c) => {
-  const { title } = await c.req.json<{ title?: string }>();
+  const { title, teamId } = await c.req.json<{ title?: string; teamId?: string }>();
   const trimmed = title?.trim();
   if (!trimmed) return c.json({ error: 'title is required' }, 400);
+  // A team you aren't on is indistinguishable from one that doesn't exist.
+  if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such team' }, 404);
 
-  return c.json(await createSession(db, c.get('user'), trimmed), 201);
+  return c.json(await createSession(db, c.get('user'), trimmed, { teamId: teamId ?? null }), 201);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Teams (M21). A list of people; nothing else. See ADR 0025.                  */
+/* Every route is a 404 to someone who isn't on the team.                      */
+/* -------------------------------------------------------------------------- */
+
+app.get('/api/teams', requireUser(db), async (c) => c.json(await listTeamsForUser(db, c.get('user').id)));
+
+app.post('/api/teams', requireUser(db), async (c) => {
+  const { name } = await c.req.json<{ name?: string }>().catch(() => ({ name: undefined }));
+  try {
+    return c.json(await createTeam(db, c.get('user').id, name ?? ''), 201);
+  } catch (err) {
+    if (err instanceof TeamError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
+});
+
+app.get('/api/teams/:id', requireUser(db), async (c) => {
+  const team = await getTeam(db, c.req.param('id'), c.get('user').id);
+  return team ? c.json(team) : c.notFound();
+});
+
+app.get('/api/teams/:id/invites', requireUser(db), async (c) => {
+  if ((await teamRole(db, c.req.param('id'), c.get('user').id)) !== 'owner') return c.notFound();
+  return c.json(await listInvites(db, { teamId: c.req.param('id') }));
+});
+
+/** Same links as a session invite: single-use, expiring, hashed (M1, ADR 0007). */
+app.post('/api/teams/:id/invites', requireUser(db), async (c) => {
+  const teamId = c.req.param('id');
+  if ((await teamRole(db, teamId, c.get('user').id)) !== 'owner') return c.notFound();
+  const body = await c.req.json<{ invitedEmail?: string; role?: string }>().catch(() => ({}) as { invitedEmail?: string; role?: string });
+  const { summary, token } = await createInvite(db, {
+    teamId,
+    createdByUserId: c.get('user').id,
+    role: body.role === 'owner' ? 'owner' : 'member',
+    invitedEmail: body.invitedEmail ?? null,
+  });
+  return c.json({ invite: summary, token, url: `${PUBLIC_URL}/invite/${token}` }, 201);
+});
+
+app.post('/api/teams/:id/invites/:inviteId/revoke', requireUser(db), async (c) => {
+  if ((await teamRole(db, c.req.param('id'), c.get('user').id)) !== 'owner') return c.notFound();
+  const revoked = await revokeInvite(db, { teamId: c.req.param('id') }, c.req.param('inviteId'));
+  return revoked ? c.json({ ok: true }) : c.notFound();
+});
+
+/** An owner removes a member; anyone may remove themselves (leave). */
+app.delete('/api/teams/:id/members/:userId', requireUser(db), async (c) => {
+  const teamId = c.req.param('id');
+  const me = c.get('user').id;
+  const role = await teamRole(db, teamId, me);
+  const target = c.req.param('userId');
+  if (!role || (role !== 'owner' && target !== me)) return c.notFound();
+  if (!(await teamRole(db, teamId, target))) return c.notFound();
+  try {
+    await removeTeamMember(db, teamId, target);
+  } catch (err) {
+    if (err instanceof TeamError) return c.json({ error: err.message }, 409);
+    throw err;
+  }
+  return c.json({ ok: true });
 });
 
 const sessionRoutes = new Hono<AuthEnv>();
@@ -279,7 +354,7 @@ sessionRoutes.get('/', async (c) => {
       ...p,
       status: statuses.get(p.id),
     })),
-    members: await listMembers(db, s.id),
+    members: await membersWithOrigin(s.id),
     me: { role: s.role, participantId: s.participantId },
     mcpEndpoint: `${PUBLIC_URL}/mcp/o/${s.view.ownerSlug}/s/${s.view.publicId}`,
   };
@@ -396,7 +471,7 @@ sessionRoutes.patch('/participants/:id', async (c) => {
 sessionRoutes.get('/members', async (c) => {
   const s = await resolve(c);
   if (!s) return c.notFound();
-  return c.json(await listMembers(db, s.id));
+  return c.json(await membersWithOrigin(s.id));
 });
 
 sessionRoutes.delete('/members/:userId', async (c) => {
@@ -416,6 +491,45 @@ sessionRoutes.delete('/members/:userId', async (c) => {
 
   await removeMember(db, s.id, userId);
   return c.json({ ok: true });
+});
+
+/* ---- the session's team (M21) ---- */
+
+/** Any member may see which team a session is in; only the owner may change it. */
+sessionRoutes.get('/team', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  return c.json(await sessionTeam(db, s.id));
+});
+
+sessionRoutes.put('/team', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+  const { teamId } = await c.req.json<{ teamId?: string | null }>();
+  if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such team' }, 404);
+  await setSessionTeam(db, s.id, teamId ?? null);
+  return c.json(await sessionTeam(db, s.id));
+});
+
+/** Teammates not yet in the session. Owner only: adding is the owner's call. */
+sessionRoutes.get('/roster', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+  return c.json(await roster(db, s.id));
+});
+
+/** Add a teammate directly — no link, because the server knows who they are. */
+sessionRoutes.post('/members', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+  const { userId } = await c.req.json<{ userId?: string }>();
+  try {
+    await addFromRoster(db, s.id, userId ?? '');
+  } catch (err) {
+    if (err instanceof TeamError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
+  return c.json({ ok: true }, 201);
 });
 
 /* ---- agents ---- */
@@ -924,7 +1038,7 @@ sessionRoutes.get('/output-edits', async (c) => {
 sessionRoutes.get('/invites', async (c) => {
   const s = await resolve(c);
   if (!s || s.role !== 'owner') return c.notFound();
-  return c.json(await listInvites(db, s.id));
+  return c.json(await listInvites(db, { sessionId: s.id }));
 });
 
 /**
@@ -961,7 +1075,7 @@ sessionRoutes.post('/invites/:id/revoke', async (c) => {
   const s = await resolve(c);
   if (!s || s.role !== 'owner') return c.notFound();
 
-  const revoked = await revokeInvite(db, s.id, c.req.param('id'));
+  const revoked = await revokeInvite(db, { sessionId: s.id }, c.req.param('id'));
   if (!revoked) return c.notFound();
   return c.json({ ok: true });
 });
@@ -1482,6 +1596,12 @@ function sendMention(ws: { send: (data: string) => void }, sessionId: string, me
       if (mentionQueues.get(ws) === next) mentionQueues.delete(ws);
     });
   mentionQueues.set(ws, next);
+}
+
+/** Members, each marked with whether their access came from the team roster (M21). */
+async function membersWithOrigin(sessionId: string) {
+  const origins = await membershipOrigins(db, sessionId);
+  return (await listMembers(db, sessionId)).map((m) => ({ ...m, viaTeam: origins.has(m.userId) }));
 }
 
 async function resolve(c: {

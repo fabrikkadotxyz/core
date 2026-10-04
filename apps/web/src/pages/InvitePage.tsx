@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { auth, invites } from '../api.ts';
+import { auth, invites, type InviteDestination } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 
 export function InvitePage() {
@@ -16,7 +16,7 @@ export function InvitePage() {
   const { user, loading, setUser } = useAuth();
 
   const [preview, setPreview] = useState<
-    { sessionTitle: string; invitedEmail: string | null } | null | 'invalid'
+    { kind: 'session' | 'team'; title: string; invitedEmail: string | null } | null | 'invalid'
   >(null);
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -51,13 +51,18 @@ export function InvitePage() {
     );
   }
 
+  /** A session invite opens the session; a team invite opens the team (M21). */
+  const go = (to: InviteDestination) =>
+    navigate(to.team ? `/teams/${to.team.id}` : `/o/${to.session!.ownerSlug}/s/${to.session!.publicId}`, {
+      replace: true,
+    });
+
   /** Already signed in: just join. */
   const join = async () => {
     setError(null);
     setBusy(true);
     try {
-      const { session } = await invites.redeem(token);
-      navigate(`/o/${session.ownerSlug}/s/${session.publicId}`, { replace: true });
+      go(await invites.redeem(token));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -71,14 +76,14 @@ export function InvitePage() {
     setError(null);
     setBusy(true);
     try {
-      const { user: created, session } = await auth.signup({
+      const { user: created, ...destination } = await auth.signup({
         token,
         email,
         password,
         displayName,
       });
       setUser(created);
-      navigate(`/o/${session.ownerSlug}/s/${session.publicId}`, { replace: true });
+      go(destination);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -90,7 +95,7 @@ export function InvitePage() {
     return (
       <main className="centered">
         <div className="card">
-          <h1>Join “{preview.sessionTitle}”</h1>
+          <h1>{preview.kind === 'team' ? `Join the team “${preview.title}”` : `Join “${preview.title}”`}</h1>
           <p className="muted">
             You're signed in as {user.email}.
             {preview.invitedEmail && preview.invitedEmail !== user.email && (
@@ -103,7 +108,7 @@ export function InvitePage() {
           </p>
           {error && <p className="error">{error}</p>}
           <button onClick={join} disabled={busy}>
-            {busy ? 'Joining…' : 'Join session'}
+            {busy ? 'Joining…' : preview.kind === 'team' ? 'Join team' : 'Join session'}
           </button>
         </div>
       </main>
@@ -113,8 +118,8 @@ export function InvitePage() {
   return (
     <main className="centered">
       <form className="card" onSubmit={signup}>
-        <h1>Join “{preview.sessionTitle}”</h1>
-        <p className="muted">Create an account to join this session.</p>
+        <h1>{preview.kind === 'team' ? `Join the team “${preview.title}”` : `Join “${preview.title}”`}</h1>
+        <p className="muted">Create an account to join this {preview.kind === 'team' ? 'team' : 'session'}.</p>
 
         <label>
           Email

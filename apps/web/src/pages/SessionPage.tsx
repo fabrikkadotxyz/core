@@ -425,6 +425,9 @@ export function SessionPage() {
   if (!view) return <main className="centered">Loading…</main>;
 
   const isOwner = view.me.role === 'owner';
+  // M22: a teammate of a team-visible session, or a guest. They read; they don't
+  // act. The server enforces that — this only stops offering what would fail.
+  const isViewer = view.me.role === 'viewer';
 
   const send = async (content: string, mentions: string[]) => {
     await sessions.postMessage(ref, content, mentions);
@@ -458,7 +461,8 @@ export function SessionPage() {
 
       <div
         className="workspace"
-        data-setup={panes.setup ? 'open' : 'closed'}
+        // A viewer has no Setup (M22): never reserve its column, whatever was remembered.
+        data-setup={panes.setup && !isViewer ? 'open' : 'closed'}
         data-output={panes.output ? 'open' : 'closed'}
         data-doc={docOpen ? 'open' : 'closed'}
         style={{ '--rail-output-w': `${railWidth}px` } as React.CSSProperties}
@@ -467,6 +471,7 @@ export function SessionPage() {
           Left — SETUP: everything that CHANGES the session. Collapsible, because
           you add an agent once and then talk for an hour (ADR 0018).
         */}
+        {!isViewer && (
         <aside className="rail setup" aria-label="Session setup" aria-hidden={!panes.setup}>
           <Panel title="Participants">
             <ul className="participants">
@@ -549,7 +554,30 @@ export function SessionPage() {
             </ul>
           </Panel>
 
-          <TeamPanel ref_={ref} isOwner={isOwner} onChanged={reload} />
+          {isOwner && !!view.guests?.length && (
+            <Panel title={`Guests (${view.guests.length})`}>
+              <p className="muted small">They can read this session and nothing else.</p>
+              <ul className="participants">
+                {view.guests.map((g) => (
+                  <li key={g.userId}>
+                    <span>{g.displayName}</span>
+                    <span className="muted small">view only</span>
+                    <button
+                      className="link small"
+                      onClick={async () => {
+                        await sessions.removeGuest(ref, g.userId);
+                        reload();
+                      }}
+                    >
+                      remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+
+          <TeamPanel ref_={ref} isOwner={isOwner} onChanged={reload} visibility={view.visibility} />
 
           {isOwner && <InvitesPanel ref_={ref} />}
 
@@ -582,21 +610,30 @@ export function SessionPage() {
             </Panel>
           )}
         </aside>
+        )}
 
         {/* Middle — the session happening. Never collapses; it is the product. */}
         <main className="session">
           <header>
-            <button
-              className={panes.setup ? 'pane-toggle on' : 'pane-toggle'}
-              aria-expanded={panes.setup}
-              title="Agents, members, integrations, invites"
-              onClick={() => togglePane('setup')}
-            >
-              Setup
-            </button>
+            {!isViewer && (
+              <button
+                className={panes.setup ? 'pane-toggle on' : 'pane-toggle'}
+                aria-expanded={panes.setup}
+                title="Agents, members, integrations, invites"
+                onClick={() => togglePane('setup')}
+              >
+                Setup
+              </button>
+            )}
 
             <h1>
-              {view.session.title} <span title="Private">🔒</span>
+              {view.session.title}{' '}
+              {view.visibility === 'team' ? (
+                <span title="Team-visible: everyone on the team can read along">👥</span>
+              ) : (
+                <span title="Private">🔒</span>
+              )}
+              {isViewer && <em className="badge">view only</em>}
               {view.session.status === 'archived' && <em className="badge">archived</em>}
             </h1>
             <span className={connected ? 'status on' : 'status off'}>
@@ -685,16 +722,23 @@ export function SessionPage() {
             meParticipantId={view.me.participantId}
             onShowEdit={(e) => openOutput(e.outputId, { tab: showTab(e), edit: e })}
           />
-          <MentionComposer
-            participants={view.participants}
-            onSend={send}
-            disabled={view.session.status === 'archived'}
-            placeholder={
-              view.session.status === 'archived'
-                ? 'This session is archived'
-                : 'Message everyone…  @ to mention'
-            }
-          />
+          {isViewer ? (
+            <p className="viewer-note">
+              You're viewing this session. You can read everything here as it happens, but not
+              post, mention or edit.
+            </p>
+          ) : (
+            <MentionComposer
+              participants={view.participants}
+              onSend={send}
+              disabled={view.session.status === 'archived'}
+              placeholder={
+                view.session.status === 'archived'
+                  ? 'This session is archived'
+                  : 'Message everyone…  @ to mention'
+              }
+            />
+          )}
         </main>
 
         {/*
@@ -717,7 +761,12 @@ export function SessionPage() {
         <aside className="rail output" aria-label="Session output" aria-hidden={!panes.output}>
           {(() => {
             const open = outputs.find((o) => o.id === panes.openOutput);
-            const me = view.participants.find((p) => p.id === view.me.participantId);
+            // A viewer has no participant; their cursor identity is just their name.
+            const me =
+              view.participants.find((p) => p.id === view.me.participantId) ??
+              (isViewer && user
+                ? { id: `viewer-${user.id}`, sessionId: view.session.id, kind: 'human' as const, displayName: user.displayName }
+                : undefined);
             if (open && me) {
               return (
                 <>
@@ -748,7 +797,8 @@ export function SessionPage() {
                     ref_={ref}
                     output={open}
                     me={me}
-                    canDelete={isOwner || open.createdBy.participantId === view.me.participantId}
+                    canDelete={!isViewer && (isOwner || open.createdBy.participantId === view.me.participantId)}
+                    readOnly={isViewer}
                     tab={outputTab}
                     onTab={(t) => {
                       setOutputTab(t);
@@ -765,10 +815,12 @@ export function SessionPage() {
             }
             return (
               <>
-                <OutputsPanel ref_={ref} outputs={outputs} onOpen={(id, o) => openOutput(id, o)} />
-                <LinksPanel ref_={ref} version={panelsVersion} />
-                <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
-                <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} />
+                <OutputsPanel ref_={ref} outputs={outputs} onOpen={(id, o) => openOutput(id, o)} canCreate={!isViewer} />
+                <LinksPanel ref_={ref} version={panelsVersion} readOnly={isViewer} />
+                <fieldset className="plain" disabled={isViewer}>
+                  <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
+                </fieldset>
+                <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} readOnly={isViewer} />
               </>
             );
           })()}
@@ -778,7 +830,7 @@ export function SessionPage() {
           On a narrow screen the rails are overlays, so a backdrop is the way out.
           Hidden by CSS at desktop widths, where nothing overlaps anything.
         */}
-        {(panes.setup || panes.output) && (
+        {((panes.setup && !isViewer) || panes.output) && (
           <button
             className="pane-backdrop"
             aria-label="Close panel"
@@ -800,7 +852,17 @@ export function SessionPage() {
  * The session's team, and adding a teammate without a link (M21, ADR 0025).
  * A team decides who can be added — never who can see.
  */
-function TeamPanel({ ref_, isOwner, onChanged }: { ref_: SessionRef; isOwner: boolean; onChanged: () => void }) {
+function TeamPanel({
+  ref_,
+  isOwner,
+  onChanged,
+  visibility,
+}: {
+  ref_: SessionRef;
+  isOwner: boolean;
+  onChanged: () => void;
+  visibility: 'private' | 'team';
+}) {
   const [team, setTeam] = useState<{ id: string; name: string } | null | undefined>(undefined);
   const [mine, setMine] = useState<TeamSummary[]>([]);
   const [roster, setRoster] = useState<TeamMember[]>([]);
@@ -848,6 +910,27 @@ function TeamPanel({ ref_, isOwner, onChanged }: { ref_: SessionRef; isOwner: bo
         <p className="small">{team!.name}</p>
       )}
       {isOwner && team && (
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={visibility === 'team'}
+            onChange={async (e) => {
+              setError(null);
+              try {
+                await sessions.update(ref_, { visibility: e.target.checked ? 'team' : 'private' });
+                onChanged();
+              } catch (err) {
+                setError((err as Error).message);
+              }
+            }}
+          />
+          <span>
+            Everyone on {team.name} can read along
+            <span className="muted small"> — they see the timeline and documents, but can't post or edit</span>
+          </span>
+        </label>
+      )}
+      {isOwner && team && (
         <>
           <p className="muted small">
             {roster.length ? 'Add a teammate — no link needed:' : 'Everyone on the team is already here.'}
@@ -885,6 +968,7 @@ function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
   const [list, setList] = useState<InviteSummary[]>([]);
   const [freshUrl, setFreshUrl] = useState<string | null>(null);
   const [scopeEmail, setScopeEmail] = useState('');
+  const [guest, setGuest] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -897,10 +981,10 @@ function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
   const create = async () => {
     setError(null);
     try {
-      const created = await sessions.createInvite(
-        ref_,
-        scopeEmail.trim() ? { invitedEmail: scopeEmail.trim() } : {},
-      );
+      const created = await sessions.createInvite(ref_, {
+        ...(scopeEmail.trim() ? { invitedEmail: scopeEmail.trim() } : {}),
+        ...(guest ? { role: 'guest' as const } : {}),
+      });
       setFreshUrl(created.url);
       setScopeEmail('');
       setCopied(false);
@@ -931,6 +1015,13 @@ function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
           placeholder="restrict to an email (optional)"
           aria-label="Restrict invite to an email address"
         />
+        <label className="check">
+          <input type="checkbox" checked={guest} onChange={(e) => setGuest(e.target.checked)} />
+          <span>
+            Guest — view only
+            <span className="muted small"> (a client, an advisor: reads this session, nothing else)</span>
+          </span>
+        </label>
         <button onClick={create}>Create invite link</button>
       </div>
 
@@ -1386,7 +1477,7 @@ const LINK_ICON: Record<LinkType, string> = {
  * status is whatever was last reported, with its age, because Fabrikka never
  * polls a vendor and should not look as if it did.
  */
-function LinksPanel({ ref_, version }: { ref_: SessionRef; version: number }) {
+function LinksPanel({ ref_, version, readOnly = false }: { ref_: SessionRef; version: number; readOnly?: boolean }) {
   const [list, setList] = useState<SessionLink[]>([]);
   const [url, setUrl] = useState('');
   const [type, setType] = useState<LinkType>('issue');
@@ -1436,6 +1527,7 @@ function LinksPanel({ ref_, version }: { ref_: SessionRef; version: number }) {
                   )}
                 </span>
               </span>
+              {!readOnly && (
               <button
                 className="link small"
                 aria-label={`Unlink ${l.title ?? l.url}`}
@@ -1446,10 +1538,12 @@ function LinksPanel({ ref_, version }: { ref_: SessionRef; version: number }) {
               >
                 ×
               </button>
+              )}
             </li>
           ))}
         </ul>
       )}
+      {!readOnly && (
       <div className="link-add">
         <select value={type} onChange={(e) => setType(e.target.value as LinkType)} aria-label="Link type">
           {LINK_TYPES.map((t) => (
@@ -1468,12 +1562,13 @@ function LinksPanel({ ref_, version }: { ref_: SessionRef; version: number }) {
           }}
         />
       </div>
+      )}
       {error && <p className="error small">{error}</p>}
     </Panel>
   );
 }
 
-function ArtifactsPanel({ ref_ }: { ref_: SessionRef }) {
+function ArtifactsPanel({ ref_, readOnly = false }: { ref_: SessionRef; readOnly?: boolean }) {
   const [list, setList] = useState<Artifact[]>([]);
   const [linkUrl, setLinkUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -1487,6 +1582,7 @@ function ArtifactsPanel({ ref_ }: { ref_: SessionRef }) {
 
   return (
     <Panel title="Artifacts">
+      {!readOnly && (
       <div className="stack">
         <input
           ref={fileRef}
@@ -1523,6 +1619,7 @@ function ArtifactsPanel({ ref_ }: { ref_: SessionRef }) {
           }}
         />
       </div>
+      )}
 
       {error && <p className="error small">{error}</p>}
 
@@ -1539,6 +1636,7 @@ function ArtifactsPanel({ ref_ }: { ref_: SessionRef }) {
                 {a.name}
               </a>
               <span className="muted small">@{a.createdBy.displayName}</span>
+              {!readOnly && (
               <button
                 className="link small"
                 onClick={async () => {
@@ -1548,6 +1646,7 @@ function ArtifactsPanel({ ref_ }: { ref_: SessionRef }) {
               >
                 remove
               </button>
+              )}
             </li>
           ))}
         </ul>
@@ -1743,7 +1842,7 @@ function Timeline({
   edits: OutputEditSummary[];
   runs: Run[];
   participants: Participant[];
-  meParticipantId: string;
+  meParticipantId: string | null;
   onShowEdit: (e: OutputEditSummary) => void;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
@@ -1820,7 +1919,7 @@ function Timeline({
                 content={item.message.content}
                 participants={participants}
                 fallback={item.message.mentions}
-                meParticipantId={meParticipantId}
+                meParticipantId={meParticipantId ?? undefined}
               />
             </p>
           </article>

@@ -94,7 +94,7 @@ export function SessionListPage() {
                   {s.title} {s.status === 'archived' && <em>archived</em>}
                 </span>
                 <span className="muted small">
-                  🔒 {s.memberCount} member{s.memberCount === 1 ? '' : 's'} · you are{' '}
+                  {s.role === 'viewer' ? '👥' : '🔒'} {s.memberCount} member{s.memberCount === 1 ? '' : 's'} · you are{' '}
                   {s.role}
                   {s.team && ` · ${s.team.name}`}
                 </span>

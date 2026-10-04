@@ -97,7 +97,7 @@ export interface InviteDestination {
 export const invites = {
   /** Unauthenticated preview, so the invite page can name what it joins. */
   preview: (token: string) =>
-    call<{ kind: 'session' | 'team'; title: string; invitedEmail: string | null }>(`/invites/${token}`),
+    call<{ kind: 'session' | 'team'; title: string; invitedEmail: string | null; guest?: boolean }>(`/invites/${token}`),
   redeem: (token: string) => call<InviteDestination>(`/invites/${token}/redeem`, { method: 'POST' }),
 };
 
@@ -134,7 +134,7 @@ export const sessions = {
   addFromRoster: (ref: SessionRef, userId: string) =>
     call<{ ok: true }>(`${base(ref)}/members`, { method: 'POST', body: { userId } }),
   get: (ref: SessionRef) => call<SessionView>(base(ref)),
-  update: (ref: SessionRef, body: { title?: string; status?: 'active' | 'archived' }) =>
+  update: (ref: SessionRef, body: { title?: string; status?: 'active' | 'archived'; visibility?: 'private' | 'team' }) =>
     call<{ ok: true }>(base(ref), { method: 'PATCH', body }),
   remove: (ref: SessionRef) => call<{ ok: true }>(base(ref), { method: 'DELETE' }),
 
@@ -271,8 +271,11 @@ export const sessions = {
     call<OutputEditSummary[]>(`${base(ref)}/output-edits`),
 
   invites: (ref: SessionRef) => call<InviteSummary[]>(`${base(ref)}/invites`),
-  createInvite: (ref: SessionRef, body: { invitedEmail?: string } = {}) =>
+  /** `role: 'guest'` (M22): a view-only invite to this one session. */
+  createInvite: (ref: SessionRef, body: { invitedEmail?: string; role?: 'guest' } = {}) =>
     call<CreatedInviteView>(`${base(ref)}/invites`, { method: 'POST', body }),
+  removeGuest: (ref: SessionRef, userId: string) =>
+    call<{ ok: true }>(`${base(ref)}/guests/${userId}`, { method: 'DELETE' }),
   revokeInvite: (ref: SessionRef, id: string) =>
     call<{ ok: true }>(`${base(ref)}/invites/${id}/revoke`, { method: 'POST' }),
 };

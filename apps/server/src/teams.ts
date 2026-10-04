@@ -120,7 +120,11 @@ export async function sessionTeam(db: Database, sessionId: string): Promise<{ id
 export async function setSessionTeam(db: Database, sessionId: string, teamId: string | null): Promise<void> {
   await db.transaction(async (tx) => {
     const [before] = await tx.select({ teamId: sessions.teamId }).from(sessions).where(eq(sessions.id, sessionId));
-    await tx.update(sessions).set({ teamId }).where(eq(sessions.id, sessionId));
+    // Out of a team means private again (M22): team visibility needs a team.
+    await tx
+      .update(sessions)
+      .set(teamId ? { teamId } : { teamId: null, visibility: 'private' })
+      .where(eq(sessions.id, sessionId));
     if (before?.teamId && before.teamId !== teamId) {
       await tx
         .delete(sessionMembers)

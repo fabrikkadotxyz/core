@@ -122,6 +122,7 @@ export function CollabEditor({
   placeholder,
   markLines = [],
   onView,
+  readOnly = false,
 }: {
   ytext: Y.Text;
   awareness: Awareness;
@@ -132,6 +133,8 @@ export function CollabEditor({
   /** Lines to mark as errors (1-based). */
   markLines?: number[];
   onView?: (view: EditorView | null) => void;
+  /** A viewer (M22). Display only — the server drops their updates regardless. */
+  readOnly?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -150,6 +153,8 @@ export function CollabEditor({
           editorTheme,
           errorLines,
           cmPlaceholder(placeholder),
+          EditorState.readOnly.of(readOnly),
+          EditorView.editable.of(!readOnly),
           yCollab(ytext, awareness, { undoManager }),
         ],
       }),
@@ -176,6 +181,7 @@ export function CollabEditor({
 
   return (
     <div className="editor-wrap">
+      {!readOnly && (
       <div className="toolbar" role="toolbar" aria-label="Formatting">
         {toolbar.map((t) => (
           <button
@@ -192,6 +198,7 @@ export function CollabEditor({
           </button>
         ))}
       </div>
+      )}
       <div ref={host} className="editor" />
     </div>
   );

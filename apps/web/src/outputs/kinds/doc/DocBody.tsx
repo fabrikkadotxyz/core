@@ -14,11 +14,11 @@ import { History } from '../../History.tsx';
 import { CollabEditor, useYFile, wrap, type ToolbarItem } from '../../CollabEditor.tsx';
 import type { KindBodyProps } from '../types.ts';
 
-export default function DocBody({ ref_, output, sync, tab, focusEdit, editsVersion }: KindBodyProps) {
+export default function DocBody({ ref_, output, sync, tab, focusEdit, editsVersion, readOnly }: KindBodyProps) {
   const file = output.mainFile;
   return (
     <>
-      {tab === 'edit' && <Editor sync={sync} file={file} />}
+      {tab === 'edit' && <Editor sync={sync} file={file} readOnly={readOnly} />}
       {tab === 'preview' && <Preview sync={sync} file={file} />}
       {tab === 'history' && (
         <History ref_={ref_} outputId={output.id} focusEditId={focusEdit?.id ?? null} version={editsVersion} />
@@ -96,7 +96,7 @@ const MARKDOWN_KEYS = [
 
 const MARKDOWN_LANGUAGE = [markdown(), syntaxHighlighting(markdownLook)];
 
-function Editor({ sync, file }: { sync: OutputSync; file: string }) {
+function Editor({ sync, file, readOnly }: { sync: OutputSync; file: string; readOnly: boolean }) {
   const ytext = useYFile(sync.doc, file);
   if (!ytext) return <p className="muted small editor-loading">Opening…</p>;
   return (
@@ -107,6 +107,7 @@ function Editor({ sync, file }: { sync: OutputSync; file: string }) {
       toolbar={MARKDOWN_TOOLBAR}
       keys={MARKDOWN_KEYS}
       placeholder="Start writing… Use the buttons above for headings and lists."
+      readOnly={readOnly}
     />
   );
 }

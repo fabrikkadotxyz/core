@@ -20,7 +20,7 @@ import {
   users,
 } from '@fabrikka/db';
 import type { InviteSummary } from '@fabrikka/types';
-import { addMember, type SessionRole } from './sessions.ts';
+import { addGuest, addMember, type SessionRole } from './sessions.ts';
 import { addTeamMember } from './teams.ts';
 
 /** What an invite joins. Exactly one — the database enforces it too. */
@@ -188,8 +188,10 @@ export async function redeemInvite(
     return { ok: true, team };
   }
 
+  // A guest invite (M22) makes a viewer of this one session, not a member.
+  if ((claimed.role as string) === 'guest') await addGuest(db, claimed.sessionId!, user.id);
   // A direct invite: the stronger grant, so it clears any roster origin (M21).
-  await addMember(db, claimed.sessionId!, user, claimed.role);
+  else await addMember(db, claimed.sessionId!, user, claimed.role);
 
   const [row] = await db
     .select({
@@ -208,12 +210,20 @@ export async function redeemInvite(
 export async function describeInvite(
   db: Database,
   token: string,
-): Promise<{ kind: 'session' | 'team'; title: string; sessionTitle: string; invitedEmail: string | null } | null> {
+): Promise<{
+  kind: 'session' | 'team';
+  title: string;
+  sessionTitle: string;
+  invitedEmail: string | null;
+  /** M22: a guest invite lets you read one session, not take part in it. */
+  guest: boolean;
+} | null> {
   const [row] = await db
     .select({
       sessionTitle: sessionsPublicId.title,
       teamName: teams.name,
       invitedEmail: sessionInvites.invitedEmail,
+      role: sessionInvites.role,
       redeemedAt: sessionInvites.redeemedAt,
       revokedAt: sessionInvites.revokedAt,
       expiresAt: sessionInvites.expiresAt,
@@ -231,7 +241,7 @@ export async function describeInvite(
   const kind = row.teamName !== null ? 'team' : 'session';
   const title = row.teamName ?? row.sessionTitle ?? '';
   // `sessionTitle` stays for clients written before teams; it is the title either way.
-  return { kind, title, sessionTitle: title, invitedEmail: row.invitedEmail };
+  return { kind, title, sessionTitle: title, invitedEmail: row.invitedEmail, guest: row.role === 'guest' };
 }
 
 function toSummary(row: typeof sessionInvites.$inferSelect): InviteSummary {

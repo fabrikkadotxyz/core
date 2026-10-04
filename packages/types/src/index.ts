@@ -377,8 +377,16 @@ export interface SessionView {
   agents: PauseState;
   participants: Participant[];
   members: Member[];
-  /** The requesting user's role and participant identity in this session. */
-  me: { role: SessionRole; participantId: string };
+  /**
+   * The requesting user's role and participant identity in this session. A
+   * viewer (M22: a teammate of a team-visible session, or a guest) has role
+   * `viewer` and no participant: they read, they don't act.
+   */
+  me: { role: SessionRole | 'viewer'; participantId: string | null };
+  /** private | team (M22). */
+  visibility: SessionVisibility;
+  /** Guests of this session (M22) — present for owners only. */
+  guests?: { userId: string; displayName: string; email: string }[];
   /** The ready-to-paste `claude mcp add` command. See docs/protocol.md. */
   mcpEndpoint: string;
 }
@@ -388,6 +396,9 @@ export interface SessionView {
 /* -------------------------------------------------------------------------- */
 
 export type SessionRole = 'owner' | 'member';
+
+/** Who beyond its members can see a session (M22, ADR 0025). Never "public". */
+export type SessionVisibility = 'private' | 'team';
 
 export interface AuthUser {
   id: string;
@@ -411,7 +422,8 @@ export interface SessionSummary {
   ownerSlug: string;
   title: string;
   status: SessionStatus;
-  role: SessionRole;
+  /** `viewer`: you can read it because it's team-visible, or you're a guest (M22). */
+  role: SessionRole | 'viewer';
   memberCount: number;
   createdAt: string;
   /** The team it belongs to (M21), if any. */

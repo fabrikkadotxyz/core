@@ -217,6 +217,34 @@ added.** Belonging to a team doesn't make a session visible to anyone (that's
 M22's `visibility`). Moving a session to another team, or out of one, removes the
 memberships the previous team granted.
 
+### M22 — who can see a session
+
+```
+sessions          + visibility   text not null default 'private'   -- private | team
+
+session_guests                            -- a viewer of one session, from outside its team
+  session_id      uuid -> sessions.id
+  user_id         uuid -> users.id
+  created_at      timestamptz not null
+  primary key (session_id, user_id)
+```
+
+**Viewers have no rows of their own.** A teammate viewing a team-visible session
+is derived (`visibility = 'team'` and on the session's team), never stored, so
+leaving the team or flipping the session back to `private` ends it with nothing
+to clean up. Guests are the one stored case, because they're named one session at
+a time.
+
+**A viewer is not a participant.** No `participants` row, no token, no mention
+marker can point at them, and `list_participants` never shows them (ADR 0025).
+
+**`visibility = 'team'` needs a team.** Taking a session out of its team resets it
+to `private`.
+
+**A guest invite is a session invite with `role = 'guest'`.** Redeeming it writes
+`session_guests`, not `session_members`. An existing member who redeems one stays
+a member.
+
 ### M19 — links
 
 ```

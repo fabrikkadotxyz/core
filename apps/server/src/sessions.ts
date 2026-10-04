@@ -9,15 +9,17 @@
  *    isn't there. Callers render `null` as 404, never 403 — a 403 would leak the
  *    existence and id of private sessions (docs/security.md).
  */
-import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, notInArray, or, sql } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import {
   messageMentions,
   messages,
   participants,
   sessionContext,
+  sessionGuests,
   sessionMembers,
   sessions,
+  teamMembers,
   teams,
   users,
 } from '@fabrikka/db';
@@ -27,11 +29,26 @@ import type {
   Participant,
   Session,
   SessionContext,
+  SessionVisibility,
   SessionSummary,
 } from '@fabrikka/types';
 import { resolveMentions } from './mentions.ts';
 
 export type SessionRole = 'owner' | 'member';
+
+/**
+ * A session as seen by someone who may only be a viewer (M22). Used ONLY by the
+ * explicit allowlist of read routes; every other route keeps the member-only
+ * resolver, so a route nobody converted fails closed (docs/security.md, Threat 8).
+ */
+export interface ViewableSession {
+  id: string;
+  view: Session;
+  access: 'member' | 'viewer';
+  role: SessionRole | 'viewer';
+  /** Null for a viewer: no participant, no identity to act with. */
+  participantId: string | null;
+}
 
 export interface ResolvedSession {
   /** Internal id. Never leaves the server. */
@@ -111,6 +128,64 @@ export async function resolveSessionForUser(
 }
 
 /** Sessions this user is a member of, newest first. */
+export async function resolveSessionForViewer(
+  db: Database,
+  ownerSlug: string,
+  sessionPublicId: string,
+  userId: string,
+): Promise<ViewableSession | null> {
+  const member = await resolveSessionForUser(db, ownerSlug, sessionPublicId, userId);
+  if (member) return { ...member, access: 'member' };
+
+  const [row] = await db
+    .select({
+      id: sessions.id,
+      publicId: sessions.publicId,
+      title: sessions.title,
+      status: sessions.status,
+      createdAt: sessions.createdAt,
+      ownerSlug: users.ownerSlug,
+      teamId: sessions.teamId,
+      visibility: sessions.visibility,
+    })
+    .from(sessions)
+    .innerJoin(users, eq(users.id, sessions.ownerId))
+    .where(eq(sessions.publicId, sessionPublicId))
+    .limit(1);
+  if (!row || row.ownerSlug !== ownerSlug) return null;
+
+  const guest = await db
+    .select({ userId: sessionGuests.userId })
+    .from(sessionGuests)
+    .where(and(eq(sessionGuests.sessionId, row.id), eq(sessionGuests.userId, userId)))
+    .limit(1);
+  let viewer = guest.length > 0;
+  if (!viewer && row.visibility === 'team' && row.teamId) {
+    const onTeam = await db
+      .select({ userId: teamMembers.userId })
+      .from(teamMembers)
+      .where(and(eq(teamMembers.teamId, row.teamId), eq(teamMembers.userId, userId)))
+      .limit(1);
+    viewer = onTeam.length > 0;
+  }
+  if (!viewer) return null;
+
+  return {
+    id: row.id,
+    access: 'viewer',
+    role: 'viewer',
+    participantId: null,
+    view: {
+      id: row.id,
+      publicId: row.publicId,
+      ownerSlug: row.ownerSlug,
+      title: row.title,
+      status: row.status as Session['status'],
+      createdAt: row.createdAt.toISOString(),
+    },
+  };
+}
+
 export async function listSessionsForUser(
   db: Database,
   userId: string,
@@ -137,7 +212,7 @@ export async function listSessionsForUser(
     .where(eq(sessionMembers.userId, userId))
     .orderBy(desc(sessions.createdAt));
 
-  return rows.map((r) => ({
+  const mine: SessionSummary[] = rows.map((r) => ({
     publicId: r.publicId,
     ownerSlug: r.ownerSlug,
     title: r.title,
@@ -147,6 +222,46 @@ export async function listSessionsForUser(
     team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
     createdAt: r.createdAt.toISOString(),
   }));
+
+  // M22: sessions you can read without being in them — as a guest, or because
+  // they're team-visible to a team you're on. Never one you're already in.
+  const memberOf = db.select({ id: sessionMembers.sessionId }).from(sessionMembers).where(eq(sessionMembers.userId, userId));
+  const guestOf = db.select({ id: sessionGuests.sessionId }).from(sessionGuests).where(eq(sessionGuests.userId, userId));
+  const myTeams = db.select({ id: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, userId));
+  const viewable = await db
+    .select({
+      publicId: sessions.publicId,
+      title: sessions.title,
+      status: sessions.status,
+      createdAt: sessions.createdAt,
+      ownerSlug: users.ownerSlug,
+      teamId: teams.id,
+      teamName: teams.name,
+      memberCount: sql<number>`(select count(*) from ${sessionMembers} sm where sm.session_id = ${sessions.id})`,
+    })
+    .from(sessions)
+    .innerJoin(users, eq(users.id, sessions.ownerId))
+    .leftJoin(teams, eq(teams.id, sessions.teamId))
+    .where(
+      and(
+        notInArray(sessions.id, memberOf),
+        or(inArray(sessions.id, guestOf), and(eq(sessions.visibility, 'team'), inArray(sessions.teamId, myTeams))),
+      ),
+    );
+
+  return [
+    ...mine,
+    ...viewable.map((r) => ({
+      publicId: r.publicId,
+      ownerSlug: r.ownerSlug,
+      title: r.title,
+      status: r.status as Session['status'],
+      role: 'viewer' as const,
+      memberCount: Number(r.memberCount),
+      team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  ].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
 /**
@@ -848,4 +963,56 @@ function toMessage(r: MessageRow, mentions: Mention[]): Message {
     mentions,
     createdAt: r.createdAt.toISOString(),
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* M22 — visibility and guests. See ADR 0025 and docs/security.md, Threat 8.  */
+/* -------------------------------------------------------------------------- */
+
+export async function getVisibility(db: Database, sessionId: string): Promise<SessionVisibility> {
+  const [row] = await db.select({ v: sessions.visibility }).from(sessions).where(eq(sessions.id, sessionId));
+  return (row?.v as SessionVisibility | undefined) ?? 'private';
+}
+
+/** `team` needs a team: a team-visible session with no team would be visible to no one, confusingly. */
+export async function setVisibility(
+  db: Database,
+  sessionId: string,
+  visibility: SessionVisibility,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (visibility !== 'private' && visibility !== 'team') return { ok: false, error: 'visibility is private or team' };
+  if (visibility === 'team') {
+    const [row] = await db.select({ teamId: sessions.teamId }).from(sessions).where(eq(sessions.id, sessionId));
+    if (!row?.teamId) return { ok: false, error: 'put the session in a team before making it team-visible' };
+  }
+  await db.update(sessions).set({ visibility }).where(eq(sessions.id, sessionId));
+  return { ok: true };
+}
+
+export async function listGuests(db: Database, sessionId: string) {
+  return db
+    .select({ userId: users.id, displayName: users.displayName, email: users.email })
+    .from(sessionGuests)
+    .innerJoin(users, eq(users.id, sessionGuests.userId))
+    .where(eq(sessionGuests.sessionId, sessionId))
+    .orderBy(asc(users.displayName));
+}
+
+/** A member who redeems a guest invite stays a member: never a downgrade. */
+export async function addGuest(db: Database, sessionId: string, userId: string): Promise<void> {
+  const member = await db
+    .select({ userId: sessionMembers.userId })
+    .from(sessionMembers)
+    .where(and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.userId, userId)))
+    .limit(1);
+  if (member.length) return;
+  await db.insert(sessionGuests).values({ sessionId, userId }).onConflictDoNothing();
+}
+
+export async function removeGuest(db: Database, sessionId: string, userId: string): Promise<boolean> {
+  const done = await db
+    .delete(sessionGuests)
+    .where(and(eq(sessionGuests.sessionId, sessionId), eq(sessionGuests.userId, userId)))
+    .returning({ userId: sessionGuests.userId });
+  return done.length > 0;
 }

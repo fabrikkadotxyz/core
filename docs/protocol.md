@@ -651,7 +651,9 @@ GET /api/o/{owner_id}/s/{session_id}/stream      (WebSocket)
 ```
 
 Authenticated by the same cookie as the REST API and membership-checked: a socket
-is not a way around the access rules.
+is not a way around the access rules. **Viewers** *(M22: team members of a
+team-visible session, and guests)* may open it too. It only sends from server to
+client, so it gives them nothing to write with.
 
 Server → client frames:
 
@@ -710,6 +712,10 @@ editor is Google's.
 Frames a client sends before the server has finished checking its cookie are held
 and replayed once it is attached — a stock client sends its first sync step the
 moment the socket opens, and dropping it means the client never syncs.
+
+A **viewer** *(M22)* may open an output's sync socket **read-only**. The server
+answers their sync step 1 with the document and drops every update and awareness
+message they send. The editor shows read-only, but the server is what enforces it.
 
 `latex` viewers *(M13)* additionally send one JSON text frame per compile:
 `{ type: 'build.report', sourceHash, status, errors }`. `sourceHash` is the

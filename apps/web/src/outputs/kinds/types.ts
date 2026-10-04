@@ -21,6 +21,8 @@ export interface KindBodyProps {
   focusEdit: OutputEditSummary | null;
   /** Bumped whenever an edit to this output is published. */
   editsVersion: number;
+  /** A viewer (M22): show, don't edit. The server enforces it regardless. */
+  readOnly: boolean;
 }
 
 export interface WebKind {

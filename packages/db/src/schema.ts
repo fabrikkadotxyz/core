@@ -5,7 +5,7 @@
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
  * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation), M10 (runs) and
- * M12 (outputs), M19 (links) and M21 (teams).
+ * M12 (outputs), M19 (links), M21 (teams) and M22 (guests).
  */
 import {
   boolean,
@@ -91,6 +91,8 @@ export const sessions = pgTable('sessions', {
   title: text('title').notNull(),
   /** Optional (M21). Decides who can be added from the roster — not who can see. */
   teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
+  /** private | team (M22). `team` makes every teammate a viewer; needs a team. */
+  visibility: text('visibility').notNull().default('private'),
   /** active | archived */
   status: text('status').notNull().default('active'),
   /**
@@ -691,4 +693,22 @@ export const sessionLinks = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('session_links_session_url').on(t.sessionId, t.url)],
+);
+
+/**
+ * A viewer of one session from outside its team: a client, an advisor (M22).
+ * Not a member and not a participant — read and (M23) comment, nothing else.
+ */
+export const sessionGuests = pgTable(
+  'session_guests',
+  {
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
 );

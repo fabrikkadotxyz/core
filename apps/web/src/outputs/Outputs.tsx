@@ -32,9 +32,12 @@ export function OutputsPanel({
   ref_,
   outputs,
   onOpen,
+  canCreate = true,
 }: {
   ref_: SessionRef;
   outputs: Output[];
+  /** False for a viewer (M22). */
+  canCreate?: boolean;
   onOpen: (id: string, opts?: { rename?: boolean }) => void;
 }) {
   const [kinds, setKinds] = useState<OutputKindInfo[]>([]);
@@ -45,7 +48,7 @@ export function OutputsPanel({
     sessions.outputKinds(ref_).then(setKinds).catch(() => {});
   }, [ref_]);
 
-  const available = kinds.filter((k) => k.available);
+  const available = canCreate ? kinds.filter((k) => k.available) : [];
   // From the catalogue, so a new kind brings its own icon (ADR 0023).
   const iconOf = (kind: string) => kinds.find((k) => k.kind === kind)?.icon ?? '📄';
 

@@ -27,6 +27,7 @@ export default function OutputView({
   renameOnOpen,
   editsVersion,
   onClose,
+  readOnly = false,
 }: {
   ref_: SessionRef;
   output: Output;
@@ -40,6 +41,8 @@ export default function OutputView({
   /** Bumped whenever an edit to this output is published. */
   editsVersion: number;
   onClose: () => void;
+  /** A viewer (M22): the output is shown, not edited. */
+  readOnly?: boolean;
 }) {
   const [status, setStatus] = useState<SyncStatus>('connecting');
   const [sync, setSync] = useState<OutputSync | null>(null);
@@ -94,7 +97,11 @@ export default function OutputView({
         )}
       </header>
 
-      <TitleField ref_={ref_} output={output} autoFocus={renameOnOpen} />
+      {readOnly ? (
+        <h2 className="output-title">{output.name}</h2>
+      ) : (
+        <TitleField ref_={ref_} output={output} autoFocus={renameOnOpen} />
+      )}
 
       <div className="tabs" role="tablist">
         {tabs.map(([key, label]) => (
@@ -109,7 +116,7 @@ export default function OutputView({
           </button>
         ))}
         <span className="spacer" />
-        <SyncBadge status={status} />
+        {readOnly ? <span className="sync-badge">View only</span> : <SyncBadge status={status} />}
       </div>
 
       {sync && (
@@ -122,6 +129,7 @@ export default function OutputView({
             onTab={onTab}
             focusEdit={focusEdit}
             editsVersion={editsVersion}
+            readOnly={readOnly}
           />
         </Suspense>
       )}

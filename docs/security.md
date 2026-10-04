@@ -287,6 +287,34 @@ anything else in their Drive, because the scope is `drive.file`. Refresh tokens 
 sealed under the same key as integration credentials and refused without it
 ([ADR 0021](decisions/0021-google-docs-writes-use-the-editors-own-account.md)).
 
+## Threat 8 — viewers: team-visible sessions and guests (M22)
+
+M22 adds the first access that is **read-only**. Until now anyone who could see a
+session could also post in it, and every route assumed that.
+
+- **Fail closed.** The member resolver is unchanged, so every existing route
+  stays members-only. Viewers reach only routes that explicitly use the viewer
+  resolver: the session view, messages, participants, context, links, artifacts,
+  outputs and their changes, the session stream, an output's sync socket, and a
+  kind's own read routes. A route nobody converted answers a viewer with 404.
+- **No identity to act with.** A viewer has no participant row and no token. They
+  can't post, so they can't mention, so they can't start an agent: the delivery
+  gate never sees them (ADR 0010). They have no MCP access at all.
+- **Read-only sync.** On an output's socket a viewer may ask for the document,
+  and every update they send is dropped, along with their awareness. The server
+  enforces this, not the editor.
+- **What they don't see.** A viewer's session view has no member list (emails),
+  and they never see Setup: agents, tokens, integrations, invites, the team
+  roster.
+- **What they do see** is everything members read, live, including what an agent
+  posted from someone's private repo. So making a session team-visible is the
+  owner's deliberate act, shown on the session, and `activity_visible` still
+  applies (Threat 5).
+- **Ends without cleanup.** Team viewing is derived from team membership and
+  visibility, so leaving the team or making the session private ends it on the
+  next request. A guest is removed by deleting one row. An already-open stream is
+  not cut mid-flight; the same is true for a removed member today.
+
 ## Threat 7 — parsing uploaded files on the server (M20)
 
 Agents can read the text of an uploaded PDF, which means the server parses a file

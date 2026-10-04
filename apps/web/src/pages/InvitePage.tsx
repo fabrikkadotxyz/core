@@ -16,7 +16,7 @@ export function InvitePage() {
   const { user, loading, setUser } = useAuth();
 
   const [preview, setPreview] = useState<
-    { kind: 'session' | 'team'; title: string; invitedEmail: string | null } | null | 'invalid'
+    { kind: 'session' | 'team'; title: string; invitedEmail: string | null; guest?: boolean } | null | 'invalid'
   >(null);
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -95,7 +95,8 @@ export function InvitePage() {
     return (
       <main className="centered">
         <div className="card">
-          <h1>{preview.kind === 'team' ? `Join the team “${preview.title}”` : `Join “${preview.title}”`}</h1>
+          <h1>{preview.kind === 'team' ? `Join the team “${preview.title}”` : preview.guest ? `View “${preview.title}”` : `Join “${preview.title}”`}</h1>
+          {preview.guest && <p className="hint">You're invited as a guest: you can read this session and nothing else.</p>}
           <p className="muted">
             You're signed in as {user.email}.
             {preview.invitedEmail && preview.invitedEmail !== user.email && (
@@ -118,8 +119,9 @@ export function InvitePage() {
   return (
     <main className="centered">
       <form className="card" onSubmit={signup}>
-        <h1>{preview.kind === 'team' ? `Join the team “${preview.title}”` : `Join “${preview.title}”`}</h1>
-        <p className="muted">Create an account to join this {preview.kind === 'team' ? 'team' : 'session'}.</p>
+        <h1>{preview.kind === 'team' ? `Join the team “${preview.title}”` : preview.guest ? `View “${preview.title}”` : `Join “${preview.title}”`}</h1>
+        {preview.guest && <p className="hint">You're invited as a guest: you can read this session and nothing else.</p>}
+        <p className="muted">Create an account to {preview.guest ? 'view' : 'join'} this {preview.kind === 'team' ? 'team' : 'session'}.</p>
 
         <label>
           Email

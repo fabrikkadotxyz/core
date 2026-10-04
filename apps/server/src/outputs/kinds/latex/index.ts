@@ -135,10 +135,13 @@ export const latex: OutputKindModule = {
     public(app) {
       app.get('/tex-assets/*', (c) => serveTexAsset(c.req.path.slice('/tex-assets/'.length)));
     },
-    /** Where browsers load the TeX engine from — null when LaTeX is not installed. */
-    session(routes, member) {
+    /**
+     * Where browsers load the TeX engine from — null when LaTeX is not installed.
+     * Viewers (M22) may read it: a guest compiles the paper to see the PDF.
+     */
+    session(routes, resolve) {
       routes.get('/tex', async (c) => {
-        if (!(await member(c))) return c.notFound();
+        if (!(await resolve.viewer(c))) return c.notFound();
         const assetsPath = texAssetsPath();
         return c.json(assetsPath ? { assetsPath } : null);
       });

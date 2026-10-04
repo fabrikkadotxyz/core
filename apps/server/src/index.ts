@@ -125,6 +125,11 @@ import {
   renameParticipant,
   renameSession,
   resolveSessionForUser,
+  resolveSessionForViewer,
+  getVisibility,
+  setVisibility,
+  listGuests,
+  removeGuest,
   setSessionStatus,
   updateSessionContext,
   type ContextUpdate,
@@ -343,10 +348,13 @@ const sessionRoutes = new Hono<AuthEnv>();
 sessionRoutes.use('*', requireUser(db));
 
 sessionRoutes.get('/', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22) — but a viewer's view leaves out the member list
+  // (emails) and everything Setup holds (docs/security.md, Threat 8).
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
 
   const statuses = await connectionStatuses(db, s.id);
+  const viewer = s.access === 'viewer';
   const view: SessionView = {
     agents: await pauseState(db, s.id),
     session: s.view,
@@ -354,9 +362,11 @@ sessionRoutes.get('/', async (c) => {
       ...p,
       status: statuses.get(p.id),
     })),
-    members: await membersWithOrigin(s.id),
+    members: viewer ? [] : await membersWithOrigin(s.id),
     me: { role: s.role, participantId: s.participantId },
-    mcpEndpoint: `${PUBLIC_URL}/mcp/o/${s.view.ownerSlug}/s/${s.view.publicId}`,
+    mcpEndpoint: viewer ? '' : `${PUBLIC_URL}/mcp/o/${s.view.ownerSlug}/s/${s.view.publicId}`,
+    visibility: await getVisibility(db, s.id),
+    ...(s.role === 'owner' ? { guests: await listGuests(db, s.id) } : {}),
   };
   return c.json(view);
 });
@@ -368,7 +378,13 @@ sessionRoutes.patch('/', async (c) => {
   // from their perspective the mutable resource does not exist.
   if (s.role !== 'owner') return c.notFound();
 
-  const body = await c.req.json<{ title?: string; status?: 'active' | 'archived' }>();
+  const body = await c.req.json<{ title?: string; status?: 'active' | 'archived'; visibility?: string }>();
+
+  // M22: making a session team-visible is the owner's deliberate act.
+  if (body.visibility !== undefined) {
+    const set = await setVisibility(db, s.id, body.visibility as 'private' | 'team');
+    if (!set.ok) return c.json({ error: set.error }, 400);
+  }
 
   if (body.title !== undefined) {
     const title = body.title.trim();
@@ -393,7 +409,8 @@ sessionRoutes.delete('/', async (c) => {
 });
 
 sessionRoutes.get('/messages', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
   return c.json(await listMessages(db, s.id));
 });
@@ -432,7 +449,8 @@ sessionRoutes.post('/messages', async (c) => {
 /* ---- participants ---- */
 
 sessionRoutes.get('/participants', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
   return c.json(await listParticipants(db, s.id));
 });
@@ -491,6 +509,14 @@ sessionRoutes.delete('/members/:userId', async (c) => {
 
   await removeMember(db, s.id, userId);
   return c.json({ ok: true });
+});
+
+/* ---- guests (M22): a viewer of this one session, from outside its team ---- */
+
+sessionRoutes.delete('/guests/:userId', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+  return (await removeGuest(db, s.id, c.req.param('userId'))) ? c.json({ ok: true }) : c.notFound();
 });
 
 /* ---- the session's team (M21) ---- */
@@ -710,7 +736,8 @@ sessionRoutes.delete('/pause', async (c) => {
 /* ---- context ---- */
 
 sessionRoutes.get('/context', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
   return c.json(await getSessionContext(db, s.id));
 });
@@ -821,7 +848,8 @@ sessionRoutes.put('/integrations/:slug/tools/:tool', async (c) => {
 /* ---- artifacts ---- */
 
 sessionRoutes.get('/artifacts', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
   return c.json(await listArtifacts(db, s.id));
 });
@@ -866,7 +894,8 @@ sessionRoutes.post('/artifacts', async (c) => {
 });
 
 sessionRoutes.get('/artifacts/:id/content', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
 
   const found = await readArtifact(db, s.id, c.req.param('id'));
@@ -895,7 +924,8 @@ sessionRoutes.delete('/artifacts/:id', async (c) => {
 /* ---- links (M19): pointers to outside things. Any member, like context. ---- */
 
 sessionRoutes.get('/links', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
   return c.json(await listLinks(db, s.id));
 });
@@ -933,13 +963,15 @@ sessionRoutes.delete('/links', async (c) => {
 
 /** The catalogue: what kinds of output this instance offers. */
 sessionRoutes.get('/output-kinds', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
   return c.json(outputKinds());
 });
 
 sessionRoutes.get('/outputs', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
   return c.json(await listOutputs(db, s.id));
 });
@@ -1014,10 +1046,11 @@ sessionRoutes.delete('/outputs/:id/files', async (c) => {
 });
 
 /** Each output kind's own routes: public assets, session-scoped config (ADR 0023). */
-mountKindRoutes(app, sessionRoutes, resolve);
+mountKindRoutes(app, sessionRoutes, { member: resolve, viewer: resolveViewer });
 
 sessionRoutes.get('/outputs/:id/changes', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
   const id = c.req.param('id');
   if (!isOutputId(id) || !(await outputCreator(db, s.id, id))) return c.notFound();
@@ -1029,7 +1062,8 @@ sessionRoutes.get('/outputs/:id/changes', async (c) => {
  * reload. Human typing is in each output's changes view, not the conversation.
  */
 sessionRoutes.get('/output-edits', async (c) => {
-  const s = await resolve(c);
+  // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
+  const s = await resolveViewer(c);
   if (!s) return c.notFound();
   const edits = await listEdits(db, s.id, { agentsOnly: true, limit: 100 });
   return c.json(edits.map(({ diff: _diff, ...summary }) => summary));
@@ -1051,7 +1085,7 @@ sessionRoutes.post('/invites', async (c) => {
 
   type InviteBody = {
     invitedEmail?: string;
-    role?: 'owner' | 'member';
+    role?: 'owner' | 'member' | 'guest';
     ttlDays?: number;
   };
   // An empty body is valid: it means "a default member invite".
@@ -1060,7 +1094,8 @@ sessionRoutes.post('/invites', async (c) => {
   const { summary, token } = await createInvite(db, {
     sessionId: s.id,
     createdByUserId: c.get('user').id,
-    role: body.role === 'owner' ? 'owner' : 'member',
+    // `guest` (M22): a viewer of this one session. Anything else unknown is a member.
+    role: body.role === 'owner' ? 'owner' : body.role === 'guest' ? ('guest' as never) : 'member',
     invitedEmail: body.invitedEmail ?? null,
     ttlDays: body.ttlDays,
   });
@@ -1405,7 +1440,9 @@ app.get(
         const user = await resolveToken(db, token);
         if (!user) return refuse('unauthenticated');
 
-        const s = await resolveSessionForUser(
+        // Viewers (M22) may listen: this socket only sends, so it gives them
+        // nothing to write with.
+        const s = await resolveSessionForViewer(
           db,
           ownerSlug,
           sessionPublicId,
@@ -1469,13 +1506,15 @@ app.get(
         if (!ownerSlug || !sessionPublicId) return refuse('not_found');
         const user = await resolveToken(db, token);
         if (!user) return refuse('unauthenticated');
-        const s = await resolveSessionForUser(db, ownerSlug, sessionPublicId, user.id);
+        const s = await resolveSessionForViewer(db, ownerSlug, sessionPublicId, user.id);
         if (!s) return refuse('not_found');
 
         handlers = await attachSocket(db, {
           sessionId: s.id,
           outputId,
+          // A viewer (M22) syncs read-only: the store drops every update they send.
           participantId: s.participantId,
+          readOnly: s.access === 'viewer',
           ws: {
             send: (data) => ws.send(data as never),
             close: () => ws.close(),
@@ -1602,6 +1641,17 @@ function sendMention(ws: { send: (data: string) => void }, sessionId: string, me
 async function membersWithOrigin(sessionId: string) {
   const origins = await membershipOrigins(db, sessionId);
   return (await listMembers(db, sessionId)).map((m) => ({ ...m, viaTeam: origins.has(m.userId) }));
+}
+
+/** The viewer-aware resolver (M22). Only allowlisted read routes may use it. */
+async function resolveViewer(c: {
+  req: { param: (k: string) => string | undefined };
+  get: (k: 'user') => AuthEnv['Variables']['user'];
+}) {
+  const owner = c.req.param('owner');
+  const session = c.req.param('session');
+  if (!owner || !session) return null;
+  return resolveSessionForViewer(db, owner, session, c.get('user').id);
 }
 
 async function resolve(c: {

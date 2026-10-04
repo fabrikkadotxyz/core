@@ -50,7 +50,11 @@ interface Origin {
   runId?: string | null;
 }
 
-interface Conn extends Origin {
+interface Conn {
+  /** Null for a viewer (M22), who never originates a transaction. */
+  participantId: string | null;
+  /** A viewer: sync requests are answered, updates and awareness dropped. */
+  readOnly: boolean;
   ws: SyncSocket;
   /** Awareness client ids this socket announced, removed when it closes. */
   clients: Set<number>;
@@ -416,7 +420,12 @@ export const yjsStore: OutputStore = {
     const hub = await acquire(db, row, kind);
     clearTimeout(hub.unloadTimer);
 
-    const conn: Conn = { participantId: opts.participantId, ws: opts.ws, clients: new Set() };
+    const conn: Conn = {
+      participantId: opts.participantId,
+      readOnly: opts.readOnly ?? false,
+      ws: opts.ws,
+      clients: new Set(),
+    };
     hub.conns.add(conn);
 
     {
@@ -449,6 +458,11 @@ export const yjsStore: OutputStore = {
         try {
           const decoder = decoding.createDecoder(new Uint8Array(data));
           const type = decoding.readVarUint(decoder);
+          // A viewer may ask for the document (sync step 1) and nothing else: an
+          // update or step 2 from them is dropped here, server-side (Threat 8).
+          if (conn.readOnly && (type !== MSG_SYNC || decoding.peekVarUint(decoder) !== syncProtocol.messageYjsSyncStep1)) {
+            return;
+          }
           if (type === MSG_SYNC) {
             const encoder = encoding.createEncoder();
             encoding.writeVarUint(encoder, MSG_SYNC);

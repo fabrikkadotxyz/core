@@ -1,6 +1,6 @@
 # 0025 — Teams, and who can see a session
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-03
 
 ## Context

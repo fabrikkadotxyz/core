@@ -75,21 +75,32 @@ export interface OutputStore {
     db: Database,
     row: OutputRow,
     kind: OutputKindModule,
-    opts: { participantId: string; ws: SyncSocket },
+    /** `readOnly` (M22): a viewer — answer their sync requests, drop their updates. */
+    opts: { participantId: string | null; ws: SyncSocket; readOnly?: boolean },
   ): Promise<SocketHandlers>;
   /** The output is being deleted: drop anything held in memory, close viewers. */
   evict(outputId: string): void;
 }
 
-/** Resolves the session for the calling member, or null — which must be a 404. */
+/** Resolves the session for the caller, or null — which must be a 404. */
 export type MemberResolver = (c: any) => Promise<{ id: string } | null>;
+
+/**
+ * How a kind's session routes check access. `member` admits members only;
+ * `viewer` also admits viewers (M22: teammates of a team-visible session, and
+ * guests). Use `viewer` only for routes that read — never for one that writes.
+ */
+export interface Resolvers {
+  member: MemberResolver;
+  viewer: MemberResolver;
+}
 
 /** A kind's own HTTP routes. */
 export interface KindRoutes {
   /** Unauthenticated routes, e.g. static assets a browser fetches without a session. */
   public?: (app: Hono<any>) => void;
-  /** Routes under /api/o/:owner/s/:session. Call `member(c)` first; null means 404. */
-  session?: (routes: Hono<any>, member: MemberResolver) => void;
+  /** Routes under /api/o/:owner/s/:session. Resolve first; null means 404. */
+  session?: (routes: Hono<any>, resolve: Resolvers) => void;
 }
 
 export interface OutputKindModule {

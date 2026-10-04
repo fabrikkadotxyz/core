@@ -100,6 +100,7 @@ export default function LatexBody({
   onTab,
   focusEdit,
   editsVersion,
+  readOnly,
 }: {
   ref_: SessionRef;
   output: Output;
@@ -108,6 +109,7 @@ export default function LatexBody({
   onTab: (t: OutputTab) => void;
   focusEdit: OutputEditSummary | null;
   editsVersion: number;
+  readOnly: boolean;
 }) {
   const [files, setFiles] = useState<string[]>([]);
   const [active, setActive] = useState(output.mainFile);
@@ -308,7 +310,7 @@ export default function LatexBody({
                 <button role="tab" aria-selected={f === active} onClick={() => setActive(f)}>
                   {f}
                 </button>
-                {f !== output.mainFile && (
+                {f !== output.mainFile && !readOnly && (
                   <button
                     className="file-remove"
                     title={`Remove ${f}`}
@@ -323,6 +325,7 @@ export default function LatexBody({
                 )}
               </span>
             ))}
+            {!readOnly && (
             <button
               className="file-add"
               title="Add a file — a section, or a .bib for references"
@@ -339,6 +342,7 @@ export default function LatexBody({
             >
               + File
             </button>
+            )}
           </div>
           {ytext ? (
             <CollabEditor
@@ -350,6 +354,7 @@ export default function LatexBody({
               placeholder={active.endsWith('.bib') ? '@article{key, author = {…}, title = {…}, year = {…}}' : '\\section{…}'}
               markLines={errorLines}
               onView={onView}
+              readOnly={readOnly}
             />
           ) : (
             <p className="muted small editor-loading">Opening…</p>

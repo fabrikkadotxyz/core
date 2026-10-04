@@ -11,7 +11,7 @@ import type { Database } from '@fabrikka/db';
 import { outputEdits, outputs, participants } from '@fabrikka/db';
 import type { Output, OutputKindInfo } from '@fabrikka/types';
 import { publish } from '../bus.ts';
-import type { EditRequest, MemberResolver, OutputKindModule, OutputRow, SocketHandlers, SyncSocket } from './contract.ts';
+import type { EditRequest, OutputKindModule, OutputRow, Resolvers, SocketHandlers, SyncSocket } from './contract.ts';
 import { OutputError } from './errors.ts';
 import { KINDS } from './registry.ts';
 
@@ -51,10 +51,10 @@ export function multiFileKinds(): string[] {
 }
 
 /** Mount every kind's own HTTP routes. Called once, at startup. */
-export function mountKindRoutes(app: Hono<any>, sessionRoutes: Hono<any>, member: MemberResolver) {
+export function mountKindRoutes(app: Hono<any>, sessionRoutes: Hono<any>, resolve: Resolvers) {
   for (const k of KINDS) {
     k.routes?.public?.(app);
-    k.routes?.session?.(sessionRoutes, member);
+    k.routes?.session?.(sessionRoutes, resolve);
   }
 }
 
@@ -309,9 +309,13 @@ export async function removeFile(
 /** Attach a browser to an output. Membership was checked by the caller. */
 export async function attachSocket(
   db: Database,
-  opts: { sessionId: string; outputId: string; participantId: string; ws: SyncSocket },
+  opts: { sessionId: string; outputId: string; participantId: string | null; ws: SyncSocket; readOnly?: boolean },
 ): Promise<SocketHandlers | null> {
   const found = await find(db, opts.sessionId, opts.outputId);
   if (!found) return null;
-  return found.kind.store.attach(db, found.row, found.kind, { participantId: opts.participantId, ws: opts.ws });
+  return found.kind.store.attach(db, found.row, found.kind, {
+    participantId: opts.participantId,
+    ws: opts.ws,
+    readOnly: opts.readOnly,
+  });
 }

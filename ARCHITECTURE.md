@@ -164,7 +164,10 @@ context whose only way to write is the attributed edit path. Kind-owned data
 lives in `outputs.kind_data`, which core never reads.
 
 **Nothing outside those folders and the registries names a kind.** A unit test
-enforces it. A kind with no web module still works through a generic text editor.
+enforces it. The one exception is data: a built-in session template (M25) says
+"start with a `doc` called Pitch" the way a stored output row does, and no code
+there branches on a kind. Built-in templates follow the same plug-in shape: one
+file in `apps/server/src/templates/builtin/` and one registry line. A kind with no web module still works through a generic text editor.
 Adding a kind means adding its folders, its two registry lines and its docs.
 
 ## What we are deliberately not building

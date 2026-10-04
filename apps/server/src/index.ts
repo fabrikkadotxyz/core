@@ -113,6 +113,7 @@ import {
 import { cachedRepos, LinkError, linkedRepos, listLinks, removeLink, saveLink } from './links.ts';
 import { addComment, listComments, reply, setResolved, threadAuthor } from './outputs/comments.ts';
 import { getCatchUp, markSeen, waitingFor } from './catchup.ts';
+import { applyTemplate, deleteTemplate, findTemplate, listTemplates, saveTemplate, sessionTemplate, TemplateError } from './templates/templates.ts';
 import {
   countOwners,
   createMessage,
@@ -272,13 +273,21 @@ app.get('/api/sessions', requireUser(db), async (c) =>
 );
 
 app.post('/api/sessions', requireUser(db), async (c) => {
-  const { title, teamId } = await c.req.json<{ title?: string; teamId?: string }>();
+  const { title, teamId, templateRef } = await c.req.json<{ title?: string; teamId?: string; templateRef?: string }>();
   const trimmed = title?.trim();
   if (!trimmed) return c.json({ error: 'title is required' }, 400);
   // A team you aren't on is indistinguishable from one that doesn't exist.
   if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such team' }, 404);
 
-  return c.json(await createSession(db, c.get('user'), trimmed, { teamId: teamId ?? null }), 201);
+  // M25: a template you can't use is indistinguishable from one that doesn't exist.
+  const template = templateRef ? await findTemplate(db, c.get('user').id, templateRef) : null;
+  if (templateRef && !template) return c.json({ error: 'no such template' }, 404);
+  const created = await createSession(db, c.get('user'), trimmed, { teamId: teamId ?? null });
+  if (template) {
+    const s = await resolveSessionForUser(db, created.ownerSlug, created.publicId, c.get('user').id);
+    await applyTemplate(db, { sessionId: s!.id, participantId: s!.participantId, template });
+  }
+  return c.json(created, 201);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -347,6 +356,14 @@ app.delete('/api/teams/:id/members/:userId', requireUser(db), async (c) => {
 
 /** M24: mentions of you across your sessions, since you last opened each. */
 app.get('/api/waiting', requireUser(db), async (c) => c.json(await waitingFor(db, c.get('user').id)));
+
+/* ---- templates (M25): a session's structure, never its content ---- */
+
+app.get('/api/templates', requireUser(db), async (c) => c.json(await listTemplates(db, c.get('user').id)));
+
+app.delete('/api/templates/:ref', requireUser(db), async (c) =>
+  (await deleteTemplate(db, c.get('user').id, c.req.param('ref'))) ? c.json({ ok: true }) : c.notFound(),
+);
 
 const sessionRoutes = new Hono<AuthEnv>();
 
@@ -530,6 +547,31 @@ sessionRoutes.post('/seen', async (c) => {
   if (!s) return c.notFound();
   await markSeen(db, s.id, c.get('user').id);
   return c.json({ ok: true });
+});
+
+/* ---- this session's template (M25) ---- */
+
+/** Which template it started from, for suggested connections. Members only. */
+sessionRoutes.get('/template', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  return c.json(await sessionTemplate(db, c.get('user').id, s.id));
+});
+
+/** Save this session's structure as a template. The owner's call. */
+sessionRoutes.post('/template', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+  const body = await c.req.json<{ name?: string; description?: string; teamId?: string | null }>();
+  try {
+    return c.json(
+      await saveTemplate(db, { sessionId: s.id, userId: c.get('user').id, name: body.name ?? '', description: body.description, teamId: body.teamId ?? null }),
+      201,
+    );
+  } catch (err) {
+    if (err instanceof TemplateError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
 });
 
 /* ---- guests (M22): a viewer of this one session, from outside its team ---- */

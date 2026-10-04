@@ -48,7 +48,10 @@ function* sources(dir: string): Generator<string> {
 const allowed = (path: string) =>
   path.startsWith(SERVER_KINDS + '/') ||
   path.startsWith(WEB_KINDS + '/') ||
-  path.endsWith('apps/server/src/outputs/registry.ts');
+  path.endsWith('apps/server/src/outputs/registry.ts') ||
+  // Built-in templates (M25) are data that name a kind the way a stored output
+  // row does — "start with a doc called Pitch". No code there branches on a kind.
+  path.startsWith(join(ROOT, 'apps/server/src/templates/builtin') + '/');
 
 const literal = new RegExp(`(['"\`])(${registered.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\1`);
 

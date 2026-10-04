@@ -955,13 +955,16 @@ couldn't answer, and mentions Alice. Her *Waiting for you* has it in the morning
 
 ## M25 — Session templates
 
-- A **template** is a session's structure without its content: the objective
-  prompt, context sections, starter outputs, recommended connections, and agent
-  setup notes.
+- A **template** is a session's structure without its content: the objective,
+  constraints, starter open questions, starter outputs (a pitch with empty
+  sections, an incident report's headings), and recommended connection
+  categories. Setup notes for agents go in a starter output, where agents can
+  read them.
 - **Save as template** from any session; **New session from template** fills the
   structure and nothing else. No messages, credentials or members are copied.
 - Templates belong to a person or a team. Fabrikka ships a few: *Shaping*,
-  *Incident*, *Onboarding*. They are plain data, editable, and not special.
+  *Incident*, *Onboarding*. They are plain data, one file each, editable, and not
+  special. Adding one is a file and a registry line.
 
 **Test — S8:** a product lead starts from *Shaping*: problem, appetite, solution,
 rabbit holes, no-gos, and a pitch output. Agents add rabbit holes to the context

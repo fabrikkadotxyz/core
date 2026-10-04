@@ -6,7 +6,7 @@
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
  * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation), M10 (runs) and
  * M12 (outputs), M19 (links), M21 (teams), M22 (guests), M23 (comments) and
- * M24 (catch-up).
+ * M24 (catch-up) and M25 (templates).
  */
 import {
   boolean,
@@ -94,6 +94,8 @@ export const sessions = pgTable('sessions', {
   teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
   /** private | team (M22). `team` makes every teammate a viewer; needs a team. */
   visibility: text('visibility').notNull().default('private'),
+  /** The template it started from (M25): "builtin:<id>" or a session_templates id. */
+  templateRef: text('template_ref'),
   /** active | archived */
   status: text('status').notNull().default('active'),
   /**
@@ -767,3 +769,21 @@ export const sessionReads = pgTable(
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
 );
+
+/**
+ * A session's structure without its content (M25): objective, constraints,
+ * starter questions and outputs, recommended connections. Never messages,
+ * facts, decisions, members or credentials. Built-in templates are files, not rows.
+ */
+export const sessionTemplates = pgTable('session_templates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  ownerUserId: uuid('owner_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Shared with a team. Null: just the owner. */
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'cascade' }),
+  body: jsonb('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

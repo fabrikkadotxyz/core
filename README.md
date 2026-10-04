@@ -24,7 +24,8 @@ the browser. Output kinds are plug-in modules (ADR 0023). Built ahead of order
 because they need no outside accounts: **M19** session links and **M20** agents
 reading uploaded PDFs (their stories wait on M18's connections), **M21** teams and
 **M22** team-visible sessions and guests, **M23** comments on outputs, and **M24**
-catch-up and handoffs (its stories' vendor half waits on M18). M14 (Google Docs) and M18 (connections) wait on real vendor
+catch-up and handoffs (its stories' vendor half waits on M18), and **M25** session
+templates. M14 (Google Docs) and M18 (connections) wait on real vendor
 accounts — see [`docs/roadmap.md`](docs/roadmap.md).
 
 ## How agents join

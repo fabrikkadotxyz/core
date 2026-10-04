@@ -20,6 +20,7 @@ import type {
   TeamMember,
   TeamSummary,
   CatchUp,
+  TemplateSummary,
 } from '@fabrikka/types';
 import { LINK_TYPES } from '@fabrikka/types';
 import {
@@ -609,6 +610,7 @@ export function SessionPage() {
 
           {isOwner && (
             <Panel title="Settings">
+              <SaveTemplate ref_={ref} />
               <div className="stack">
                 <button className="link" onClick={rename}>
                   Rename session
@@ -1699,6 +1701,75 @@ function ArtifactsPanel({ ref_, readOnly = false }: { ref_: SessionRef; readOnly
  * comprehensible. You never see whose credential is behind someone else's —
  * ADR 0004.
  */
+/**
+ * Save this session's structure as a template (M25): objective, constraints,
+ * open questions, documents as they stand. Never messages, facts, decisions,
+ * links, members or agents — said in the form, so nobody has to wonder.
+ */
+function SaveTemplate({ ref_ }: { ref_: SessionRef }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [teamId, setTeamId] = useState('');
+  const [mine, setMine] = useState<TeamSummary[]>([]);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (open) teams.list().then(setMine).catch(() => {});
+  }, [open]);
+  if (!open) {
+    return (
+      <div className="stack">
+        <button className="link" onClick={() => setOpen(true)}>
+          Save as template
+        </button>
+        {done && <p className="muted small">Saved “{done}”. It's in the template list when you start a session.</p>}
+      </div>
+    );
+  }
+  return (
+    <form
+      className="stack"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setError(null);
+        try {
+          const t = await sessions.saveTemplate(ref_, { name, teamId: teamId || null });
+          setDone(t.name);
+          setOpen(false);
+          setName('');
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      }}
+    >
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Template name" aria-label="Template name" autoFocus />
+      {mine.length > 0 && (
+        <select value={teamId} onChange={(e) => setTeamId(e.target.value)} aria-label="Share with">
+          <option value="">Just me</option>
+          {mine.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      )}
+      <p className="muted small">
+        Copies the objective, constraints, open questions and documents. Never messages, facts,
+        decisions, links, members or agents.
+      </p>
+      <div className="row">
+        <button type="submit" disabled={!name.trim()}>
+          Save
+        </button>
+        <button type="button" className="link" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      {error && <p className="error small">{error}</p>}
+    </form>
+  );
+}
+
 function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boolean }) {
   const [state, setState] = useState<Awaited<
     ReturnType<typeof sessions.integrations>
@@ -1740,6 +1811,7 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
 
   return (
     <Panel title="Integrations">
+      <SuggestedConnections ref_={ref_} />
       {!state.encryptionConfigured && (
         <p className="hint danger-hint">
           <code>FABRIKKA_ENCRYPTION_KEY</code> is not set, so credentials cannot be
@@ -1983,5 +2055,19 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       <h2>{title}</h2>
       {children}
     </section>
+  );
+}
+
+/** What the session's template suggests connecting (M25). A hint, nothing more. */
+function SuggestedConnections({ ref_ }: { ref_: SessionRef }) {
+  const [t, setT] = useState<TemplateSummary | null>(null);
+  useEffect(() => {
+    sessions.template(ref_).then(setT).catch(() => setT(null));
+  }, [ref_]);
+  if (!t?.body.connections.length) return null;
+  return (
+    <p className="muted small">
+      {t.name} suggests: {t.body.connections.join(', ')}.
+    </p>
   );
 }

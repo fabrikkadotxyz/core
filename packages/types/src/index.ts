@@ -560,3 +560,30 @@ export interface WaitingItem {
   text: string;
   at: string;
 }
+
+/* ----------------------------------------------------------------- templates */
+
+/** A session's structure, never its content (M25). */
+export interface TemplateBody {
+  objective: string;
+  constraints: string[];
+  /** Starter open questions. */
+  questions: string[];
+  /** Starter outputs: a pitch with empty sections, an incident report's headings. */
+  outputs: { kind: string; name: string; content: string }[];
+  /** Connection categories worth adding: "issue tracker", "observability"… */
+  connections: string[];
+}
+
+export interface TemplateSummary {
+  /** "builtin:<id>" for a built-in, or a saved template's id. */
+  ref: string;
+  name: string;
+  description: string;
+  /** Where it comes from: Fabrikka, you, or a team you're on. */
+  source: 'builtin' | 'mine' | 'team';
+  teamName?: string;
+  /** True when you may delete it. */
+  canDelete: boolean;
+  body: TemplateBody;
+}

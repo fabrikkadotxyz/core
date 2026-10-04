@@ -303,6 +303,32 @@ read.
 position of "now". Without it, every mention ever made would arrive at once as
 "waiting for you".
 
+### M25 — templates
+
+```
+session_templates                         -- a session's structure, without its content
+  id              uuid pk
+  name            text not null
+  description     text not null default ''
+  owner_user_id   uuid -> users.id not null
+  team_id         uuid -> teams.id        -- shared with a team; null = just the owner
+  body            jsonb not null          -- { objective, constraints, questions, outputs, connections }
+  created_at      timestamptz not null
+
+sessions          + template_ref  text    -- "builtin:shaping" or a session_templates id
+```
+
+**A template is structure, never content.** `body` holds the objective, the
+constraints, starter open questions, starter outputs (`{ kind, name, content }`)
+and recommended connection categories. Saving a session as a template copies
+exactly those. Never messages, facts, decisions, links, artifacts, members, agents
+or credentials: those are what happened in a session, not its shape.
+
+**Built-in templates aren't rows.** They are files in
+`apps/server/src/templates/builtin/`, one per template plus a registry line, the
+same plug-in shape as output kinds (ADR 0023). They're plain data, editable by
+anyone who runs the instance, and not special. `template_ref` names either kind.
+
 ### M19 — links
 
 ```

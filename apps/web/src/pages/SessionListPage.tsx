@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { SessionSummary, TeamSummary, WaitingItem } from '@fabrikka/types';
-import { sessions, teams } from '../api.ts';
+import type { SessionSummary, TeamSummary, TemplateSummary, WaitingItem } from '@fabrikka/types';
+import { sessions, teams, templates } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 
 export function SessionListPage() {
@@ -14,6 +14,8 @@ export function SessionListPage() {
   const [teamId, setTeamId] = useState('');
   const [teamName, setTeamName] = useState('');
   const [waiting, setWaiting] = useState<WaitingItem[]>([]);
+  const [tpls, setTpls] = useState<TemplateSummary[]>([]);
+  const [templateRef, setTemplateRef] = useState('');
 
   const refresh = useCallback(() => {
     sessions
@@ -22,6 +24,7 @@ export function SessionListPage() {
       .catch((err) => setError((err as Error).message));
     teams.list().then(setMyTeams).catch(() => {});
     sessions.waiting().then(setWaiting).catch(() => {});
+    templates.list().then(setTpls).catch(() => {});
   }, []);
 
   useEffect(refresh, [refresh]);
@@ -31,8 +34,9 @@ export function SessionListPage() {
     const trimmed = title.trim();
     if (!trimmed) return;
     try {
-      await sessions.create(trimmed, teamId || undefined);
+      await sessions.create(trimmed, teamId || undefined, templateRef || undefined);
       setTitle('');
+      setTemplateRef('');
       refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -80,6 +84,22 @@ export function SessionListPage() {
             placeholder="New session — what's the problem?"
             aria-label="New session title"
           />
+          {tpls.length > 0 && (
+            <select
+              value={templateRef}
+              onChange={(e) => setTemplateRef(e.target.value)}
+              aria-label="Start from a template"
+              title={tpls.find((t) => t.ref === templateRef)?.description ?? 'Start blank, or from a template'}
+            >
+              <option value="">Blank</option>
+              {tpls.map((t) => (
+                <option key={t.ref} value={t.ref}>
+                  {t.name}
+                  {t.source === 'team' ? ` · ${t.teamName}` : t.source === 'mine' ? ' · yours' : ''}
+                </option>
+              ))}
+            </select>
+          )}
           {myTeams.length > 0 && (
             <select value={teamId} onChange={(e) => setTeamId(e.target.value)} aria-label="Team">
               <option value="">No team</option>
@@ -127,6 +147,36 @@ export function SessionListPage() {
           <button className="link" onClick={() => setShowArchived((v) => !v)}>
             {showArchived ? 'Hide archived' : 'Show archived'}
           </button>
+        )}
+
+        {tpls.some((t) => t.source !== 'builtin') && (
+          <>
+            <h2>Templates</h2>
+            <ul className="session-list">
+              {tpls
+                .filter((t) => t.source !== 'builtin')
+                .map((t) => (
+                  <li key={t.ref} className="team-member">
+                    <span>
+                      <strong>{t.name}</strong>{' '}
+                      <span className="muted small">{t.source === 'team' ? t.teamName : 'yours'}</span>
+                    </span>
+                    <span className="spacer" />
+                    {t.canDelete && (
+                      <button
+                        className="link small"
+                        onClick={async () => {
+                          await templates.remove(t.ref).catch(() => {});
+                          refresh();
+                        }}
+                      >
+                        delete
+                      </button>
+                    )}
+                  </li>
+                ))}
+            </ul>
+          </>
         )}
 
         <h2>Teams</h2>

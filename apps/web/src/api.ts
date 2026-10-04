@@ -21,6 +21,7 @@ import type {
   OutputKindInfo,
   Participant,
   SessionLink,
+  TemplateSummary,
   CatchUp,
   WaitingItem,
   OutputComment,
@@ -104,6 +105,13 @@ export const invites = {
   redeem: (token: string) => call<InviteDestination>(`/invites/${token}/redeem`, { method: 'POST' }),
 };
 
+/* ------------------------------------------------------------- templates */
+
+export const templates = {
+  list: () => call<TemplateSummary[]>('/templates'),
+  remove: (ref: string) => call<{ ok: true }>(`/templates/${encodeURIComponent(ref)}`, { method: 'DELETE' }),
+};
+
 /* ----------------------------------------------------------------- teams */
 
 export const teams = {
@@ -127,8 +135,12 @@ const base = ({ owner, session }: SessionRef) =>
 
 export const sessions = {
   list: () => call<SessionSummary[]>('/sessions'),
-  create: (title: string, teamId?: string) =>
-    call<SessionSummary>('/sessions', { method: 'POST', body: { title, teamId } }),
+  create: (title: string, teamId?: string, templateRef?: string) =>
+    call<SessionSummary>('/sessions', { method: 'POST', body: { title, teamId, templateRef } }),
+  /** M25: the template this session started from, and saving it as one. */
+  template: (ref: SessionRef) => call<TemplateSummary | null>(`${base(ref)}/template`),
+  saveTemplate: (ref: SessionRef, body: { name: string; description?: string; teamId?: string | null }) =>
+    call<TemplateSummary>(`${base(ref)}/template`, { method: 'POST', body }),
   /** M21: the session's team, who can be added from it, and adding them. */
   team: (ref: SessionRef) => call<{ id: string; name: string } | null>(`${base(ref)}/team`),
   setTeam: (ref: SessionRef, teamId: string | null) =>

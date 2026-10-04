@@ -1,9 +1,13 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { AuthProvider, useAuth } from './auth-context.tsx';
 import { InvitePage } from './pages/InvitePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
-import { SessionListPage } from './pages/SessionListPage.tsx';
+import { AllSessionsPage } from './pages/AllSessionsPage.tsx';
+import { HomePage } from './pages/HomePage.tsx';
+import { IntegrationsPage } from './pages/IntegrationsPage.tsx';
+import { AppShell } from './shell/AppShell.tsx';
+import { WorkspaceProvider } from './shell/workspace.tsx';
 import { SessionPage } from './pages/SessionPage.tsx';
 import { TeamPage } from './pages/TeamPage.tsx';
 
@@ -14,33 +18,32 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         {/* Unauthenticated on purpose: an invite is how you get an account. */}
         <Route path="/invite/:token" element={<InvitePage />} />
-        <Route
-          path="/"
-          element={
-            <RequireAuth>
-              <SessionListPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/o/:owner/s/:session"
-          element={
-            <RequireAuth>
-              <SessionPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/teams/:id"
-          element={
-            <RequireAuth>
-              <TeamPage />
-            </RequireAuth>
-          }
-        />
+        {/* M28: every signed-in page lives in one shell, beside one sidebar that
+            stays mounted as you move between pages. */}
+        <Route element={<Shell />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/sessions" element={<AllSessionsPage />} />
+          <Route path="/teams/:id/sessions" element={<AllSessionsPage />} />
+          <Route path="/teams/:id" element={<TeamPage />} />
+          <Route path="/integrations" element={<IntegrationsPage />} />
+          <Route path="/o/:owner/s/:session" element={<SessionPage />} />
+        </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>
+  );
+}
+
+/** Signed in, inside the workspace frame. */
+function Shell() {
+  return (
+    <RequireAuth>
+      <WorkspaceProvider>
+        <AppShell>
+          <Outlet />
+        </AppShell>
+      </WorkspaceProvider>
+    </RequireAuth>
   );
 }
 

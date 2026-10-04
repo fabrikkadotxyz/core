@@ -1589,3 +1589,49 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 .catchup ul { margin: 0; padding-left: 18px; }
 .catchup li { margin: 2px 0; overflow-wrap: anywhere; }
 .waiting { margin-bottom: 16px; }
+
+/* ---- the shell: sidebar + page (M28) ---- */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+.shell-main { flex: 1; min-width: 0; position: relative; }
+.shell-main > .page { height: 100vh; overflow: auto; }
+.shell-menu, .shell-backdrop { display: none; }
+
+.sidebar {
+  width: 248px; flex: 0 0 248px; height: 100vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--panel); border-right: 1px solid var(--border);
+  padding: 10px 8px; font-size: 0.875rem;
+}
+.side-top { display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px; }
+.side-brand { padding: 6px 8px; }
+.team-switcher { font-weight: 600; width: 100%; }
+.side-section { margin-top: 10px; display: flex; flex-direction: column; gap: 1px; }
+.side-section h2 {
+  margin: 0 8px 4px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.side-item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px;
+  color: var(--text); text-decoration: none; min-width: 0;
+}
+.side-item:hover { background: rgba(255, 255, 255, 0.05); }
+.side-item.on { background: rgba(124, 156, 255, 0.18); }
+.side-icon { width: 1.1em; text-align: center; color: var(--muted); flex: 0 0 auto; }
+.side-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.side-meta { font-size: 0.7rem; color: var(--muted); }
+.side-more { color: var(--muted); font-size: 0.8rem; }
+.side-empty { margin: 0 8px; color: var(--muted); font-size: 0.8rem; }
+.side-bottom { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
+.side-user { display: flex; align-items: center; padding: 6px 8px; }
+.filter { width: 100%; margin: 4px 0 12px; }
+
+@media (max-width: 900px) {
+  .sidebar { position: fixed; z-index: 40; left: 0; top: 0; transform: translateX(-100%); transition: transform 0.15s ease; }
+  .shell.drawer-open .sidebar { transform: none; }
+  .shell-backdrop { display: block; position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.5); border: 0; }
+  .shell-menu {
+    display: block; position: fixed; z-index: 20; top: 8px; left: 8px;
+    padding: 4px 9px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text);
+  }
+  .shell-main > .page { padding-top: 40px; }
+}

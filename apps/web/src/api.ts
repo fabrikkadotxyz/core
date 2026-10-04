@@ -105,6 +105,19 @@ export const invites = {
   redeem: (token: string) => call<InviteDestination>(`/invites/${token}/redeem`, { method: 'POST' }),
 };
 
+/* ---------------------------------------------------- personal integrations */
+
+export const connections = {
+  list: () =>
+    call<{
+      connections: { id: string; slug: string; label: string; url: string; hasCredential: boolean; sessions: number }[];
+      encryptionConfigured: boolean;
+    }>('/me/connections'),
+  save: (body: { slug: string; url: string; label?: string; credential?: string }) =>
+    call<{ id: string }>('/me/connections', { method: 'POST', body }),
+  remove: (slug: string) => call<{ ok: true }>(`/me/connections/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
+};
+
 /* ------------------------------------------------------------- templates */
 
 export const templates = {
@@ -219,13 +232,16 @@ export const sessions = {
   integrations: (ref: SessionRef) =>
     call<{
       mine: { id: string; slug: string; label: string; url: string; hasCredential: boolean }[];
+      /** M28: your saved connections not yet in this session. */
+      available: { id: string; slug: string; label: string; url: string; hasCredential: boolean }[];
       inSession: { slug: string; label: string; attachedBy: number }[];
       grants: { serverSlug: string; toolName: string; allowed: boolean }[];
       encryptionConfigured: boolean;
     }>(`${base(ref)}/integrations`),
   attachIntegration: (
     ref: SessionRef,
-    body: { slug: string; label?: string; url: string; credential?: string },
+    // No url: attach a connection you already saved (M28).
+    body: { slug: string; label?: string; url?: string; credential?: string },
   ) => call<unknown>(`${base(ref)}/integrations`, { method: 'POST', body }),
   detachIntegration: (ref: SessionRef, slug: string) =>
     call<{ ok: true }>(`${base(ref)}/integrations/${slug}`, { method: 'DELETE' }),

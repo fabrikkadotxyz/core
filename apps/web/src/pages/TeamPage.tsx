@@ -10,11 +10,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { TeamDetail } from '@fabrikka/types';
 import { teams } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
+import { useWorkspace } from '../shell/workspace.tsx';
 
 export function TeamPage() {
   const { id = '' } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { refresh } = useWorkspace();
   const [team, setTeam] = useState<TeamDetail | null | 'missing'>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -58,6 +60,7 @@ export function TeamPage() {
     setError(null);
     try {
       await teams.removeMember(team.id, userId);
+      refresh();
       if (leaving) navigate('/', { replace: true });
       else load();
     } catch (err) {
@@ -67,12 +70,6 @@ export function TeamPage() {
 
   return (
     <div className="page">
-      <header className="topbar">
-        <Link to="/">← Sessions</Link>
-        <span className="spacer" />
-        <span className="muted">@{user?.ownerSlug}</span>
-      </header>
-
       <main className="column">
         <h1>{team.name}</h1>
         <p className="muted">

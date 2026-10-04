@@ -220,7 +220,7 @@ function RailHandle({
 export function SessionPage() {
   const { owner = '', session = '' } = useParams();
   const ref = useMemo<SessionRef>(() => ({ owner, session }), [owner, session]);
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [view, setView] = useState<SessionView | null>(null);
@@ -475,17 +475,6 @@ export function SessionPage() {
 
   return (
     <div className="page">
-      <header className="topbar">
-        <Link to="/" className="link">
-          ← Sessions
-        </Link>
-        <span className="spacer" />
-        <span className="muted">@{user?.ownerSlug}</span>
-        <button className="link" onClick={signOut}>
-          Sign out
-        </button>
-      </header>
-
       <div
         className="workspace"
         // A viewer has no Setup (M22): never reserve its column, whatever was remembered.
@@ -1822,6 +1811,33 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
   return (
     <Panel title="Integrations">
       <SuggestedConnections ref_={ref_} />
+      {state.available.length > 0 && (
+        <div className="stack">
+          <p className="muted small">Your connections — attach one to this session:</p>
+          <ul className="participants">
+            {state.available.map((a) => (
+              <li key={a.id}>
+                <span>{a.label}</span>
+                <span className="muted small">{a.slug}</span>
+                <button
+                  className="link small"
+                  onClick={async () => {
+                    setError(null);
+                    try {
+                      await sessions.attachIntegration(ref_, { slug: a.slug });
+                      load();
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                >
+                  attach
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {!state.encryptionConfigured && (
         <p className="hint danger-hint">
           <code>FABRIKKA_ENCRYPTION_KEY</code> is not set, so credentials cannot be

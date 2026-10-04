@@ -430,6 +430,8 @@ export interface SessionSummary {
   createdAt: string;
   /** The team it belongs to (M21), if any. */
   team?: { id: string; name: string } | null;
+  /** The latest message, or creation if there is none (M28). */
+  lastActivityAt?: string;
 }
 
 /**

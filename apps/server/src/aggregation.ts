@@ -9,7 +9,7 @@
  *
  * HTTP only. See ADR 0014 for why stdio is not here.
  */
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { Database } from '@fabrikka/db';
 import {
@@ -55,17 +55,15 @@ export type AttachResult =
  * The credential is sealed here or the call fails — there is no path that stores
  * it in plaintext.
  */
-export async function attachServer(
+/**
+ * Save a person's own connection (M28: from the Personal integrations page, or
+ * while attaching in a session). Re-saving without a credential keeps the one
+ * already sealed.
+ */
+export async function saveConnection(
   db: Database,
-  opts: {
-    sessionId: string;
-    userId: string;
-    slug: string;
-    label?: string;
-    url: string;
-    credential?: string;
-  },
-): Promise<AttachResult> {
+  opts: { userId: string; slug: string; label?: string; url: string; credential?: string },
+): Promise<{ ok: true; server: AttachedServer } | { ok: false; error: string }> {
   const slug = opts.slug.trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(slug)) {
     return { ok: false, error: 'slug must be lowercase letters, digits, - or _' };
@@ -115,25 +113,81 @@ export async function attachServer(
     })
     .returning();
 
-  await db
-    .insert(sessionMcpServers)
-    .values({
-      sessionId: opts.sessionId,
-      mcpServerId: row!.id,
-      addedByUserId: opts.userId,
-    })
-    .onConflictDoNothing();
-
   return {
     ok: true,
-    server: {
-      id: row!.id,
-      slug: row!.slug,
-      label: row!.label,
-      url: row!.url,
-      hasCredential: !!row!.sealedCredential,
-    },
+    server: { id: row!.id, slug: row!.slug, label: row!.label, url: row!.url, hasCredential: !!row!.sealedCredential },
   };
+}
+
+/**
+ * Attach one of the caller's connections to a session. With a url, the
+ * connection is saved (or updated) first; with only a slug, an existing one is
+ * attached as it is (M28).
+ */
+export async function attachServer(
+  db: Database,
+  opts: {
+    sessionId: string;
+    userId: string;
+    slug: string;
+    label?: string;
+    url?: string;
+    credential?: string;
+  },
+): Promise<AttachResult> {
+  let server: AttachedServer;
+  if (opts.url) {
+    const saved = await saveConnection(db, { ...opts, url: opts.url });
+    if (!saved.ok) return saved;
+    server = saved.server;
+  } else {
+    const existing = (await listConnections(db, opts.userId)).find((c) => c.slug === opts.slug.trim().toLowerCase());
+    if (!existing) return { ok: false, error: 'no connection with that slug — add it with a url first' };
+    server = existing;
+  }
+
+  await db
+    .insert(sessionMcpServers)
+    .values({ sessionId: opts.sessionId, mcpServerId: server.id, addedByUserId: opts.userId })
+    .onConflictDoNothing();
+
+  return { ok: true, server };
+}
+
+/** Every connection a person has, and how many sessions each is attached to (M28). */
+export async function listConnections(
+  db: Database,
+  userId: string,
+): Promise<(AttachedServer & { sessions: number })[]> {
+  const rows = await db
+    .select({
+      id: mcpServers.id,
+      slug: mcpServers.slug,
+      label: mcpServers.label,
+      url: mcpServers.url,
+      sealed: mcpServers.sealedCredential,
+      sessions: sql<number>`(select count(*) from ${sessionMcpServers} sms where sms.mcp_server_id = ${mcpServers.id})`,
+    })
+    .from(mcpServers)
+    .where(eq(mcpServers.ownerId, userId))
+    .orderBy(mcpServers.slug);
+  return rows.map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    label: r.label,
+    url: r.url,
+    hasCredential: !!r.sealed,
+    sessions: Number(r.sessions),
+  }));
+}
+
+/** Remove a connection everywhere: it is detached from every session it was in. */
+export async function removeConnection(db: Database, userId: string, slug: string): Promise<boolean> {
+  const done = await db
+    .delete(mcpServers)
+    .where(and(eq(mcpServers.ownerId, userId), eq(mcpServers.slug, slug)))
+    .returning({ id: mcpServers.id });
+  return done.length > 0;
 }
 
 export async function detachServer(

@@ -205,6 +205,7 @@ export async function listSessionsForUser(
         select count(*) from ${sessionMembers} sm
         where sm.session_id = ${sessions.id}
       )`,
+      lastActivityAt: sql<Date>`coalesce((select max(m.created_at) from ${messages} m where m.session_id = ${sessions.id}), ${sessions.createdAt})`,
     })
     .from(sessionMembers)
     .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
@@ -222,6 +223,7 @@ export async function listSessionsForUser(
     memberCount: Number(r.memberCount),
     team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
     createdAt: r.createdAt.toISOString(),
+    lastActivityAt: new Date(r.lastActivityAt).toISOString(),
   }));
 
   // M22: sessions you can read without being in them — as a guest, or because
@@ -239,6 +241,7 @@ export async function listSessionsForUser(
       teamId: teams.id,
       teamName: teams.name,
       memberCount: sql<number>`(select count(*) from ${sessionMembers} sm where sm.session_id = ${sessions.id})`,
+      lastActivityAt: sql<Date>`coalesce((select max(m.created_at) from ${messages} m where m.session_id = ${sessions.id}), ${sessions.createdAt})`,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.ownerId))
@@ -261,8 +264,10 @@ export async function listSessionsForUser(
       memberCount: Number(r.memberCount),
       team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
       createdAt: r.createdAt.toISOString(),
+      lastActivityAt: new Date(r.lastActivityAt).toISOString(),
     })),
-  ].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    // Most recently active first (M28): the latest message, or creation.
+  ].sort((a, b) => (a.lastActivityAt! < b.lastActivityAt! ? 1 : -1));
 }
 
 /**

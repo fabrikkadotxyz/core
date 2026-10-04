@@ -42,6 +42,9 @@ import { broadcastAbort, onAbort, pauseState, setPaused } from './rails.ts';
 import { catchUp, endRun, recordActivity, startRun } from './activity.ts';
 import {
   attachServer,
+  listConnections,
+  removeConnection,
+  saveConnection,
   detachServer,
   discoverTools,
   listGrants,
@@ -364,6 +367,24 @@ app.get('/api/templates', requireUser(db), async (c) => c.json(await listTemplat
 
 app.delete('/api/templates/:ref', requireUser(db), async (c) =>
   (await deleteTemplate(db, c.get('user').id, c.req.param('ref'))) ? c.json({ ok: true }) : c.notFound(),
+);
+
+/* ---- personal integrations (M28): your own connections, outside any session ---- */
+
+app.get('/api/me/connections', requireUser(db), async (c) =>
+  c.json({ connections: await listConnections(db, c.get('user').id), encryptionConfigured: isEncryptionConfigured() }),
+);
+
+app.post('/api/me/connections', requireUser(db), async (c) => {
+  const body = await c.req.json<{ slug?: string; label?: string; url?: string; credential?: string }>();
+  if (!body.slug || !body.url) return c.json({ error: 'slug and url are required' }, 400);
+  const saved = await saveConnection(db, { userId: c.get('user').id, slug: body.slug, label: body.label, url: body.url, credential: body.credential });
+  return saved.ok ? c.json(saved.server, 201) : c.json({ error: saved.error }, 400);
+});
+
+/** Removing a connection detaches it from every session it was in. */
+app.delete('/api/me/connections/:slug', requireUser(db), async (c) =>
+  (await removeConnection(db, c.get('user').id, c.req.param('slug'))) ? c.json({ ok: true }) : c.notFound(),
 );
 
 const sessionRoutes = new Hono<AuthEnv>();
@@ -860,8 +881,11 @@ sessionRoutes.get('/integrations', async (c) => {
   const s = await resolve(c);
   if (!s) return c.notFound();
 
+  const mine = await serversForUser(db, s.id, c.get('user').id);
   return c.json({
-    mine: await serversForUser(db, s.id, c.get('user').id),
+    mine,
+    // M28: your connections not yet in this session, offered to attach.
+    available: (await listConnections(db, c.get('user').id)).filter((x) => !mine.some((m) => m.id === x.id)),
     inSession: await slugsInSession(db, s.id),
     grants: await listGrants(db, s.id),
     encryptionConfigured: isEncryptionConfigured(),
@@ -878,9 +902,9 @@ sessionRoutes.post('/integrations', async (c) => {
     url?: string;
     credential?: string;
   }>();
-  if (!body.slug || !body.url) {
-    return c.json({ error: 'slug and url are required' }, 400);
-  }
+  // A url saves (or updates) the connection; a slug alone attaches one you
+  // already have, from Personal integrations (M28).
+  if (!body.slug) return c.json({ error: 'slug is required' }, 400);
 
   const result = await attachServer(db, {
     sessionId: s.id,

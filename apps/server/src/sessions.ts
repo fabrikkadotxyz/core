@@ -15,6 +15,7 @@ import {
   messageMentions,
   messages,
   participants,
+  contextEvents,
   sessionContext,
   sessionGuests,
   sessionMembers,
@@ -601,6 +602,8 @@ export async function updateSessionContext(
   db: Database,
   sessionId: string,
   update: ContextUpdate,
+  /** Who is writing (M27), for the context history. Null: a template at creation. */
+  actor: { participantId: string | null } = { participantId: null },
 ): Promise<ContextUpdateResult> {
   // Object.keys counts keys whose VALUE is undefined, and callers build this
   // object with every field present-but-undefined. Checking values means a pure
@@ -637,11 +640,20 @@ export async function updateSessionContext(
       };
     }
 
+    // Copies, not the row's own arrays: `next` is mutated below, and the history
+    // (M27) compares it with what was there before. Sharing them made every
+    // "before" look like "after", so no change was ever recorded.
+    const before: Record<ListField, string[]> = {
+      facts: [...(current?.facts ?? [])],
+      decisions: [...(current?.decisions ?? [])],
+      questions: [...(current?.questions ?? [])],
+      constraints: [...(current?.constraints ?? [])],
+    };
     const next: Record<ListField, string[]> = {
-      facts: current?.facts ?? [],
-      decisions: current?.decisions ?? [],
-      questions: current?.questions ?? [],
-      constraints: current?.constraints ?? [],
+      facts: [...before.facts],
+      decisions: [...before.decisions],
+      questions: [...before.questions],
+      constraints: [...before.constraints],
     };
 
     for (const field of LIST_FIELDS) {
@@ -682,6 +694,17 @@ export async function updateSessionContext(
       .insert(sessionContext)
       .values({ sessionId, ...fields })
       .onConflictDoUpdate({ target: sessionContext.sessionId, set: fields });
+
+    // M27: record the difference this write made — who decided what, and when.
+    const events: (typeof contextEvents.$inferInsert)[] = [];
+    for (const field of LIST_FIELDS) {
+      for (const v of next[field]) if (!before[field].includes(v)) events.push({ sessionId, participantId: actor.participantId, field, op: 'add', value: v });
+      for (const v of before[field]) if (!next[field].includes(v)) events.push({ sessionId, participantId: actor.participantId, field, op: 'remove', value: v });
+    }
+    if (update.objective !== undefined && update.objective !== (current?.objective ?? null)) {
+      events.push({ sessionId, participantId: actor.participantId, field: 'objective', op: 'set', value: update.objective });
+    }
+    if (events.length) await tx.insert(contextEvents).values(events);
 
     const [row] = await tx
       .select()

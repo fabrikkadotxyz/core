@@ -251,7 +251,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
           constraints: args.constraints,
         },
         ifVersion: args.if_version,
-      });
+      }, { participantId: actor.participantId });
 
       // A conflict is reported, never silently resolved: the caller re-reads and
       // decides, rather than one of two edits vanishing (ADR 0013).

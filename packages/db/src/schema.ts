@@ -6,9 +6,10 @@
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
  * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation), M10 (runs) and
  * M12 (outputs), M19 (links), M21 (teams), M22 (guests), M23 (comments) and
- * M24 (catch-up) and M25 (templates).
+ * M24 (catch-up), M25 (templates) and M27 (context history).
  */
 import {
+  bigserial,
   boolean,
   check,
   customType,
@@ -787,3 +788,29 @@ export const sessionTemplates = pgTable('session_templates', {
   body: jsonb('body').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Who changed the session context, and when (M27). Append-only. Context items
+ * are plain strings (ADR 0013), so their history lives beside them: one row per
+ * item added or removed, one per objective set.
+ */
+export const contextEvents = pgTable(
+  'context_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    /** Null for a template applied when the session was created. */
+    participantId: uuid('participant_id').references(() => participants.id, { onDelete: 'set null' }),
+    /** objective | facts | decisions | questions | constraints */
+    field: text('field').notNull(),
+    /** add | remove | set */
+    op: text('op').notNull(),
+    value: text('value').notNull(),
+    /** Insertion order: one write can add several items with the same timestamp. */
+    seq: bigserial('seq', { mode: 'number' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('context_events_session_created_idx').on(t.sessionId, t.createdAt)],
+);

@@ -137,6 +137,8 @@ export const sessions = {
   list: () => call<SessionSummary[]>('/sessions'),
   create: (title: string, teamId?: string, templateRef?: string) =>
     call<SessionSummary>('/sessions', { method: 'POST', body: { title, teamId, templateRef } }),
+  /** M27: the export download — a plain link, so the browser handles the file. */
+  exportUrl: (ref: SessionRef) => `/api${base(ref)}/export`,
   /** M25: the template this session started from, and saving it as one. */
   template: (ref: SessionRef) => call<TemplateSummary | null>(`${base(ref)}/template`),
   saveTemplate: (ref: SessionRef, body: { name: string; description?: string; teamId?: string | null }) =>

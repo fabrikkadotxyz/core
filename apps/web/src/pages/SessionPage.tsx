@@ -612,6 +612,16 @@ export function SessionPage() {
             <Panel title="Settings">
               <SaveTemplate ref_={ref} />
               <div className="stack">
+                <a className="link" href={sessions.exportUrl(ref)} download>
+                  Export session
+                </a>
+                <p className="muted small">
+                  A zip you can open anywhere: the decisions with who made them and when, every
+                  document with its history, artifacts and the timeline. Once downloaded, it's out
+                  of Fabrikka's hands.
+                </p>
+              </div>
+              <div className="stack">
                 <button className="link" onClick={rename}>
                   Rename session
                 </button>

@@ -329,6 +329,33 @@ or credentials: those are what happened in a session, not its shape.
 same plug-in shape as output kinds (ADR 0023). They're plain data, editable by
 anyone who runs the instance, and not special. `template_ref` names either kind.
 
+### M27 — context history, and export
+
+```
+context_events                            -- append-only: who changed the context, and when
+  id              uuid pk
+  session_id      uuid -> sessions.id not null
+  participant_id  uuid -> participants.id  -- null for a template applied at creation
+  field           text not null           -- objective | facts | decisions | questions | constraints
+  op              text not null           -- add | remove | set
+  value           text not null
+  seq             bigserial               -- insertion order; one write can add several items at once
+  created_at      timestamptz not null
+  index (session_id, created_at)
+```
+
+**Context items are plain strings (ADR 0013), so their history is kept beside
+them.** Every write records the difference it made: one row per item added or
+removed, and one for an objective set. "Who decided this, and when" is then a
+lookup, which is what an export has to answer for each decision. History starts
+with M27; earlier items have none, and the export says so instead of inventing an
+author.
+
+**Export is a zip the session's owner downloads.** It holds `README.md` (the
+session as one readable document), `session.json` (the same data, for programs),
+each output's files and changes log, the artifacts, and the timeline. Agent
+activity is never included (ADR 0015). Nothing in it needs Fabrikka to read.
+
 ### M19 — links
 
 ```

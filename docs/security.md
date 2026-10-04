@@ -342,6 +342,14 @@ and embedded scripts have all been ways in.
 - **No text layer is said, not hidden.** A scanned PDF returns a note that it has
   no extractable text, never an empty success an agent would mistake for "blank".
 
+## Export (M27)
+
+An export holds everything the session's members can read, including comments by
+guests and every member's messages, so it is the **owner's** deliberate act. The
+file says who exported it and when. It never includes agent activity (ADR 0015),
+credentials or tokens. Once downloaded it's out of Fabrikka's hands, like any
+copied text, and the export button says so.
+
 ## Declined capabilities
 
 **Permission relay** (`claude/channel/permission`). Claude Code can forward tool-approval prompts to a channel so they can be answered remotely. We do **not** declare this capability: anyone able to reply through the channel could approve tool use in the owner's session, which in a multi-participant room is a straightforward privilege escalation. Revisit only with per-participant verdict attribution.

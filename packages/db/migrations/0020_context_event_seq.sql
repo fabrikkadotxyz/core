@@ -1,0 +1,1 @@
+ALTER TABLE "context_events" ADD COLUMN "seq" bigserial NOT NULL;

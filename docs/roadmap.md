@@ -1003,6 +1003,9 @@ saved as the next hire's template.
 - **Export a session** as Markdown plus a folder of files: objective, context
   with its history, decisions, links, outputs at their current version with
   their changes log, artifacts, and the timeline.
+- **Context history** is recorded from M27 on: who added or removed each fact,
+  decision, question and constraint, and when. Items from before then have no
+  history, and the export says so rather than guessing.
 - Also **JSON**, for anything that wants to read it programmatically.
 - Owners export; it is a deliberate act, and the file says who exported it and
   when. Activity is excluded, as it is everywhere (ADR 0015).

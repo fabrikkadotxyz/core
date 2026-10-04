@@ -134,6 +134,20 @@
       "when": 1791080856964,
       "tag": "0018_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791081254211,
+      "tag": "0019_context_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791081457183,
+      "tag": "0020_context_event_seq",
+      "breakpoints": true
     }
   ]
 }

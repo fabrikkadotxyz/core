@@ -113,6 +113,7 @@ import {
 import { cachedRepos, LinkError, linkedRepos, listLinks, removeLink, saveLink } from './links.ts';
 import { addComment, listComments, reply, setResolved, threadAuthor } from './outputs/comments.ts';
 import { getCatchUp, markSeen, waitingFor } from './catchup.ts';
+import { exportSession } from './export.ts';
 import { applyTemplate, deleteTemplate, findTemplate, listTemplates, saveTemplate, sessionTemplate, TemplateError } from './templates/templates.ts';
 import {
   countOwners,
@@ -574,6 +575,27 @@ sessionRoutes.post('/template', async (c) => {
   }
 });
 
+/* ---- export (M27): the record is yours. The owner's deliberate act. ---- */
+
+sessionRoutes.get('/export', async (c) => {
+  const s = await resolve(c);
+  if (!s || s.role !== 'owner') return c.notFound();
+  const { filename, data } = await exportSession(db, {
+    sessionId: s.id,
+    session: { title: s.view.title, publicId: s.view.publicId, ownerSlug: s.view.ownerSlug, createdAt: s.view.createdAt },
+    exportedBy: c.get('user').displayName,
+  });
+  // An ASCII fallback, and the real name per RFC 5987 for anything that reads it.
+  const ascii = filename.replace(/[^\x20-\x7e]/g, '-').replace(/"/g, '');
+  return new Response(new Uint8Array(data), {
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Cache-Control': 'no-store',
+    },
+  });
+});
+
 /* ---- guests (M22): a viewer of this one session, from outside its team ---- */
 
 sessionRoutes.delete('/guests/:userId', async (c) => {
@@ -810,7 +832,7 @@ sessionRoutes.patch('/context', async (c) => {
   if (!s) return c.notFound();
 
   const body = await c.req.json<ContextUpdate>();
-  const result = await updateSessionContext(db, s.id, body);
+  const result = await updateSessionContext(db, s.id, body, { participantId: s.participantId });
 
   // 409 rather than a silent overwrite: the browser reloads and shows what
   // changed, instead of one of two people's edits disappearing (ADR 0013).

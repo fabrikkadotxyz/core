@@ -20,11 +20,13 @@ import type {
   TeamMember,
   TeamSummary,
   CatchUp,
+  DeviceSummary,
 } from '@fabrikka/types';
 import { LINK_TYPES } from '@fabrikka/types';
 import {
   ApiError,
   openStream,
+  devices,
   sessions,
   teams,
   type SessionRef,
@@ -1141,9 +1143,15 @@ function AgentsPanel({
   const [provider, setProvider] = useState('claude-code');
   const [fresh, setFresh] = useState<CreatedAgentView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // M31: agents that run on your own computer, in a folder granted there.
+  const [myDevices, setMyDevices] = useState<DeviceSummary[] | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [choice, setChoice] = useState<string>('');
+  const [hosts, setHosts] = useState<Record<string, { deviceName: string; label: string | null; online: boolean }>>({});
 
   const refresh = useCallback(() => {
     sessions.agents(ref_).then(setAgents).catch(() => {});
+    sessions.agentHosts(ref_).then(setHosts).catch(() => {});
     // Owner-only on the server (404 otherwise). Asking anyway would work, but a
     // request whose failure we plan on is a request not worth sending.
     if (isOwner) sessions.tokens(ref_).then(setTokens).catch(() => {});
@@ -1167,8 +1175,78 @@ function AgentsPanel({
     }
   };
 
+  const folders = (myDevices ?? []).flatMap((d) =>
+    d.grants.filter((g) => g.usable).map((g) => ({ key: `${d.id}|${g.id}`, deviceId: d.id, grantId: g.id, device: d.name, label: g.label, online: d.online })),
+  );
+
+  const addMine = async () => {
+    const f = folders.find((x) => x.key === choice) ?? folders[0];
+    if (!f) return;
+    setError(null);
+    try {
+      await sessions.addHostAgent(ref_, { deviceId: f.deviceId, grantId: f.grantId });
+      setPicking(false);
+      refresh();
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   return (
     <Panel title="Agents">
+      {/* The five-click path (CLAUDE.md): Setup → Add my agent → folder → Add. */}
+      {!picking ? (
+        <button
+          className="primary"
+          onClick={() => {
+            setPicking(true);
+            devices.list().then((d) => {
+              setMyDevices(d);
+              const first = d.flatMap((x) => x.grants.filter((g) => g.usable).map((g) => `${x.id}|${g.id}`))[0];
+              setChoice(first ?? '');
+            }).catch(() => setMyDevices([]));
+          }}
+        >
+          Add my agent
+        </button>
+      ) : (
+        <div className="stack add-mine">
+          {myDevices === null && <p className="muted small">Looking for your computers…</p>}
+          {myDevices !== null && folders.length === 0 && (
+            <p className="muted small">
+              {myDevices.length === 0 ? (
+                <>
+                  Run your agent on your own computer: once, run <code>npx fabrikka host</code> there and grant a
+                  folder. See <Link to="/devices">Your devices</Link>.
+                </>
+              ) : (
+                <>No folder granted yet on {myDevices.map((d) => d.name).join(', ')}. Grant one in the host's window.</>
+              )}
+            </p>
+          )}
+          {folders.length > 0 && (
+            <>
+              <p className="muted small">Run in which folder?</p>
+              {folders.map((f) => (
+                <label key={f.key} className="check">
+                  <input type="radio" name="folder" checked={choice === f.key} onChange={() => setChoice(f.key)} />
+                  <span>
+                    📁 {f.label} <span className="muted small">on {f.device}{f.online ? '' : ' (offline)'}</span>
+                  </span>
+                </label>
+              ))}
+              <button onClick={addMine}>Add</button>
+            </>
+          )}
+          <button className="link small" onClick={() => setPicking(false)}>
+            Cancel
+          </button>
+        </div>
+      )}
+
+      <details className="manual-agent">
+        <summary className="muted small">Connect another way (another tool, or by hand)</summary>
       <form className="stack" onSubmit={add}>
         <input
           value={name}
@@ -1190,16 +1268,21 @@ function AgentsPanel({
         </button>
       </form>
 
-      {error && <p className="error small">{error}</p>}
-
       {fresh && <AgentSetup created={fresh} onError={setError} />}
+      </details>
+
+      {error && <p className="error small">{error}</p>}
 
       {agents.length > 0 && (
         <ul className="participants">
           {agents.map((a) => (
             <li key={a.sessionAgentId}>
               <span>🤖 @{a.displayName}</span>
-              <span className="muted small">{a.provider}</span>
+              <span className="muted small">
+                {hosts[a.participantId]
+                  ? `on ${hosts[a.participantId]!.deviceName} · ${hosts[a.participantId]!.label ?? 'folder removed'}${hosts[a.participantId]!.online ? '' : ' · offline'}`
+                  : a.provider}
+              </span>
               {/*
                 Trust and step visibility are the AGENT owner's call, and the
                 server answers 404 to anyone else. Showing the buttons to a

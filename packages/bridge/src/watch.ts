@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve as resolvePath } from 'node:path';
 import type { BridgeConfig } from './config.ts';
 import { BridgeSocket, type MentionFrame } from './socket.ts';
-import { isSupported, runAgent, type Provider } from './spawn.ts';
+import { isSupported, policyVerified, runAgent, type Policy, type Provider } from './spawn.ts';
 import { Upstream } from './upstream.ts';
 
 /** Beyond this, further mentions are refused with a note rather than silently. */
@@ -22,13 +22,53 @@ export interface WatchOptions {
   config: BridgeConfig;
   dir: string;
   provider: Provider;
+  /** What a run may do on this machine (ADR 0027). Defaults to edit. */
+  policy?: Policy;
   allowedTools?: string[];
   log: (...args: unknown[]) => void;
 }
 
+/** A running runner: one agent, one folder, one connection. */
+export interface RunnerHandle {
+  displayName: string;
+  /** Stop the current run and drop the queue; the connection stays. */
+  abort: () => void;
+  /** Close everything. */
+  stop: () => void;
+  readonly running: boolean;
+}
+
+export interface RunnerEvents {
+  onRunStart?: (info: { runId: string; author: string; preview: string }) => void;
+  onRunEnd?: (info: { runId: string; status: 'done' | 'failed' | 'stopped'; error?: string }) => void;
+}
+
+/** `fabrikka watch`: a runner in a terminal, until Ctrl-C. */
 export async function watch(opts: WatchOptions): Promise<void> {
+  const policy = opts.policy ?? 'edit';
+  const handle = await startRunner({ ...opts, policy, banner: true });
+  if (!handle) {
+    process.exitCode = 1;
+    return;
+  }
+  const shutdown = () => {
+    handle.stop();
+    process.exit(0);
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
+/**
+ * The runner loop, reusable: the CLI starts one, the local host (M31) starts one
+ * per bound agent. Delivery is still decided server-side (ADR 0010).
+ */
+export async function startRunner(
+  opts: WatchOptions & RunnerEvents & { banner?: boolean },
+): Promise<RunnerHandle | null> {
   const { config, log } = opts;
   const cwd = resolvePath(opts.dir);
+  const policy: Policy = opts.policy ?? 'full';
 
   const upstream = new Upstream(config.mcpUrl, config.token);
   await upstream.connect();
@@ -41,28 +81,37 @@ export async function watch(opts: WatchOptions): Promise<void> {
       `provider "${opts.provider}" cannot be spawned. ` +
         'Supported: claude-code, codex. Use a live session instead.',
     );
-    process.exitCode = 1;
-    return;
+    return null;
+  }
+  if (!policyVerified(opts.provider, policy)) {
+    log(`${opts.provider} has no verified "${policy}" policy yet (ADR 0027). Use --policy full to run it unsandboxed.`);
+    return null;
   }
 
   // State the risk before anything can happen. This banner is the record of
   // consent, so it says what will run, where, and who can trigger it.
-  log('');
-  log(`  session   : ${me?.session ?? '?'}`);
-  log(`  agent     : @${displayName}`);
-  log(`  directory : ${cwd}`);
-  log(
-    `  on mention: ${
-      opts.provider === 'codex'
-        ? 'codex exec --approve-for-me   (workspace-write sandbox)'
-        : 'claude -p --dangerously-skip-permissions   (no sandbox)'
-    }`,
-  );
-  log('');
-  log('  Runs start WITHOUT permission prompts, in the directory above.');
-  log('  Only mentions the server authorises can trigger them.');
-  log('  Ctrl-C to stop.');
-  log('');
+  if (opts.banner) {
+    log('');
+    log(`  session   : ${me?.session ?? '?'}`);
+    log(`  agent     : @${displayName}`);
+    log(`  directory : ${cwd}`);
+    log(
+      `  policy    : ${
+        policy === 'read'
+          ? 'read only — reads files in this folder, changes nothing'
+          : policy === 'edit'
+            ? 'edit in folder — edits files here; no shell, no web'
+            : opts.provider === 'codex'
+              ? 'full — codex exec --approve-for-me (workspace-write sandbox)'
+              : 'full — claude -p --dangerously-skip-permissions (no sandbox)'
+      }`,
+    );
+    log('');
+    log('  Runs start without permission prompts, in the directory above.');
+    log('  Only mentions the server authorises can trigger them.');
+    log('  Ctrl-C to stop.');
+    log('');
+  }
 
   let running = false;
   const queue: MentionFrame[] = [];
@@ -134,6 +183,7 @@ export async function watch(opts: WatchOptions): Promise<void> {
     });
     socket.send({ type: 'status', status: 'working' });
     log(`run start — @${frame.message.author.displayName}: ${frame.message.content.slice(0, 60)}`);
+    opts.onRunStart?.({ runId, author: frame.message.author.displayName, preview: frame.message.content.slice(0, 80) });
 
     // What the agent posts is attributed to this participant, so "did it post?"
     // is answerable by looking for a newer message of its own.
@@ -158,6 +208,7 @@ export async function watch(opts: WatchOptions): Promise<void> {
       // Codex ignores this (it cannot resume with auto-approval); Claude uses it.
       resumeId: opts.provider === 'codex' ? undefined : resumeId,
       allowedTools: opts.allowedTools,
+      policy,
       onLog: (line) => log(`  ${line}`),
       // Already a tool name plus a short redacted descriptor: summarise() ran
       // inside the spawner, so no raw argument reaches this line (ADR 0015).
@@ -167,11 +218,9 @@ export async function watch(opts: WatchOptions): Promise<void> {
 
     if (result.resumeId) resumeId = result.resumeId;
 
-    socket.send({
-      type: 'run.end',
-      runId,
-      status: result.error === 'run was stopped' ? 'stopped' : result.ok ? 'done' : 'failed',
-    });
+    const endStatus = result.error === 'run was stopped' ? 'stopped' : result.ok ? 'done' : 'failed';
+    socket.send({ type: 'run.end', runId, status: endStatus });
+    opts.onRunEnd?.({ runId, status: endStatus, error: result.error });
 
     if (result.error === 'run was stopped') {
       // Deliberately stopped, not broken. Say which, so the timeline does not
@@ -220,13 +269,22 @@ export async function watch(opts: WatchOptions): Promise<void> {
 
   socket.connect();
 
-  const shutdown = () => {
-    socket.close();
-    void upstream.close();
-    process.exit(0);
+  return {
+    displayName,
+    abort: () => {
+      queue.length = 0;
+      current?.abort();
+    },
+    stop: () => {
+      queue.length = 0;
+      current?.abort();
+      socket.close();
+      void upstream.close();
+    },
+    get running() {
+      return running;
+    },
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
 }
 
 /* -------------------------------------------------------------------------- */

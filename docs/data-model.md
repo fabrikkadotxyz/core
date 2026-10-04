@@ -409,7 +409,12 @@ session_agent_hosts                       -- "this session agent runs on that de
   session_agent_id uuid -> session_agents.id pk
   device_id       uuid -> devices.id not null
   grant_id        text not null
+  token_id        uuid -> session_tokens.id   -- the token the host holds for it now
 ```
+
+**A binding's token is re-minted on every host connection** and the previous one
+revoked, so a token only lives as long as one connection. The server can't
+re-send a token it stores hashed, and doesn't need to.
 
 **The server never holds a path or a policy.** `device_grants` has what the host
 chose to report: an opaque id, a label, and which agent tools are installed. Paths

@@ -6,7 +6,8 @@
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
  * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation), M10 (runs) and
  * M12 (outputs), M19 (links), M21 (teams), M22 (guests), M23 (comments) and
- * M24 (catch-up), M25 (templates), M27 (context history) and M29 (chats).
+ * M24 (catch-up), M25 (templates), M27 (context history), M29 (chats) and
+ * M31 (devices).
  */
 import {
   bigserial,
@@ -818,3 +819,60 @@ export const contextEvents = pgTable(
   },
   (t) => [index('context_events_session_created_idx').on(t.sessionId, t.createdAt)],
 );
+
+/* ------------------------------------------------------------------------ */
+/* M31 — the local host (ADR 0027). The server holds no paths and no policies. */
+/* ------------------------------------------------------------------------ */
+
+/** A paired machine running the host. */
+export const devices = pgTable('devices', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  /** SHA-256 of the device token. The plaintext was given to the host once. */
+  tokenHash: text('token_hash').notNull().unique(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** A pairing waiting for a signed-in person to confirm its code. */
+export const devicePairings = pgTable('device_pairings', {
+  /** What the host polls with — hashed, like every other secret. */
+  deviceCodeHash: text('device_code_hash').primaryKey(),
+  /** The short code a person reads off the host and confirms in the browser. */
+  userCode: text('user_code').notNull().unique(),
+  deviceName: text('device_name').notNull(),
+  confirmedByUserId: uuid('confirmed_by_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
+
+/** What a host reports it may use: opaque ids and labels, never paths. */
+export const deviceGrants = pgTable(
+  'device_grants',
+  {
+    deviceId: uuid('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'cascade' }),
+    grantId: text('grant_id').notNull(),
+    label: text('label').notNull(),
+    /** Agent tools installed on that machine. */
+    providers: text('providers').array().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.deviceId, t.grantId] })],
+);
+
+/** "This session agent runs on that device, in that grant." */
+export const sessionAgentHosts = pgTable('session_agent_hosts', {
+  sessionAgentId: uuid('session_agent_id')
+    .primaryKey()
+    .references(() => sessionAgents.id, { onDelete: 'cascade' }),
+  deviceId: uuid('device_id')
+    .notNull()
+    .references(() => devices.id, { onDelete: 'cascade' }),
+  grantId: text('grant_id').notNull(),
+  /** The token the host holds for it now; re-minted per host connection. */
+  tokenId: uuid('token_id').references(() => sessionTokens.id, { onDelete: 'set null' }),
+});

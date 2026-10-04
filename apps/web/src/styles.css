@@ -1732,3 +1732,13 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 .side-new-session select { width: 100%; background: rgba(224, 251, 252, 0.08); color: var(--side-strong); border-color: var(--side-border); }
 .side-new-session select option { color: var(--text); background: var(--panel); }
 .side-form-row { display: flex; align-items: center; gap: 8px; }
+
+/* ---- the local host (M31) ---- */
+.pair-code { font-family: ui-monospace, monospace; font-size: 1.3em; letter-spacing: 0.08em; background: var(--panel-tint); padding: 2px 8px; border-radius: 6px; }
+.card-hint { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: var(--panel); margin: 12px 0; }
+.device { padding: 10px 12px; }
+.device .row { display: flex; align-items: center; gap: 10px; }
+.grant-list { list-style: none; margin: 6px 0 0; padding: 0 0 0 4px; display: flex; flex-direction: column; gap: 2px; }
+.add-mine { padding: 6px 0; }
+.manual-agent { margin: 8px 0; }
+.manual-agent summary { cursor: pointer; margin-bottom: 6px; }

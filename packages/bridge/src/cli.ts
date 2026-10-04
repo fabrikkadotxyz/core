@@ -19,6 +19,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { loadConfig } from './config.ts';
 import { watch } from './watch.ts';
+import { runHost } from './host/host.ts';
 import { randomUUID } from 'node:crypto';
 import { createChannelServer, formatMention, pushToChannel } from './channel.ts';
 import { summarise } from './redact.ts';
@@ -43,13 +44,22 @@ async function main(): Promise<void> {
         '    Bridge a Fabrikka session into THIS agent session. Claude Code\n' +
         '    spawns this from .mcp.json; mentions arrive as channel events.\n' +
         '\n' +
-        'fabrikka watch --dir <project> [--provider claude-code|codex]\n' +
-        '    Spawn a headless run for each mention, in <project>. Runs start\n' +
-        '    WITHOUT permission prompts — see the banner it prints.\n' +
+        'fabrikka host [--server <url>]\n' +
+        '    Run your agents on this computer, in folders you grant here.\n' +
+        '    Pairs with your account once (no token to paste). Recommended.\n' +
+        '\n' +
+        'fabrikka watch --dir <project> [--provider claude-code|codex] [--policy read|edit|full]\n' +
+        '    Spawn a headless run for each mention, in <project>. Policy\n' +
+        '    defaults to edit: files in <project> only, no shell, no web.\n' +
         '\n' +
         'Both need FABRIKKA_URL and FABRIKKA_TOKEN. Copy the block from your\n' +
         "session's Agents panel.",
     );
+    return;
+  }
+  if (command === 'host') {
+    // M31 (ADR 0027): pair once, grant folders here, and your agents run in them.
+    await runHost(argv.slice(1), (...a) => console.error('[fabrikka host]', ...a));
     return;
   }
   if (command !== 'connect' && command !== 'watch') {
@@ -64,7 +74,13 @@ async function main(): Promise<void> {
     const dir = flag(argv, 'dir') ?? process.cwd();
     const provider = flag(argv, 'provider') ?? 'claude-code';
     const allowedTools = flag(argv, 'allowed-tools')?.split(',').filter(Boolean);
-    await watch({ config, dir, provider, allowedTools, log });
+    const policy = (flag(argv, 'policy') ?? 'edit') as 'read' | 'edit' | 'full';
+    if (!['read', 'edit', 'full'].includes(policy)) {
+      log('--policy is read, edit or full (ADR 0027)');
+      process.exitCode = 1;
+      return;
+    }
+    await watch({ config, dir, provider, policy, allowedTools, log });
     return;
   }
   const mcp = createChannelServer(VERSION);

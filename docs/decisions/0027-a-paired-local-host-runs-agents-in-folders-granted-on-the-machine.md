@@ -1,6 +1,6 @@
 # 0027 — A paired local host runs agents in folders granted on the machine
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-04
 **Extends:** [ADR 0011](0011-spawning-is-local-and-opt-in.md). The CLI runner it describes stays.
 
@@ -33,7 +33,9 @@ folder, a command or a permission.**
 The host shows a short code, and **Connect** opens the browser at the instance's
 `/pair` page, where the signed-in user confirms the code (the OAuth device flow
 shape, RFC 8628). The host receives a **device token**, which is user-scoped,
-sealed at rest on the machine, and revocable from the web (*Your devices*). This
+stored in `~/.fabrikka/host.json` readable only by you (mode 0600, the way
+command-line tools like `gh` and `npm` keep theirs; the OS keychain can come
+later), and revocable from the web (*Your devices*). This
 is the one setup step allowed to take longer than five clicks, and it happens
 once per machine.
 

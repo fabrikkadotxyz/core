@@ -272,6 +272,10 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
           <span className="side-icon" aria-hidden>⚇</span>
           <span className="side-label">Personal integrations</span>
         </NavLink>
+        <NavLink to="/devices" className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
+          <span className="side-icon" aria-hidden>▣</span>
+          <span className="side-label">Your devices</span>
+        </NavLink>
       </section>
 
       <div className="side-bottom">

@@ -19,6 +19,33 @@ import { join } from 'node:path';
 export type Provider = 'claude-code' | 'codex' | string;
 
 /**
+ * What an agent may do on this machine (ADR 0027). Enforced by the agent tool
+ * itself, with flags verified in real runs (scripts/spikes/m31-policies.mjs):
+ *   - read: read files in the folder; nothing that writes exists.
+ *   - edit: read and edit files in the folder; no shell, no web, no sub-agents.
+ *   - full: anything the tool can do — today's unsandboxed behaviour, opt-in.
+ * Either way the run loads Fabrikka's tools and no other MCP server: without
+ * --strict-mcp-config it would load the user's own Claude connectors.
+ */
+export type Policy = 'read' | 'edit' | 'full';
+
+export const POLICIES: Policy[] = ['read', 'edit', 'full'];
+
+/** Providers whose read/edit policies were verified. Codex isn't, yet (ADR 0027). */
+export function policyVerified(provider: Provider, policy: Policy): boolean {
+  return policy === 'full' || provider === 'claude-code';
+}
+
+/** The Claude Code flags for a policy. Exactly the ones the spike verified. */
+export function claudePolicyArgs(policy: Policy): string[] {
+  const confined = ['--restricted', '--permission-prompts', 'none', '--strict-mcp-config', '--allowedTools', 'mcp__fabrikka'];
+  if (policy === 'read') return [...confined, '--permission-mode', 'dontAsk', '--tools', 'Read,Glob,Grep'];
+  if (policy === 'edit') return [...confined, '--permission-mode', 'acceptEdits', '--tools', 'Read,Glob,Grep,Edit,Write'];
+  // A headless run cannot answer a prompt; full is the explicit, per-folder opt-in.
+  return ['--dangerously-skip-permissions'];
+}
+
+/**
  * The name the session endpoint is registered under inside a Codex run.
  *
  * Deliberately not plain "fabrikka": `-c` merges into the user's existing
@@ -38,6 +65,8 @@ export interface SpawnRequest {
   resumeId?: string;
   /** Optional narrowing; unset means the provider's own default. */
   allowedTools?: string[];
+  /** What the run may do on this machine (ADR 0027). Unset means full, as before. */
+  policy?: Policy;
   onLog?: (line: string) => void;
   /**
    * One step the agent took. Already reduced to a tool name and a short redacted
@@ -63,6 +92,10 @@ export function isSupported(provider: Provider): boolean {
 }
 
 export async function runAgent(req: SpawnRequest): Promise<SpawnResult> {
+  // Never run a policy that wasn't verified for this tool as if it were full.
+  if (req.policy && !policyVerified(req.provider, req.policy)) {
+    return { ok: false, text: '', error: `${req.provider} has no verified "${req.policy}" policy yet (ADR 0027)` };
+  }
   if (req.provider === 'codex') return runCodex(req);
   if (req.provider === 'claude-code') return runClaude(req);
   return {
@@ -109,12 +142,12 @@ async function runClaude(req: SpawnRequest): Promise<SpawnResult> {
       '--verbose',
       '--append-system-prompt',
       req.systemPreamble,
-      // A headless run cannot answer a prompt. See ADR 0011 for why this is
-      // acceptable here and nowhere else.
-      '--dangerously-skip-permissions',
+      ...claudePolicyArgs(req.policy ?? 'full'),
     ];
     if (req.mcp) args.push('--mcp-config', configPath);
-    if (req.allowedTools?.length) args.push('--allowedTools', ...req.allowedTools);
+    // A confined policy already names its tools exactly; narrowing it further is
+    // only meaningful for full.
+    if (req.allowedTools?.length && (req.policy ?? 'full') === 'full') args.push('--allowedTools', ...req.allowedTools);
     if (req.resumeId) args.push('--resume', req.resumeId);
 
     const out = await execute('claude', args, req, {}, (line) =>

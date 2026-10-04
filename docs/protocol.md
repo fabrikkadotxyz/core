@@ -771,19 +771,22 @@ Host → server:
 
 | Frame | Meaning |
 | --- | --- |
-| `{ type: 'grants', grants: [{ id, label, providers }] }` | What this machine may use. Sent on connect and whenever the user changes a grant. Labels only, never paths |
-| `{ type: 'run.refused', requestId, reason }` | `unknown_grant`, `grant_revoked`, `provider_missing`, `busy` |
+| `{ type: 'grants', grants: [{ id, label, providers }] }` | What this machine may use. Sent on connect and whenever the user changes a grant. Labels only, never paths. `providers` is the agent tools installed on the machine |
 
 Server → host:
 
 | Frame | Meaning |
 | --- | --- |
-| `{ type: 'run.request', requestId, session, agent, grantId, provider, message, trust, repos?, runToken }` | Start one run. **Carries no path, command line, flag or policy**: the host resolves `grantId` against its own config and builds the command from fixed templates |
-| `{ type: 'abort', sessionId? }` | Stop runs (for one session, or all). The kill switch, as for the runner (ADR 0012) |
+| `{ type: 'bindings', bindings: [{ id, grantId, provider, agent, session, mcpUrl, bridgeUrl, token }] }` | The agents bound to this machine, each with a **fresh token** minted for this connection (the previous one is revoked). Sent on connect and whenever a binding is added or removed. **Carries no path, command line, flag or policy** |
+| `{ type: 'binding', binding }` | One agent was just bound to this machine: the same shape as an entry above, with its own fresh token. The others keep theirs, because re-minting them would revoke tokens that running agents are using |
+| `{ type: 'revoked' }` | The device was revoked on the web. The host stops every run and forgets its token |
 
-From there a run behaves exactly like a CLI runner's run: the same run, activity and
-outcome frames (above), the same per-run token, and the same delivery gate in
-front of it.
+**For each binding, the host opens an ordinary runner connection** (the bridge
+socket above, `hello { kind: 'runner' }`) with that binding's token. So mentions,
+the delivery gate, runs, activity, aborts and the kill switch all work exactly as
+they do for `fabrikka watch`. What the host adds is local: it resolves `grantId`
+against its own config to a folder and a policy, and refuses to run if the grant is
+gone, the folder is missing, or the provider has no verified policy.
 
 ## Presence
 

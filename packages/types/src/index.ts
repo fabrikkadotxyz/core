@@ -602,3 +602,20 @@ export interface TemplateSummary {
   canDelete: boolean;
   body: TemplateBody;
 }
+
+/* ------------------------------------------------------------- local host */
+
+/** A paired machine running the host (M31, ADR 0027). Labels only, never paths. */
+export interface DeviceSummary {
+  id: string;
+  name: string;
+  online: boolean;
+  lastSeenAt: string | null;
+  grants: {
+    id: string;
+    label: string;
+    providers: string[];
+    /** False when none of its agent tools has verified host policies (Codex, for now). */
+    usable: boolean;
+  }[];
+}

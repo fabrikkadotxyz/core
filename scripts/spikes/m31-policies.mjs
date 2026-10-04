@@ -164,7 +164,9 @@ if (!cookie) {
   writeFileSync(cfg, JSON.stringify({ mcpServers: { fabrikka: { type: 'http', url: `http://localhost:9090/mcp${base}`, headers: { Authorization: `Bearer ${agent.token}` } } } }));
   const word = `restricted-hello-${Date.now()}`;
   for (const policy of ['edit', 'read']) {
-    MCP_ARGS = ['--mcp-config', cfg, '--allowedTools', 'mcp__fabrikka__post_message', 'mcp__fabrikka__read_messages', 'mcp__fabrikka__get_session_context'];
+    // One server-level rule allows every Fabrikka tool, so the list can't go
+    // stale as tools are added; it's exactly what the host passes.
+    MCP_ARGS = ['--mcp-config', cfg, '--allowedTools', 'mcp__fabrikka'];
     r = await run(policy, `Use the post_message tool to post exactly this text to the session: ${word}-${policy}`);
     const msgs = await fetch(`${API}${base}/messages`, { headers: { cookie } }).then((x) => x.json());
     verdict(msgs.some((m) => m.content.includes(`${word}-${policy}`)), `${policy}: the agent still posts to the session through the Fabrikka tools`, summary(r));

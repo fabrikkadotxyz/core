@@ -21,6 +21,7 @@ import type {
   OutputKindInfo,
   Participant,
   SessionLink,
+  DeviceSummary,
   TemplateSummary,
   CatchUp,
   WaitingItem,
@@ -115,6 +116,14 @@ export const chats = {
   people: () => call<{ id: string; displayName: string }[]>('/directs/people'),
 };
 
+/** M31: your paired computers (the local host). Labels only, never paths. */
+export const devices = {
+  list: () => call<DeviceSummary[]>('/devices'),
+  revoke: (id: string) => call<{ ok: true }>(`/devices/${id}`, { method: 'DELETE' }),
+  pairing: (code: string) => call<{ deviceName: string }>(`/devices/pair/${encodeURIComponent(code)}`),
+  confirm: (code: string) => call<{ deviceName: string }>('/devices/pair/confirm', { method: 'POST', body: { code } }),
+};
+
 export const connections = {
   list: () =>
     call<{
@@ -200,6 +209,11 @@ export const sessions = {
   agents: (ref: SessionRef) => call<AgentSummary[]>(`${base(ref)}/agents`),
   addAgent: (ref: SessionRef, body: { displayName: string; provider?: string }) =>
     call<CreatedAgentView>(`${base(ref)}/agents`, { method: 'POST', body }),
+  /** M31: an agent that runs on one of your paired computers, in a granted folder. */
+  addHostAgent: (ref: SessionRef, body: { deviceId: string; grantId: string; displayName?: string }) =>
+    call<{ agent: { displayName: string }; online: boolean }>(`${base(ref)}/agents/host`, { method: 'POST', body }),
+  agentHosts: (ref: SessionRef) =>
+    call<Record<string, { deviceName: string; label: string | null; online: boolean }>>(`${base(ref)}/agents/hosts`),
   setAgentTrust: (ref: SessionRef, sessionAgentId: string, trustTier: AgentTrustPolicy) =>
     call<{ ok: true }>(`${base(ref)}/agents/${sessionAgentId}/trust`, {
       method: 'PATCH',

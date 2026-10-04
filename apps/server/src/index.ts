@@ -117,6 +117,21 @@ import { cachedRepos, LinkError, linkedRepos, listLinks, removeLink, saveLink } 
 import { addComment, listComments, reply, setResolved, threadAuthor } from './outputs/comments.ts';
 import { getCatchUp, markSeen, waitingFor } from './catchup.ts';
 import { exportSession } from './export.ts';
+import {
+  bindAgent,
+  bindingsForDevice,
+  confirmPairing,
+  describePairing,
+  DeviceError,
+  hostHub,
+  hostOf,
+  listDevices,
+  pollPairing,
+  resolveDevice,
+  revokeDevice,
+  setGrants,
+  startPairing,
+} from './devices.ts';
 import { ChatError, createChat, directCandidates, ensureGeneral, listTeamChats, openDirect } from './chats.ts';
 import { applyTemplate, deleteTemplate, findTemplate, listTemplates, saveTemplate, sessionTemplate, TemplateError } from './templates/templates.ts';
 import {
@@ -426,6 +441,45 @@ app.post('/api/directs', requireUser(db), async (c) => {
 
 app.get('/api/directs/people', requireUser(db), async (c) => c.json(await directCandidates(db, c.get('user').id)));
 
+/* ---- the local host (M31, ADR 0027): pairing and devices ---- */
+
+/** Unauthenticated: the host asks to pair and gets a code for a person to confirm. */
+app.post('/api/devices/pair', async (c) => {
+  const { name } = await c.req.json<{ name?: string }>().catch(() => ({ name: undefined }));
+  return c.json(await startPairing(db, name ?? ''), 201);
+});
+
+/** Unauthenticated: the host polls; once confirmed it receives its token, once. */
+app.post('/api/devices/pair/poll', async (c) => {
+  const { deviceCode } = await c.req.json<{ deviceCode?: string }>().catch(() => ({ deviceCode: undefined }));
+  return c.json(await pollPairing(db, deviceCode ?? ''));
+});
+
+/** What the /pair page shows: the device's name for a live code. */
+app.get('/api/devices/pair/:code', requireUser(db), async (c) => {
+  const p = await describePairing(db, c.req.param('code'));
+  return p ? c.json(p) : c.notFound();
+});
+
+app.post('/api/devices/pair/confirm', requireUser(db), async (c) => {
+  const { code } = await c.req.json<{ code?: string }>().catch(() => ({ code: undefined }));
+  try {
+    return c.json(await confirmPairing(db, c.get('user').id, code ?? ''));
+  } catch (err) {
+    if (err instanceof DeviceError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
+});
+
+app.get('/api/devices', requireUser(db), async (c) => c.json(await listDevices(db, c.get('user').id, hostHub.online)));
+
+app.delete('/api/devices/:id', requireUser(db), async (c) => {
+  const done = await revokeDevice(db, c.get('user').id, c.req.param('id'));
+  if (!done) return c.notFound();
+  hostHub.kick(c.req.param('id'));
+  return c.json({ ok: true });
+});
+
 const sessionRoutes = new Hono<AuthEnv>();
 
 sessionRoutes.use('*', requireUser(db));
@@ -680,6 +734,46 @@ sessionRoutes.post('/spin-off', async (c) => {
     },
   });
   return c.json(created, 201);
+});
+
+/* ---- "Add my agent" (M31): an agent that runs on one of your paired devices ---- */
+
+sessionRoutes.post('/agents/host', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const body = await c.req.json<{ deviceId?: string; grantId?: string; displayName?: string }>();
+  try {
+    const agent = await bindAgent(db, {
+      sessionId: s.id,
+      sessionPublicId: s.view.publicId,
+      ownerSlug: s.view.ownerSlug,
+      publicUrl: PUBLIC_URL,
+      user: c.get('user'),
+      deviceId: body.deviceId ?? '',
+      grantId: body.grantId ?? '',
+      displayName: body.displayName,
+    });
+    // Only the new binding goes out, with its own token: re-minting the others
+    // would revoke tokens that running agents are using.
+    const [binding] = await bindingsForDevice(db, body.deviceId!, PUBLIC_URL, agent.sessionAgentId);
+    if (binding) hostHub.send(body.deviceId!, { type: 'binding', binding });
+    return c.json({ agent, online: hostHub.online(body.deviceId!) }, 201);
+  } catch (err) {
+    if (err instanceof DeviceError) return c.json({ error: err.message }, err.message === 'no such device' ? 404 : 400);
+    throw err;
+  }
+});
+
+/** Where each of this session's agents runs, for agents bound to a device. */
+sessionRoutes.get('/agents/hosts', async (c) => {
+  const s = await resolve(c);
+  if (!s) return c.notFound();
+  const out: Record<string, { deviceName: string; label: string | null; online: boolean }> = {};
+  for (const a of await listSessionAgents(db, s.id)) {
+    const h = await hostOf(db, a.sessionAgentId);
+    if (h) out[a.participantId] = { deviceName: h.deviceName, label: h.label, online: hostHub.online(h.deviceId) };
+  }
+  return c.json(out);
 });
 
 /* ---- guests (M22): a viewer of this one session, from outside its team ---- */
@@ -1663,6 +1757,59 @@ app.route('/', mcp.app);
  * Authenticated by the same cookie as the REST API, and membership-checked —
  * a socket is not a way around the access rules.
  */
+/**
+ * The local host socket (M31, ADR 0027). Authenticated with the device token.
+ * The host reports its grants (labels, never paths); the server answers with the
+ * agents bound to it, each with a fresh token. The host then opens an ordinary
+ * runner connection per binding — so nothing here starts a run by itself.
+ */
+app.get(
+  '/host',
+  upgradeWebSocket((c) => {
+    const bearer = c.req.header('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+    let deviceId: string | null = null;
+    let me: { send: (d: string) => void; close: () => void } | null = null;
+    /** Bindings (and their fresh tokens) go out once per connection, not per grant change. */
+    let bound = false;
+    return {
+      async onOpen(_evt, ws) {
+        const device = await resolveDevice(db, bearer);
+        if (!device) {
+          ws.send(JSON.stringify({ type: 'error', code: 'unauthenticated' }));
+          ws.close();
+          return;
+        }
+        deviceId = device.id;
+        me = { send: (d) => ws.send(d), close: () => ws.close() };
+        hostHub.attach(device.id, me);
+        ws.send(JSON.stringify({ type: 'ready', device: { id: device.id, name: device.name } }));
+      },
+      async onMessage(evt, ws) {
+        if (!deviceId) return;
+        let frame: { type?: string; grants?: { id: string; label: string; providers: string[] }[] };
+        try {
+          frame = JSON.parse(String(evt.data));
+        } catch {
+          return;
+        }
+        if (frame.type === 'grants' && Array.isArray(frame.grants)) {
+          await setGrants(db, deviceId, frame.grants);
+          if (!bound) {
+            bound = true;
+            ws.send(JSON.stringify({ type: 'bindings', bindings: await bindingsForDevice(db, deviceId, PUBLIC_URL) }));
+          }
+        }
+      },
+      onClose() {
+        if (deviceId && me) hostHub.detach(deviceId, me);
+      },
+      onError() {
+        if (deviceId && me) hostHub.detach(deviceId, me);
+      },
+    };
+  }),
+);
+
 app.get(
   '/api/o/:owner/s/:session/stream',
   upgradeWebSocket((c) => {

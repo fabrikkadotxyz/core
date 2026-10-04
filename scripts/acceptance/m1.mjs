@@ -73,7 +73,8 @@ function admin(args, stdinValue) {
   });
 }
 
-const PW = 'fabrikka-dev-pw';
+const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
+const PW = process.env.FABRIKKA_TEST_PASSWORD ?? 'fabrikka-dev-pw';
 const stamp = Date.now();
 const aliceEmail = `alice-${stamp}@example.com`;
 const carolEmail = `carol-${stamp}@example.com`;
@@ -83,7 +84,7 @@ const carolEmail = `carol-${stamp}@example.com`;
 const fede = jar();
 const badLogin = await req('/auth/login', {
   method: 'POST',
-  body: { email: 'fede@example.com', password: 'wrong-password' },
+  body: { email: EMAIL, password: 'wrong-password' },
 });
 check(badLogin.status === 401, 'wrong password rejected with 401');
 check(
@@ -102,13 +103,13 @@ check(
 
 const login = await req('/auth/login', {
   method: 'POST',
-  body: { email: 'fede@example.com', password: PW },
+  body: { email: EMAIL, password: PW },
   jar: fede,
 });
 check(login.status === 200, 'correct password logs in');
 
 const me = await req('/auth/me', { jar: fede });
-check(me.status === 200 && me.json?.user?.ownerSlug === 'fede', '/auth/me identifies fede');
+check(me.status === 200 && me.json?.user?.email === EMAIL, '/auth/me identifies the signed-in account');
 
 const anon = await req('/auth/me');
 check(anon.status === 401, 'no cookie -> 401 on /auth/me');
@@ -373,7 +374,7 @@ check(
 // Re-login as fede (step 13 logged him out) so the session can be removed.
 await req('/auth/login', {
   method: 'POST',
-  body: { email: 'fede@example.com', password: PW },
+  body: { email: EMAIL, password: PW },
   jar: fede,
 });
 await req(base, { method: 'DELETE', jar: fede }).catch(() => {});

@@ -16,7 +16,7 @@ import WebSocket from 'ws';
 
 const API = 'http://localhost:9090/api';
 const WS_BASE = 'ws://localhost:9090/bridge';
-const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'fede@example.com';
+const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
 const PASSWORD = process.env.FABRIKKA_TEST_PASSWORD ?? 'fabrikka-dev-pw';
 
 let failures = 0;

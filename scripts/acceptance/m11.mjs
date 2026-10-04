@@ -18,7 +18,7 @@
  */
 const ORIGIN = 'http://localhost:9090';
 const API = `${ORIGIN}/api`;
-const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'fede@example.com';
+const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
 const PASSWORD = process.env.FABRIKKA_TEST_PASSWORD ?? 'fabrikka-dev-pw';
 
 let failures = 0;

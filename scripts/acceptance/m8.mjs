@@ -14,7 +14,7 @@ const API = 'http://localhost:9090/api';
 const MCP = 'http://localhost:9090/mcp';
 const UPSTREAM_PORT = 9191;
 const UPSTREAM = `http://localhost:${UPSTREAM_PORT}/mcp`;
-const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'fede@example.com';
+const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
 const PASSWORD = process.env.FABRIKKA_TEST_PASSWORD ?? 'fabrikka-dev-pw';
 
 let failures = 0;

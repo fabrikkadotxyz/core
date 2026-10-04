@@ -12,7 +12,7 @@
 import { execFile as execFileCb } from 'node:child_process';
 
 const API = 'http://localhost:9090/api';
-const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'fede@example.com';
+const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
 const PASSWORD = process.env.FABRIKKA_TEST_PASSWORD ?? 'fabrikka-dev-pw';
 
 let failures = 0;

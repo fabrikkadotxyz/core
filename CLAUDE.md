@@ -57,6 +57,11 @@ pnpm acceptance    # every milestone's check, in order
 git commit -m "M<N>: ..." && git tag m<N>
 ```
 
+The checks run as a dedicated test account, `acceptance@example.com`, created on
+first run by `scripts/acceptance/_setup.mjs`, never as a developer's own
+account. Everything they create (teams, sessions, agents) lands there. Override
+with `FABRIKKA_TEST_EMAIL` / `FABRIKKA_TEST_PASSWORD`.
+
 Some checks are gated behind an env var because they cost a real model call.
 Run them before tagging a milestone that touches their area:
 

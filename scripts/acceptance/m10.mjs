@@ -27,7 +27,7 @@ import { join } from 'node:path';
 import WebSocket from 'ws';
 
 const API = 'http://localhost:9090/api';
-const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'fede@example.com';
+const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
 const DEEP = process.env.FABRIKKA_TEST_SPAWN === '1';
 const PASSWORD = process.env.FABRIKKA_TEST_PASSWORD ?? 'fabrikka-dev-pw';
 

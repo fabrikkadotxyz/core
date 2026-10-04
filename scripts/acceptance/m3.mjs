@@ -14,7 +14,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 
 const API = 'http://localhost:9090/api';
 const MCP = 'http://localhost:9090/mcp';
-const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'fede@example.com';
+const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
 const PASSWORD = process.env.FABRIKKA_TEST_PASSWORD ?? 'fabrikka-dev-pw';
 
 let failures = 0;
@@ -113,6 +113,9 @@ if (login.status !== 200) {
   console.error(`could not log in as ${EMAIL}`);
   process.exit(1);
 }
+// The account's own name, not a hard-coded one: the checks run as a dedicated
+// test account (scripts/acceptance/_setup.mjs), not as anyone's real account.
+const ME = (await req('/auth/me', { jar: fede })).json.user.displayName;
 
 // Two sessions, so cross-session isolation is testable.
 const A = (
@@ -130,7 +133,7 @@ const urlB = `${MCP}/o/${B.ownerSlug}/s/${B.publicId}`;
 // rather than silently skipped by a find() that matches nothing.
 await req(`${baseA}/messages`, {
   method: 'POST',
-  body: { content: `fede opening the session ${stamp}` },
+  body: { content: `${ME} opening the session ${stamp}` },
   jar: fede,
 });
 
@@ -295,10 +298,10 @@ check(
 /* -------------------------- 6. mention resolution from prose */
 
 const mentioned = await call(clientA, 'post_message', {
-  content: `@fede the retry handler resets backoff ${stamp}`,
+  content: `@${ME} the retry handler resets backoff ${stamp}`,
 });
 check(
-  mentioned.mentions.includes('fede'),
+  mentioned.mentions.includes(ME),
   'an agent mentions a human by name in prose, with no participant id',
 );
 
@@ -313,13 +316,13 @@ check(
 const read = await call(clientA, 'read_messages', { limit: 100 });
 const readBack = read.find((m) => m.content.includes('retry handler resets backoff'));
 check(
-  readBack.content.includes('@fede') && !readBack.content.includes('<@'),
+  readBack.content.includes(`@${ME}`) && !readBack.content.includes('<@'),
   'markers are expanded to @name for the agent, not leaked as ids',
 );
 
 /* ------------------------------------------- 7. trust evaluation */
 
-const ownerMsg = read.find((m) => m.author === 'fede');
+const ownerMsg = read.find((m) => m.author === ME);
 check(!!ownerMsg, 'fixture: an owner-authored message exists to evaluate');
 check(ownerMsg?.trust === 'owner', "the agent owner's messages are trust=owner");
 
@@ -359,7 +362,7 @@ check(
   elevated.find((m) => m.author === 'alice')?.trust === 'session',
   'elevating the agent to session_trusted reports alice as trust=session',
 );
-const elevatedOwner = elevated.find((m) => m.author === 'fede');
+const elevatedOwner = elevated.find((m) => m.author === ME);
 check(!!elevatedOwner, 'fixture: owner message still present after elevation');
 check(
   elevatedOwner?.trust === 'owner',

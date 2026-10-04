@@ -9,7 +9,7 @@
  * Run: node scripts/acceptance/m0.mjs
  */
 const API = 'http://localhost:9090/api';
-const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'fede@example.com';
+const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
 const PASSWORD = process.env.FABRIKKA_TEST_PASSWORD ?? 'fabrikka-dev-pw';
 
 const fail = (msg) => {
@@ -28,7 +28,7 @@ const loginRes = await fetch(`${API}/auth/login`, {
 if (!loginRes.ok) {
   fail(
     `could not log in as ${EMAIL}. Create an account first:\n` +
-      `  pnpm admin create-user --email ${EMAIL} --owner`,
+      `  node scripts/acceptance/_setup.mjs   (creates the test account)`,
   );
 }
 for (const c of loginRes.headers.getSetCookie?.() ?? []) {
@@ -41,8 +41,19 @@ console.log('ok  logged in');
 /* ------------------------------------------------ find the demo session */
 
 const list = await (await fetch(`${API}/sessions`, { headers: { cookie } })).json();
-const demo = list.find((s) => s.publicId === 'demo') ?? list[0];
-if (!demo) fail('no sessions found — run: pnpm db:seed');
+// The seeded demo session if there is one; otherwise make one, so a fresh test
+// account (scripts/acceptance/_setup.mjs) needs no seeding first.
+const demo =
+  list.find((s) => s.publicId === 'demo') ??
+  list.find((s) => (s.kind ?? 'session') === 'session') ??
+  (await (
+    await fetch(`${API}/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', cookie },
+      body: JSON.stringify({ title: 'M0 check' }),
+    })
+  ).json());
+if (!demo?.publicId) fail('could not find or create a session');
 
 const BASE = `${API}/o/${demo.ownerSlug}/s/${demo.publicId}`;
 const WS = BASE.replace('http', 'ws') + '/stream';

@@ -1044,8 +1044,10 @@ decision, with who decided and when, and opens in any editor.
 - "Most recently active" means the latest message, or the session's creation if
   it has none. Fabrikka doesn't track who looked at what beyond your own read
   position (M24).
-- **The home's main area**, with nothing open, shows *Waiting for you* (M24) and a
-  way to start a session in the current team or for yourself.
+- **Starting a session happens where the sessions are.** A **+** beside *Team
+  sessions* starts one in the current team, and a **+** beside *Personal sessions*
+  starts one just for you. Either way you give a title and, optionally, a template.
+- **The home's main area**, with nothing open, shows *Waiting for you* (M24).
 - Nothing here is a new permission. The sidebar shows exactly what the session
   list already showed, arranged by team.
 

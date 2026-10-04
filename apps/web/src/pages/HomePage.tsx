@@ -1,43 +1,22 @@
 /**
- * Home (M28): what's waiting for you, and starting something new. The lists of
- * sessions live in the sidebar, beside every page.
+ * Home (M28): what's waiting for you, and your teams. Sessions — listing them
+ * and starting them — live in the sidebar, beside every page.
  */
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import type { TemplateSummary, WaitingItem } from '@fabrikka/types';
-import { sessions, teams, templates } from '../api.ts';
+import { Link } from 'react-router-dom';
+import type { WaitingItem } from '@fabrikka/types';
+import { sessions, teams } from '../api.ts';
 import { useWorkspace } from '../shell/workspace.tsx';
 
 export function HomePage() {
   const { team, teams: myTeams, refresh, selectTeam } = useWorkspace();
-  const navigate = useNavigate();
   const [waiting, setWaiting] = useState<WaitingItem[]>([]);
-  const [tpls, setTpls] = useState<TemplateSummary[]>([]);
-  const [title, setTitle] = useState('');
-  const [templateRef, setTemplateRef] = useState('');
-  const [where, setWhere] = useState<'team' | 'personal'>('team');
   const [teamName, setTeamName] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     sessions.waiting().then(setWaiting).catch(() => {});
-    templates.list().then(setTpls).catch(() => {});
   }, []);
-
-  const inTeam = !!team && where === 'team';
-
-  const start = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-    setError(null);
-    try {
-      const s = await sessions.create(title.trim(), inTeam ? team!.id : undefined, templateRef || undefined);
-      refresh();
-      navigate(`/o/${s.ownerSlug}/s/${s.publicId}`);
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
 
   return (
     <div className="page">
@@ -62,39 +41,9 @@ export function HomePage() {
           </section>
         )}
 
-        <h2>Start a session</h2>
-        <form className="inline-form" onSubmit={start}>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="What's the problem?"
-            aria-label="New session title"
-          />
-          {tpls.length > 0 && (
-            <select value={templateRef} onChange={(e) => setTemplateRef(e.target.value)} aria-label="Start from a template">
-              <option value="">Blank</option>
-              {tpls.map((t) => (
-                <option key={t.ref} value={t.ref}>
-                  {t.name}
-                  {t.source === 'team' ? ` · ${t.teamName}` : t.source === 'mine' ? ' · yours' : ''}
-                </option>
-              ))}
-            </select>
-          )}
-          {team && (
-            <select value={where} onChange={(e) => setWhere(e.target.value as 'team' | 'personal')} aria-label="Where">
-              <option value="team">In {team.name}</option>
-              <option value="personal">Just for me</option>
-            </select>
-          )}
-          <button type="submit" disabled={!title.trim()}>
-            Start
-          </button>
-        </form>
         <p className="muted small">
-          {inTeam
-            ? `Private to you until you add someone — teammates on ${team!.name} can be added without a link.`
-            : 'Private to you until you invite someone.'}
+          Start a session with the <strong>+</strong> beside <em>Team sessions</em> or{' '}
+          <em>Personal sessions</em> in the sidebar.
         </p>
         {error && <p className="error">{error}</p>}
 

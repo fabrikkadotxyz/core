@@ -6,10 +6,10 @@
  * It shows exactly what the session list already showed, arranged by team. No
  * new permission lives here.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import type { SessionSummary } from '@fabrikka/types';
-import { chats } from '../api.ts';
+import type { SessionSummary, TemplateSummary } from '@fabrikka/types';
+import { chats, sessions as sessionsApi, templates } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { byActivity, useWorkspace } from './workspace.tsx';
 
@@ -31,6 +31,83 @@ function SessionLink({ s, onNavigate }: { s: SessionSummary; onNavigate: () => v
       <span className="side-label">{label}</span>
       {s.role === 'viewer' && <span className="side-meta">view</span>}
     </NavLink>
+  );
+}
+
+/**
+ * Start a session where the sessions are (M28): in the current team, or just
+ * for you. A title, and optionally a template; Enter starts it and opens it.
+ */
+function NewSession({
+  teamId,
+  open,
+  onClose,
+  onCreated,
+}: {
+  teamId: string | null;
+  open: boolean;
+  onClose: () => void;
+  onCreated: (s: SessionSummary) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [templateRef, setTemplateRef] = useState('');
+  const [tpls, setTpls] = useState<TemplateSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (open) templates.list().then(setTpls).catch(() => {});
+  }, [open]);
+  if (!open) return null;
+  return (
+    <form
+      className="side-form side-new-session"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+        setError(null);
+        try {
+          const s = await sessionsApi.create(title.trim(), teamId ?? undefined, templateRef || undefined);
+          setTitle('');
+          setTemplateRef('');
+          onCreated(s);
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      }}
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+    >
+      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What's the problem?" aria-label="New session title" />
+      {tpls.length > 0 && (
+        <select value={templateRef} onChange={(e) => setTemplateRef(e.target.value)} aria-label="Start from a template">
+          <option value="">Blank</option>
+          {tpls.map((t) => (
+            <option key={t.ref} value={t.ref}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      )}
+      <div className="side-form-row">
+        <button type="submit" disabled={!title.trim()}>
+          Start
+        </button>
+        <button type="button" className="link small" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+      {error && <p className="side-empty error">{error}</p>}
+    </form>
+  );
+}
+
+/** A section heading with a "+" that opens the section's create form. */
+function SectionHead({ title, label, onAdd }: { title: string; label: string; onAdd: () => void }) {
+  return (
+    <div className="side-head">
+      <h2>{title}</h2>
+      <button className="side-add" aria-label={label} title={label} onClick={onAdd}>
+        +
+      </button>
+    </div>
   );
 }
 
@@ -117,7 +194,9 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
     ? active.filter((s) => s.kind === 'chat' && s.team?.id === team.id).sort((a, b) => a.title.localeCompare(b.title))
     : [];
   const directs = active.filter((s) => s.kind === 'direct').sort(byActivity);
+  const [creating, setCreating] = useState<'team' | 'personal' | null>(null);
   const open = (s: SessionSummary) => {
+    setCreating(null);
     refresh();
     navigate(`/o/${s.ownerSlug}/s/${s.publicId}`);
     onNavigate();
@@ -164,7 +243,8 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
 
       {team && (
         <section className="side-section" aria-label="Team sessions">
-          <h2>Team sessions</h2>
+          <SectionHead title="Team sessions" label={`New session in ${team.name}`} onAdd={() => setCreating('team')} />
+          <NewSession teamId={team.id} open={creating === 'team'} onClose={() => setCreating(null)} onCreated={open} />
           {teamSessions.length === 0 && <p className="side-empty">No sessions in {team.name} yet.</p>}
           {teamSessions.slice(0, RECENT).map((s) => (
             <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
@@ -188,7 +268,8 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
       </section>
 
       <section className="side-section" aria-label="Personal sessions">
-        <h2>Personal sessions</h2>
+        <SectionHead title="Personal sessions" label="New personal session" onAdd={() => setCreating('personal')} />
+        <NewSession teamId={null} open={creating === 'personal'} onClose={() => setCreating(null)} onCreated={open} />
         {personal.length === 0 && <p className="side-empty">Sessions in no team show here.</p>}
         {personal.slice(0, 8).map((s) => (
           <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />

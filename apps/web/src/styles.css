@@ -1719,3 +1719,16 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 .side-picker { display: flex; flex-direction: column; gap: 1px; max-height: 240px; overflow-y: auto; }
 .spin-off { display: flex; gap: 6px; align-items: center; }
 .spin-off input { width: 16rem; }
+
+/* ---- "+" beside a sidebar section (M28) ---- */
+.side-head { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 4px 0; }
+.side-head h2 { margin-bottom: 0; }
+.side-add {
+  width: 22px; height: 22px; padding: 0; border-radius: 6px; line-height: 1;
+  background: transparent; border: 1px solid transparent; color: var(--side-muted); font-size: 1rem; font-weight: 600;
+}
+.side-add:hover { background: var(--side-hover); color: var(--side-strong); border-color: var(--side-border); }
+.side-new-session { display: flex; flex-direction: column; gap: 4px; padding: 2px 8px 6px; }
+.side-new-session select { width: 100%; background: rgba(224, 251, 252, 0.08); color: var(--side-strong); border-color: var(--side-border); }
+.side-new-session select option { color: var(--text); background: var(--panel); }
+.side-form-row { display: flex; align-items: center; gap: 8px; }

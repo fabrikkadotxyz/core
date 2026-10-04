@@ -28,6 +28,17 @@ Why this project in particular: Fabrikka's value is a *protocol surface* that ex
 
 Change `docs/protocol.md` with particular care: agents in the wild are bound to it.
 
+## Five clicks, at most
+
+**Every feature path is reachable in five clicks or fewer**, from wherever a person
+would start it. Copying and pasting a command, a token or a URL counts as failing
+the rule, not as one click: if a flow needs a paste every time, the flow is wrong.
+
+- A milestone's manual test counts the clicks for its main path and says the
+  number.
+- One-time setup (signing in, pairing a machine) may take longer, but only once.
+  It must never be repeated per session or per agent.
+
 ## The rule that overrides everything
 
 > **Fabrikka does not own the agent. Fabrikka owns the session.**

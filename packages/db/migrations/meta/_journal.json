@@ -113,6 +113,20 @@
       "when": 1791079867473,
       "tag": "0015_output_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791080408257,
+      "tag": "0016_session_reads",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791080573184,
+      "tag": "0017_backfill_session_reads",
+      "breakpoints": true
     }
   ]
 }

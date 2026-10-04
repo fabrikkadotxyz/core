@@ -532,3 +532,31 @@ export interface OutputComment {
   resolvedAtVersion: number | null;
   replies: { id: string; body: string; author: string; createdAt: string }[];
 }
+
+/* ------------------------------------------------------------------ catch-up */
+
+/** What changed in a session since you last looked (M24). Built from the record. */
+export type CatchUp =
+  | { firstVisit: true; since: null }
+  | {
+      firstVisit: false;
+      since: string;
+      decisions: string[];
+      facts: string[];
+      newQuestions: string[];
+      /** Open at your last visit, not open now. */
+      answeredQuestions: string[];
+      messages: number;
+      mentions: { from: string; text: string; at: string }[];
+      /** `isNew`: created while you were away. */
+      outputs: { name: string; editors: string[]; edits: number; isNew?: boolean }[];
+      links: { title: string; url: string; status: string }[];
+    };
+
+/** A mention of you, in any of your sessions, since you last opened it (M24). */
+export interface WaitingItem {
+  session: { ownerSlug: string; publicId: string; title: string };
+  from: string;
+  text: string;
+  at: string;
+}

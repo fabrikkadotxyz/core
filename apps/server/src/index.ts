@@ -112,6 +112,7 @@ import {
 } from './teams.ts';
 import { cachedRepos, LinkError, linkedRepos, listLinks, removeLink, saveLink } from './links.ts';
 import { addComment, listComments, reply, setResolved, threadAuthor } from './outputs/comments.ts';
+import { getCatchUp, markSeen, waitingFor } from './catchup.ts';
 import {
   countOwners,
   createMessage,
@@ -344,6 +345,9 @@ app.delete('/api/teams/:id/members/:userId', requireUser(db), async (c) => {
   return c.json({ ok: true });
 });
 
+/** M24: mentions of you across your sessions, since you last opened each. */
+app.get('/api/waiting', requireUser(db), async (c) => c.json(await waitingFor(db, c.get('user').id)));
+
 const sessionRoutes = new Hono<AuthEnv>();
 
 sessionRoutes.use('*', requireUser(db));
@@ -509,6 +513,22 @@ sessionRoutes.delete('/members/:userId', async (c) => {
   }
 
   await removeMember(db, s.id, userId);
+  return c.json({ ok: true });
+});
+
+/* ---- since you were away (M24). Viewers too: catch-up only reads, and "seen"
+   writes nothing but the caller's own read position. ---- */
+
+sessionRoutes.get('/catch-up', async (c) => {
+  const s = await resolveViewer(c);
+  if (!s) return c.notFound();
+  return c.json(await getCatchUp(db, s.id, c.get('user').id));
+});
+
+sessionRoutes.post('/seen', async (c) => {
+  const s = await resolveViewer(c);
+  if (!s) return c.notFound();
+  await markSeen(db, s.id, c.get('user').id);
   return c.json({ ok: true });
 });
 

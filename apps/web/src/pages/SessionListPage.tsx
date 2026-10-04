@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { SessionSummary, TeamSummary } from '@fabrikka/types';
+import type { SessionSummary, TeamSummary, WaitingItem } from '@fabrikka/types';
 import { sessions, teams } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 
@@ -13,6 +13,7 @@ export function SessionListPage() {
   const [myTeams, setMyTeams] = useState<TeamSummary[]>([]);
   const [teamId, setTeamId] = useState('');
   const [teamName, setTeamName] = useState('');
+  const [waiting, setWaiting] = useState<WaitingItem[]>([]);
 
   const refresh = useCallback(() => {
     sessions
@@ -20,6 +21,7 @@ export function SessionListPage() {
       .then(setList)
       .catch((err) => setError((err as Error).message));
     teams.list().then(setMyTeams).catch(() => {});
+    sessions.waiting().then(setWaiting).catch(() => {});
   }, []);
 
   useEffect(refresh, [refresh]);
@@ -51,6 +53,24 @@ export function SessionListPage() {
       </header>
 
       <main className="column">
+        {waiting.length > 0 && (
+          <section className="waiting" aria-label="Waiting for you">
+            <h2>Waiting for you</h2>
+            <ul className="session-list">
+              {waiting.map((w, i) => (
+                <li key={i}>
+                  <Link to={`/o/${w.session.ownerSlug}/s/${w.session.publicId}`}>
+                    <span className="session-title">
+                      @{w.from} <span className="muted small">in {w.session.title}</span>
+                    </span>
+                    <span className="small">{w.text}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <h1>Sessions</h1>
 
         <form className="inline-form" onSubmit={create}>

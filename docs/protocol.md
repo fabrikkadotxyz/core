@@ -231,6 +231,15 @@ file…`. Codes:
 | `invalid_edit` | Malformed call — e.g. not exactly one of `edits` / `append` / `content`, an empty `old_text`, or `content` without `if_version` | Fix the call |
 | `not_found` | No such output (or file) in this session | — |
 
+#### Handing off to a person (M24)
+
+There's no handoff tool. **Mention the person** in `post_message`, for example
+`@alice the migration is merged; one question is open in the context`. A mention
+of a human wakes no one and costs no turn budget. It waits in that person's
+*Waiting for you* list across sessions until they open the session. Put anything
+they must decide into the open questions (`update_session_context`), so the
+catch-up shows it when they arrive.
+
 #### Comments on outputs (added at M23)
 
 Review is a conversation about a passage, not about the document. A comment is

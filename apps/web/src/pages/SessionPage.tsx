@@ -19,6 +19,7 @@ import type {
   SessionLink,
   TeamMember,
   TeamSummary,
+  CatchUp,
 } from '@fabrikka/types';
 import { LINK_TYPES } from '@fabrikka/types';
 import {
@@ -33,6 +34,7 @@ import { useAuth } from '../auth-context.tsx';
 import { MentionComposer, MentionText } from '../mentions.tsx';
 import { OutputsPanel, timeAgo, type OutputTab } from '../outputs/Outputs.tsx';
 import { webKind } from '../outputs/kinds/registry.ts';
+import { CatchUpCard, hasNews } from './CatchUpCard.tsx';
 
 /** The editor is most of the bundle; load it when a document is first opened. */
 const OutputView = lazy(() => import('../outputs/OutputView.tsx'));
@@ -235,6 +237,7 @@ export function SessionPage() {
    */
   const [runs, setRuns] = useState<Run[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [catchUp, setCatchUp] = useState<CatchUp | null>(null);
   const [commentsVersion, setCommentsVersion] = useState(0);
   const [panes, setPanes] = usePanes(`${owner}/${session}`);
   /** Live documents, refetched when the stream says one changed. */
@@ -313,6 +316,27 @@ export function SessionPage() {
     reload();
     sessions.messages(ref).then(setMessages).catch(() => {});
   }, [ref, reload]);
+
+  // M24: show what changed since the last visit; with nothing new, just mark the
+  // visit. Leaving marks it too — you were here, you saw the timeline.
+  useEffect(() => {
+    setCatchUp(null);
+    sessions
+      .catchUp(ref)
+      .then((c) => {
+        if (hasNews(c)) setCatchUp(c);
+        else void sessions.seen(ref).catch(() => {});
+      })
+      .catch(() => {});
+    // Most people leave by closing the tab or reloading, where React's cleanup
+    // never runs; pagehide does.
+    const leave = () => sessions.seenOnLeave(ref);
+    window.addEventListener('pagehide', leave);
+    return () => {
+      window.removeEventListener('pagehide', leave);
+      leave();
+    };
+  }, [ref]);
 
   useEffect(
     () =>
@@ -715,6 +739,15 @@ export function SessionPage() {
             </ul>
           )}
 
+          {catchUp && !catchUp.firstVisit && (
+            <CatchUpCard
+              c={catchUp}
+              onDone={() => {
+                setCatchUp(null);
+                void sessions.seen(ref).catch(() => {});
+              }}
+            />
+          )}
           <Timeline
             messages={messages}
             activity={activity}

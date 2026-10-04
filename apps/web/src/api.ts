@@ -21,6 +21,8 @@ import type {
   OutputKindInfo,
   Participant,
   SessionLink,
+  CatchUp,
+  WaitingItem,
   OutputComment,
   TeamDetail,
   TeamMember,
@@ -275,6 +277,15 @@ export const sessions = {
   /** `role: 'guest'` (M22): a view-only invite to this one session. */
   createInvite: (ref: SessionRef, body: { invitedEmail?: string; role?: 'guest' } = {}) =>
     call<CreatedInviteView>(`${base(ref)}/invites`, { method: 'POST', body }),
+  /** M24: what changed since you last looked, and marking that you've looked. */
+  catchUp: (ref: SessionRef) => call<CatchUp>(`${base(ref)}/catch-up`),
+  seen: (ref: SessionRef) => call<{ ok: true }>(`${base(ref)}/seen`, { method: 'POST' }),
+  /** Leaving: must survive the page going away, so it can't wait for a response. */
+  seenOnLeave: (ref: SessionRef) => {
+    void fetch(`/api${base(ref)}/seen`, { method: 'POST', credentials: 'same-origin', keepalive: true }).catch(() => {});
+  },
+  /** M24: mentions of you across your sessions, since you last opened each. */
+  waiting: () => call<WaitingItem[]>('/waiting'),
   /** M23: comments on an output. Viewers and guests may write these. */
   comments: (ref: SessionRef, outputId: string) => call<OutputComment[]>(`${base(ref)}/outputs/${outputId}/comments`),
   addComment: (ref: SessionRef, outputId: string, body: { quote: string; body: string; file?: string }) =>

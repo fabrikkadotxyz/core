@@ -1580,3 +1580,11 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 .comment-draft { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
 .comment-draft textarea { min-height: 60px; }
 .comment-draft .row { display: flex; gap: 8px; }
+
+/* ---- since you were away (M24) ---- */
+.catchup { margin: 12px 16px 0; padding: 12px 14px; border: 1px solid var(--accent, #7c9cff); border-radius: 10px; background: var(--panel, #14161d); }
+.catchup header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.catchup h3 { margin: 8px 0 2px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted, #8b91a3); }
+.catchup ul { margin: 0; padding-left: 18px; }
+.catchup li { margin: 2px 0; overflow-wrap: anywhere; }
+.waiting { margin-bottom: 16px; }

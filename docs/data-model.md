@@ -274,6 +274,35 @@ longer occurs exactly once in the file's current text. That's the anchored-edit
 rule (ADR 0019), so the answer changes the moment the passage does, with nothing
 to keep in sync.
 
+### M24 — since you were away
+
+```
+session_reads                             -- where each person left off, per session
+  session_id      uuid -> sessions.id
+  user_id         uuid -> users.id
+  last_seen_at    timestamptz not null
+  context_seen    jsonb not null          -- the context lists as they were then
+  primary key (session_id, user_id)
+```
+
+**Catch-up is a difference, not a feed.** Context items are plain strings with no
+timestamps (ADR 0013), so "what changed" is today's lists compared with
+`context_seen`: new decisions and facts, new open questions, and questions that
+were open then and aren't now, which is how a question gets answered. Messages,
+output edits and link statuses do have times, and are compared with
+`last_seen_at`.
+
+**Nothing is generated.** Fabrikka has no model; catch-up is built from the
+record, so it can't be wrong in ways the record isn't.
+
+**Per user, not per participant**, so viewers and guests (M22) get a catch-up too.
+No row means no previous visit: there's nothing to catch up on, only a session to
+read.
+
+**The feature starts fresh.** The M24 migration gives every existing member a read
+position of "now". Without it, every mention ever made would arrive at once as
+"waiting for you".
+
 ### M19 — links
 
 ```

@@ -5,7 +5,8 @@
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
  * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation), M10 (runs) and
- * M12 (outputs), M19 (links), M21 (teams), M22 (guests) and M23 (comments).
+ * M12 (outputs), M19 (links), M21 (teams), M22 (guests), M23 (comments) and
+ * M24 (catch-up).
  */
 import {
   boolean,
@@ -745,4 +746,24 @@ export const outputComments = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('output_comments_output_created_idx').on(t.outputId, t.createdAt)],
+);
+
+/**
+ * Where each person left off in a session (M24). Catch-up is the difference
+ * between now and this: context lists have no per-item times, so the lists as
+ * they were at the last visit are kept beside the timestamp.
+ */
+export const sessionReads = pgTable(
+  'session_reads',
+  {
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+    contextSeen: jsonb('context_seen').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
 );

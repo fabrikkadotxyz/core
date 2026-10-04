@@ -31,10 +31,10 @@ export const editorTheme = EditorView.theme(
     '&.cm-focused': { outline: 'none' },
     '.cm-cursor': { borderLeftColor: 'var(--accent)' },
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': {
-      backgroundColor: '#7c9cff44',
+      backgroundColor: 'color-mix(in srgb, var(--accent) 22%, transparent)',
     },
     '.cm-placeholder': { color: 'var(--muted)' },
-    '.cm-error-line': { backgroundColor: '#f8717122', boxShadow: 'inset 3px 0 0 #f87171' },
+    '.cm-error-line': { backgroundColor: 'var(--danger-soft)', boxShadow: 'inset 3px 0 0 var(--danger)' },
     '.cm-ySelectionInfo': {
       fontFamily: 'ui-sans-serif, system-ui, sans-serif',
       fontSize: '11px',

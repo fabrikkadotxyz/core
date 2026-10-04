@@ -37,11 +37,11 @@ const markdownLook = HighlightStyle.define([
   { tag: tags.heading3, fontSize: '1.1em', fontWeight: '700' },
   { tag: tags.strong, fontWeight: '700' },
   { tag: tags.emphasis, fontStyle: 'italic' },
-  { tag: tags.link, color: '#7c9cff', textDecoration: 'underline' },
-  { tag: tags.url, color: '#8b91a3' },
-  { tag: tags.monospace, fontFamily: 'ui-monospace, monospace', color: '#f0abfc' },
-  { tag: tags.quote, color: '#a5b4c8', fontStyle: 'italic' },
-  { tag: [tags.processingInstruction, tags.meta], color: '#5d6375' },
+  { tag: tags.link, color: 'var(--accent)', textDecoration: 'underline' },
+  { tag: tags.url, color: 'var(--muted)' },
+  { tag: tags.monospace, fontFamily: 'ui-monospace, monospace', color: 'var(--danger)' },
+  { tag: tags.quote, color: 'var(--muted)', fontStyle: 'italic' },
+  { tag: [tags.processingInstruction, tags.meta], color: 'var(--muted)' },
 ]);
 
 /** Toggle a prefix on every selected line: headings, lists, quotes. */

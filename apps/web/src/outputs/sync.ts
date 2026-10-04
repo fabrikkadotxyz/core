@@ -158,6 +158,7 @@ export function connectOutput(
 export function colorFor(id: string): string {
   let h = 0;
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const palette = ['#7c9cff', '#f59e0b', '#34d399', '#f472b6', '#60a5fa', '#a78bfa', '#fb7185', '#2dd4bf'];
+  // Mid-dark tones that read on the light theme, starting from the palette's Dusk Blue and Burnt Peach.
+  const palette = ['#3d5a80', '#c4492b', '#2e7d5b', '#8a5a00', '#6a4c93', '#1f7a8c', '#b0306a', '#4a6fa5'];
   return palette[h % palette.length]!;
 }

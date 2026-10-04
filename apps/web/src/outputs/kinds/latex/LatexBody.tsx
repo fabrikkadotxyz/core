@@ -35,11 +35,11 @@ type BuildState =
   | { status: 'unavailable' };
 
 const latexLook = HighlightStyle.define([
-  { tag: [tags.tagName, tags.keyword], color: '#7c9cff' },
-  { tag: tags.comment, color: '#5d6375', fontStyle: 'italic' },
-  { tag: [tags.atom, tags.number], color: '#f0abfc' },
-  { tag: tags.bracket, color: '#a5b4c8' },
-  { tag: tags.string, color: '#34d399' },
+  { tag: [tags.tagName, tags.keyword], color: 'var(--accent)' },
+  { tag: tags.comment, color: 'var(--muted)', fontStyle: 'italic' },
+  { tag: [tags.atom, tags.number], color: 'var(--danger)' },
+  { tag: tags.bracket, color: 'var(--muted)' },
+  { tag: tags.string, color: 'var(--ok)' },
 ]);
 
 const LATEX_LANGUAGE = [StreamLanguage.define(stex), syntaxHighlighting(latexLook)];

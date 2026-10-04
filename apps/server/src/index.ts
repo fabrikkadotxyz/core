@@ -14,7 +14,7 @@ import { relative, resolve as resolvePath } from 'node:path';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createNodeWebSocket } from '@hono/node-ws';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { createClient, isEncryptionConfigured } from '@fabrikka/db';
 import type {
@@ -111,6 +111,7 @@ import {
   teamRole,
 } from './teams.ts';
 import { cachedRepos, LinkError, linkedRepos, listLinks, removeLink, saveLink } from './links.ts';
+import { addComment, listComments, reply, setResolved, threadAuthor } from './outputs/comments.ts';
 import {
   countOwners,
   createMessage,
@@ -1056,6 +1057,74 @@ sessionRoutes.get('/outputs/:id/changes', async (c) => {
   if (!isOutputId(id) || !(await outputCreator(db, s.id, id))) return c.notFound();
   return c.json(await listEdits(db, s.id, { outputId: id }));
 });
+
+/* ---- comments on outputs (M23). Viewers and guests comment too: the one write
+   on their allowlist (docs/security.md, Threat 8). A comment wakes no agent. ---- */
+
+async function commentCall(c: Context<AuthEnv>, fn: () => Promise<unknown>) {
+  try {
+    return c.json(await fn());
+  } catch (err) {
+    if (err instanceof OutputError) {
+      return err.code === 'not_found' ? c.notFound() : c.json({ error: err.message, code: err.code }, 400);
+    }
+    throw err;
+  }
+}
+
+sessionRoutes.get('/outputs/:id/comments', async (c) => {
+  const s = await resolveViewer(c);
+  if (!s) return c.notFound();
+  return commentCall(c, () => listComments(db, s.id, c.req.param('id')));
+});
+
+sessionRoutes.post('/outputs/:id/comments', async (c) => {
+  const s = await resolveViewer(c);
+  if (!s) return c.notFound();
+  const body = await c.req.json<{ quote?: string; body?: string; file?: string }>();
+  return commentCall(c, async () => ({
+    id: await addComment(db, {
+      sessionId: s.id,
+      outputId: c.req.param('id'),
+      userId: c.get('user').id,
+      file: body.file,
+      quote: body.quote ?? '',
+      body: body.body ?? '',
+    }),
+  }));
+});
+
+sessionRoutes.post('/outputs/:id/comments/:cid/replies', async (c) => {
+  const s = await resolveViewer(c);
+  if (!s) return c.notFound();
+  const body = await c.req.json<{ body?: string }>();
+  return commentCall(c, async () => ({
+    id: await reply(db, {
+      sessionId: s.id,
+      outputId: c.req.param('id'),
+      userId: c.get('user').id,
+      commentId: c.req.param('cid'),
+      body: body.body ?? '',
+    }),
+  }));
+});
+
+/** Members resolve any thread; a viewer only one they started. */
+for (const action of ['resolve', 'reopen'] as const) {
+  sessionRoutes.post(`/outputs/:id/comments/:cid/${action}`, async (c) => {
+    const s = await resolveViewer(c);
+    if (!s) return c.notFound();
+    const outputId = c.req.param('id');
+    const commentId = c.req.param('cid');
+    if (s.access === 'viewer' && (await threadAuthor(db, s.id, outputId, commentId)) !== c.get('user').id) {
+      return c.notFound();
+    }
+    return commentCall(c, async () => {
+      await setResolved(db, { sessionId: s.id, outputId, userId: c.get('user').id, commentId, resolved: action === 'resolve' });
+      return { ok: true };
+    });
+  });
+}
 
 /**
  * Recent agent edits across the session, so the timeline can show them after a

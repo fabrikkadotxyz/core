@@ -1563,3 +1563,20 @@ button.edit-line {
 fieldset.plain { border: 0; margin: 0; padding: 0; min-width: 0; }
 label.check { display: flex; flex-direction: row; gap: 8px; align-items: flex-start; cursor: pointer; color: inherit; }
 label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
+
+/* ---- comments on outputs (M23) ---- */
+.comments { display: flex; flex-direction: column; gap: 12px; padding: 8px 0; overflow: auto; }
+.comment-thread { border: 1px solid var(--border, #2a2e3a); border-radius: 8px; padding: 10px 12px; }
+.comment-thread.resolved { opacity: 0.7; }
+.comment-thread blockquote, .comment-draft blockquote {
+  margin: 0 0 6px; padding: 4px 8px; border-left: 3px solid var(--accent, #7c9cff); color: var(--muted, #8b91a3); font-size: 0.9em; white-space: pre-wrap;
+}
+.comment-thread blockquote.outdated { border-left-color: var(--muted, #8b91a3); text-decoration: line-through; }
+.comment-thread p { margin: 6px 0; overflow-wrap: anywhere; }
+.comment-reply { padding-left: 12px; border-left: 2px solid var(--border, #2a2e3a); }
+.comment-badges { display: flex; gap: 6px; }
+.comment-actions { display: flex; gap: 8px; align-items: center; }
+.comment-actions input { flex: 1; min-width: 0; }
+.comment-draft { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+.comment-draft textarea { min-height: 60px; }
+.comment-draft .row { display: flex; gap: 8px; }

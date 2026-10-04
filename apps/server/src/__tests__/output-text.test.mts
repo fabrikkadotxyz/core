@@ -4,6 +4,7 @@ import {
   AttributionTracker,
   deltaToSplices,
   lineDiff,
+  anchorState,
 } from '../output-text.ts';
 
 let fails = 0;
@@ -198,6 +199,13 @@ for (let trial = 0; trial < 200; trial++) {
   }
 }
 eq('200 random interleavings: every diff is exactly its author\'s', true, true);
+
+/* ------------------------------------------------------------ anchorState (M23) */
+
+eq('a quote that occurs once is found', anchorState('a b c', 'b'), 'found');
+eq('a quote that is gone is missing', anchorState('a b c', 'z'), 'missing');
+eq('a quote that occurs twice is ambiguous', anchorState('b a b', 'b'), 'ambiguous');
+eq('an empty quote is missing, never "found everywhere"', anchorState('abc', ''), 'missing');
 
 if (fails) {
   console.error(`\n${fails} failure(s)`);

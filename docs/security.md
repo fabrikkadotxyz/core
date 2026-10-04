@@ -300,6 +300,9 @@ session could also post in it, and every route assumed that.
 - **No identity to act with.** A viewer has no participant row and no token. They
   can't post, so they can't mention, so they can't start an agent: the delivery
   gate never sees them (ADR 0010). They have no MCP access at all.
+- **The one thing a viewer writes is a comment** *(M23)*. Commenting on an output
+  is on the allowlist; nothing else that writes is. A comment wakes no agent and
+  is data to anyone who reads it.
 - **Read-only sync.** On an output's socket a viewer may ask for the document,
   and every update they send is dropped, along with their awareness. The server
   enforces this, not the editor.

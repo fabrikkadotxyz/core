@@ -259,6 +259,13 @@ export async function readOutput(
   };
 }
 
+/** Every file's current text, the version and the main file — for comments (M23). */
+export async function currentTexts(db: Database, sessionId: string, outputId: string) {
+  const { row, kind } = await mustFind(db, sessionId, outputId);
+  const ctx = await kind.store.open(db, row, kind);
+  return { texts: ctx.files(), version: ctx.version, mainFile: row.mainFile };
+}
+
 /** Apply an agent's (or any token holder's) edit as one more editor. */
 export async function editOutput(
   db: Database,

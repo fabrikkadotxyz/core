@@ -324,3 +324,14 @@ export function linesOf(diff: string): { start: number; end: number } | null {
   }
   return Number.isFinite(start) ? { start, end } : null;
 }
+
+/**
+ * The anchored-edit rule on its own: a quote is valid when it occurs exactly
+ * once. Comments (M23) use it to anchor, and to tell when a thread is outdated.
+ */
+export function anchorState(text: string, quote: string): 'found' | 'missing' | 'ambiguous' {
+  if (!quote) return 'missing';
+  const at = text.indexOf(quote);
+  if (at === -1) return 'missing';
+  return text.indexOf(quote, at + 1) === -1 ? 'found' : 'ambiguous';
+}

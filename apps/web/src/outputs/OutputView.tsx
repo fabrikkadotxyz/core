@@ -11,6 +11,7 @@ import { sessions, type SessionRef } from '../api.ts';
 import type { OutputTab } from './Outputs.tsx';
 import { colorFor, connectOutput, type OutputSync, type SyncStatus } from './sync.ts';
 import { webKind } from './kinds/registry.ts';
+import { CommentsPanel, selectedQuote } from './Comments.tsx';
 
 /* -------------------------------------------------------------------------- */
 /* One open output                                                            */
@@ -28,6 +29,7 @@ export default function OutputView({
   editsVersion,
   onClose,
   readOnly = false,
+  commentsVersion = 0,
 }: {
   ref_: SessionRef;
   output: Output;
@@ -43,6 +45,8 @@ export default function OutputView({
   onClose: () => void;
   /** A viewer (M22): the output is shown, not edited. */
   readOnly?: boolean;
+  /** Bumped whenever a comment on this output changes (M23). */
+  commentsVersion?: number;
 }) {
   const [status, setStatus] = useState<SyncStatus>('connecting');
   const [sync, setSync] = useState<OutputSync | null>(null);
@@ -72,11 +76,36 @@ export default function OutputView({
     ['edit', kind.tabs.edit],
     ...(kind.tabs.preview ? [['preview', kind.tabs.preview] as [OutputTab, string]] : []),
     ['history', 'History'],
+    ['comments', 'Comments'],
   ];
   const Body = kind.Body;
 
+  // M23: select a passage anywhere in the view, then comment on it.
+  const viewRef = useRef<HTMLElement>(null);
+  const [draft, setDraft] = useState<{ quote: string; body: string } | null>(null);
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const startComment = () => {
+    setCommentError(null);
+    const quote = selectedQuote(viewRef.current);
+    if (!quote) {
+      setCommentError('Select the passage you want to comment on first.');
+      return;
+    }
+    setDraft({ quote, body: '' });
+  };
+  const postComment = async () => {
+    if (!draft?.body.trim()) return;
+    try {
+      await sessions.addComment(ref_, output.id, { quote: draft.quote, body: draft.body.trim() });
+      setDraft(null);
+      onTab('comments');
+    } catch (err) {
+      setCommentError((err as Error).message);
+    }
+  };
+
   return (
-    <section className="output-view" aria-label={`Document: ${output.name}`}>
+    <section ref={viewRef} className="output-view" aria-label={`Document: ${output.name}`}>
       <header className="output-head">
         <button className="link back" onClick={onClose} title="Back to all documents">
           ← Documents
@@ -116,8 +145,47 @@ export default function OutputView({
           </button>
         ))}
         <span className="spacer" />
+        <button
+          className="link small"
+          // Keep the selection: a mousedown would clear it before the click lands.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={startComment}
+          title="Select a passage first"
+        >
+          Comment on selection
+        </button>
         {readOnly ? <span className="sync-badge">View only</span> : <SyncBadge status={status} />}
       </div>
+
+      {(draft || commentError) && (
+        <div className="comment-draft">
+          {draft && (
+            <>
+              <blockquote>{draft.quote}</blockquote>
+              <textarea
+                autoFocus
+                value={draft.body}
+                placeholder="Your comment…"
+                aria-label="Comment"
+                onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+              />
+              <div className="row">
+                <button onClick={postComment} disabled={!draft.body.trim()}>
+                  Comment
+                </button>
+                <button className="link" onClick={() => setDraft(null)}>
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
+          {commentError && <p className="error small">{commentError}</p>}
+        </div>
+      )}
+
+      {tab === 'comments' && (
+        <CommentsPanel ref_={ref_} outputId={output.id} version={commentsVersion} isMember={!readOnly} myName={me.displayName} />
+      )}
 
       {sync && (
         <Suspense fallback={<p className="muted small editor-loading">{kind.loading ?? 'Opening…'}</p>}>

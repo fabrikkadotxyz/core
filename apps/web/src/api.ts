@@ -21,6 +21,7 @@ import type {
   OutputKindInfo,
   Participant,
   SessionLink,
+  OutputComment,
   TeamDetail,
   TeamMember,
   TeamSummary,
@@ -274,6 +275,16 @@ export const sessions = {
   /** `role: 'guest'` (M22): a view-only invite to this one session. */
   createInvite: (ref: SessionRef, body: { invitedEmail?: string; role?: 'guest' } = {}) =>
     call<CreatedInviteView>(`${base(ref)}/invites`, { method: 'POST', body }),
+  /** M23: comments on an output. Viewers and guests may write these. */
+  comments: (ref: SessionRef, outputId: string) => call<OutputComment[]>(`${base(ref)}/outputs/${outputId}/comments`),
+  addComment: (ref: SessionRef, outputId: string, body: { quote: string; body: string; file?: string }) =>
+    call<{ id: string }>(`${base(ref)}/outputs/${outputId}/comments`, { method: 'POST', body }),
+  replyComment: (ref: SessionRef, outputId: string, commentId: string, body: string) =>
+    call<{ id: string }>(`${base(ref)}/outputs/${outputId}/comments/${commentId}/replies`, { method: 'POST', body: { body } }),
+  setCommentResolved: (ref: SessionRef, outputId: string, commentId: string, resolved: boolean) =>
+    call<{ ok: true }>(`${base(ref)}/outputs/${outputId}/comments/${commentId}/${resolved ? 'resolve' : 'reopen'}`, {
+      method: 'POST',
+    }),
   removeGuest: (ref: SessionRef, userId: string) =>
     call<{ ok: true }>(`${base(ref)}/guests/${userId}`, { method: 'DELETE' }),
   revokeInvite: (ref: SessionRef, id: string) =>

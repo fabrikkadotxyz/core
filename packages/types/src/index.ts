@@ -97,6 +97,8 @@ export type ServerEvent =
   | { type: 'output.changed'; outputId: string }
   /** A link was added, updated or removed. Clients re-read /links. See M19. */
   | { type: 'links.changed' }
+  /** A comment on that output changed (M23). Display data: it wakes no agent. */
+  | { type: 'comments.changed'; outputId: string }
   /**
    * An output's content changed. Display data only, like activity: it is not a
    * message, wakes no agent and costs no turn budget (ADR 0019).
@@ -509,4 +511,24 @@ export interface TeamDetail {
   /** The viewer's role. */
   role: TeamRole;
   members: TeamMember[];
+}
+
+/* ------------------------------------------------------------------ comments */
+
+/** A thread on an output, anchored to a quoted passage (M23). */
+export interface OutputComment {
+  id: string;
+  file: string;
+  quote: string;
+  body: string;
+  author: string;
+  createdAt: string;
+  status: 'open' | 'resolved';
+  /** The quote no longer occurs exactly once: someone rewrote the passage. */
+  outdated: boolean;
+  /** Who resolved it: a person, or the agent whose edit did. */
+  resolvedBy: string | null;
+  /** Set when an agent's edit resolved it: the output version that did. */
+  resolvedAtVersion: number | null;
+  replies: { id: string; body: string; author: string; createdAt: string }[];
 }

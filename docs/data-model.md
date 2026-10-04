@@ -245,6 +245,35 @@ to `private`.
 `session_guests`, not `session_members`. An existing member who redeems one stays
 a member.
 
+### M23 — comments on outputs
+
+```
+output_comments
+  id              uuid pk
+  output_id       uuid -> outputs.id not null
+  parent_id       uuid -> output_comments.id   -- a reply; null for a thread's first comment
+  file            text not null
+  quote           text                   -- the passage; null on a reply
+  body            text not null
+  author_user_id  uuid -> users.id not null    -- a person: member, viewer or guest
+  status          text not null default 'open' -- open | resolved (threads only)
+  resolved_by_user_id        uuid -> users.id
+  resolved_by_participant_id uuid -> participants.id   -- an agent, by editing
+  resolved_at_version        int                       -- the output version that resolved it
+  resolved_at     timestamptz
+  created_at      timestamptz not null
+  index (output_id, created_at)
+```
+
+**Comments are written by people, keyed by user, not participant.** Viewers and
+guests (M22) comment and have no participant row. Agents resolve by editing,
+which is why only resolution can name a participant.
+
+**`outdated` is computed, not stored.** A thread is outdated when its `quote` no
+longer occurs exactly once in the file's current text. That's the anchored-edit
+rule (ADR 0019), so the answer changes the moment the passage does, with nothing
+to keep in sync.
+
 ### M19 — links
 
 ```

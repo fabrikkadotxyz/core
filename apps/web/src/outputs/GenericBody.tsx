@@ -12,6 +12,7 @@ export default function GenericBody({ ref_, output, sync, tab, focusEdit, editsV
   if (tab === 'history') {
     return <History ref_={ref_} outputId={output.id} focusEditId={focusEdit?.id ?? null} version={editsVersion} />;
   }
+  if (tab !== 'edit') return null;
   if (!ytext) return <p className="muted small editor-loading">Opening…</p>;
   return <CollabEditor ytext={ytext} awareness={sync.awareness} language={[]} toolbar={[]} keys={[]} placeholder="Start writing…" readOnly={readOnly} />;
 }

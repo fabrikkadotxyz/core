@@ -14,7 +14,8 @@ import { useEffect, useState } from 'react';
 import type { Output, OutputKindInfo } from '@fabrikka/types';
 import { sessions, type SessionRef } from '../api.ts';
 
-export type OutputTab = 'edit' | 'preview' | 'history';
+/** `comments` (M23) is shared by every kind and drawn by OutputView, not the kind's body. */
+export type OutputTab = 'edit' | 'preview' | 'history' | 'comments';
 
 export function timeAgo(iso: string): string {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);

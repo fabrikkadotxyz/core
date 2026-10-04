@@ -5,7 +5,7 @@
  * Currently covers M0 (messaging core), M1 (auth, membership, invites),
  * M2 (mentions), M3 (agents, tokens, session context), M4 (presence),
  * M6 (safety rails), M7 (artifacts), M8 (MCP aggregation), M10 (runs) and
- * M12 (outputs), M19 (links), M21 (teams) and M22 (guests).
+ * M12 (outputs), M19 (links), M21 (teams), M22 (guests) and M23 (comments).
  */
 import {
   boolean,
@@ -711,4 +711,38 @@ export const sessionGuests = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
+);
+
+/**
+ * Comments on an output, anchored to a quoted passage (M23). Written by people
+ * — members, viewers, guests — so keyed by user; agents only resolve, by editing.
+ * Whether a thread is outdated is computed from the current text, never stored.
+ */
+export const outputComments = pgTable(
+  'output_comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    outputId: uuid('output_id')
+      .notNull()
+      .references(() => outputs.id, { onDelete: 'cascade' }),
+    /** A reply's thread. Null for the comment that starts a thread. */
+    parentId: uuid('parent_id'),
+    file: text('file').notNull(),
+    /** The anchored passage. Null on a reply. */
+    quote: text('quote'),
+    body: text('body').notNull(),
+    authorUserId: uuid('author_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** open | resolved — threads only. */
+    status: text('status').notNull().default('open'),
+    resolvedByUserId: uuid('resolved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    resolvedByParticipantId: uuid('resolved_by_participant_id').references(() => participants.id, {
+      onDelete: 'set null',
+    }),
+    resolvedAtVersion: integer('resolved_at_version'),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('output_comments_output_created_idx').on(t.outputId, t.createdAt)],
 );

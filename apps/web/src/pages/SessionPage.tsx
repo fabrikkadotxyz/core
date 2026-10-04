@@ -235,6 +235,7 @@ export function SessionPage() {
    */
   const [runs, setRuns] = useState<Run[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [commentsVersion, setCommentsVersion] = useState(0);
   const [panes, setPanes] = usePanes(`${owner}/${session}`);
   /** Live documents, refetched when the stream says one changed. */
   const [outputs, setOutputs] = useState<Output[]>([]);
@@ -353,6 +354,7 @@ export function SessionPage() {
             setPanelsVersion((v) => v + 1);
           }
           if (event.type === 'output.changed') setOutputsVersion((v) => v + 1);
+          if (event.type === 'comments.changed') setCommentsVersion((v) => v + 1);
           if (event.type === 'output.edited') {
             const e = event.edit;
             setOutputsVersion((v) => v + 1);
@@ -807,6 +809,7 @@ export function SessionPage() {
                     focusEdit={focusEdit}
                     renameOnOpen={renameOnOpen}
                     editsVersion={outputsVersion}
+                    commentsVersion={commentsVersion}
                     onClose={closeOutput}
                   />
                   </Suspense>

@@ -23,7 +23,7 @@ aggregation, a Tauri shell, live activity, the three-pane session screen, live s
 the browser. Output kinds are plug-in modules (ADR 0023). Built ahead of order
 because they need no outside accounts: **M19** session links and **M20** agents
 reading uploaded PDFs (their stories wait on M18's connections), **M21** teams and
-**M22** team-visible sessions and guests. M14 (Google Docs) and M18 (connections) wait on real vendor
+**M22** team-visible sessions and guests, and **M23** comments on outputs. M14 (Google Docs) and M18 (connections) wait on real vendor
 accounts — see [`docs/roadmap.md`](docs/roadmap.md).
 
 ## How agents join

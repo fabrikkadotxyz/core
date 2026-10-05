@@ -1121,26 +1121,53 @@ decision, with who decided and when, and opens in any editor.
 
 > **Last of the three, by design.** Credentials have belonged to one person since
 > ADR 0004, so that every call names the person behind it. Some connections are
-> genuinely the team's: a shared Sentry org token, a team's CI account. This
-> milestone admits those **as team credentials, marked as shared everywhere they
-> appear**, through an ADR that supersedes ADR 0004 for them specifically.
+> genuinely the team's: a shared Sentry org token, a team's CI account.
+> [ADR 0028](decisions/0028-team-credentials-are-shared-marked-and-lose-to-your-own.md)
+> admits those **as team credentials, marked as shared everywhere they appear**,
+> superseding ADR 0004 for them specifically.
 
-**ADR before building.** It must answer:
-- who may add a team credential (team owners);
-- how a shared credential is shown to every agent and person who uses it, so
-  nobody mistakes it for their own;
-- how audit stays honest when the vendor's log names one account (the changes
-  log and activity name the participant, as now);
-- whether a person's own credential takes precedence over the team's when both
-  exist.
+The ADR's answers:
+- **Who adds one:** team owners only. Members see that it exists, never the secret.
+- **Who uses one:** every current team member, and their agents, in the team's
+  sessions. Never guests, never in a personal or another team's session.
+- **Precedence:** your own credential for the same integration wins; the team's
+  fills the gap.
+- **Shown as shared:** in the tool description the agent reads, in the session's
+  Setup (*team's · shared*), and on Team integrations.
+- **Audit:** every call made with a team credential is recorded with the
+  participant who made it, the tool, and the outcome. Never its arguments or
+  results. Team owners see recent uses.
 
 - **Team integrations** joins the sidebar: the team's shared connections, managed
-  by team owners. Members see that they exist and what they're for, never the
-  secret.
+  by team owners.
 - Everything else about connections is unchanged: per-tool grants stay
   default-deny, and credentials are sealed and never returned (ADR 0014).
 
-**Test:** written with the ADR.
+**Test.** An upstream fixture that reports the token it saw, so the routing is
+proved rather than assumed. Fede owns team T; Alice is a member; Carol is a guest
+in one of T's sessions, not on the team.
+
+1. Fede, sidebar → **Team integrations**, fills in name, server and token →
+   **Save**: **2 clicks**. The token is never returned by any API.
+2. Alice opens Team integrations: she sees the connection and who added it, not
+   the token, and has no form. Adding one as her is refused.
+3. In a session of T: Fede opens **Setup**, the team's connection shows *team's ·
+   shared* → **tools** → allows one: **3 clicks**. Before that grant, nobody's
+   agent lists the tool. Adding a team credential grants nothing.
+4. Alice's agent lists the tool; its description says it uses T's shared
+   credential. Calling it reaches upstream with **the team's token**.
+5. Alice attaches her own connection with the same name: the same call now
+   reaches upstream with **her** token, and the description says *your own*.
+   Detaching it falls back to the team's.
+6. Carol's agent, in the same session, has no such tool, and calling it by name is
+   refused.
+7. The same team connection is absent in Fede's personal session and in another
+   team's session.
+8. Fede removes Alice from T: her agent loses the tool on its next listing, and a
+   call is refused.
+9. Team integrations shows Fede the recent uses: Alice's agent, the tool, ok. Alice
+   no longer sees the page at all; while a member, she saw no uses.
+10. Fede removes the team connection: it's gone from every session of T at once.
 
 ## M31 — The local host: your agents, in folders you choose, safely
 

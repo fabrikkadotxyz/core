@@ -831,7 +831,11 @@ async function registerAggregatedTools(
         title: tool.name,
         description:
           (tool.description ?? `${tool.upstreamName} on ${tool.slug}`) +
-          `\n\n(via ${tool.slug}, using your own credential)`,
+          // Whose account this acts as, every time — a shared one must never pass
+          // for the agent's owner's own (ADR 0028, docs/protocol.md).
+          (tool.sharedBy
+            ? `\n\n(via ${tool.slug}, using ${tool.sharedBy}'s shared credential: the vendor sees the team's account, not yours)`
+            : `\n\n(via ${tool.slug}, using your own credential)`),
         // Forwarded as-is: re-deriving a schema would drift from upstream.
         inputSchema: fromJsonSchema(tool.inputSchema as never),
       },

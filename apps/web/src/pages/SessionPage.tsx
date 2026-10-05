@@ -1934,12 +1934,44 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
         </>
       )}
 
+      {state.team.length > 0 && (
+        <>
+          <h3 className="subhead">{state.team[0]!.teamName}'s</h3>
+          <ul className="participants">
+            {state.team.map((t) => (
+              <li key={t.slug}>
+                <span>{t.label}</span>
+                {t.overridden ? (
+                  <span className="muted small" title="Your own connection with this name is used instead">
+                    you use your own
+                  </span>
+                ) : (
+                  <span className="badge-shared" title="Calls run as the team's account, not yours">
+                    team's · shared
+                  </span>
+                )}
+                <button
+                  className="link small"
+                  onClick={async () => {
+                    const list = await sessions.integrationTools(ref_, t.slug);
+                    setTools((x) => ({ ...x, [t.slug]: list }));
+                  }}
+                >
+                  tools
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       {Object.entries(tools).map(([s, list]) => (
         <div key={s}>
           <h3 className="subhead">{s} — what this session allows</h3>
           <p className="hint">
             Nothing is permitted until you allow it, and a grant applies to everyone
-            in the session — each person still uses their own credential.
+            in the session — each person uses their own credential, or the team's
+            shared one where they have none.
           </p>
           <ul className="participants">
             {list.map((t) => (

@@ -48,9 +48,15 @@ import {
   detachServer,
   discoverTools,
   listGrants,
+  listTeamConnections,
+  removeTeamConnection,
+  saveTeamConnection,
   serversForUser,
   setGrant,
   slugsInSession,
+  teamConnectionUses,
+  teamServersFor,
+  usableServers,
 } from './aggregation.ts';
 import {
   createFileArtifact,
@@ -407,6 +413,45 @@ app.post('/api/me/connections', requireUser(db), async (c) => {
 app.delete('/api/me/connections/:slug', requireUser(db), async (c) =>
   (await removeConnection(db, c.get('user').id, c.req.param('slug'))) ? c.json({ ok: true }) : c.notFound(),
 );
+
+/* ---- team integrations (M30, ADR 0028): credentials the team shares ---- */
+
+/**
+ * Every member sees what the team has connected — never a credential. Only owners
+ * see who has been using them: that record exists for whoever answers for the
+ * shared account.
+ */
+app.get('/api/teams/:id/connections', requireUser(db), async (c) => {
+  const teamId = c.req.param('id');
+  const role = await teamRole(db, teamId, c.get('user').id);
+  if (!role) return c.notFound();
+  return c.json({
+    connections: await listTeamConnections(db, teamId),
+    canManage: role === 'owner',
+    uses: role === 'owner' ? await teamConnectionUses(db, teamId) : [],
+    encryptionConfigured: isEncryptionConfigured(),
+  });
+});
+
+/** Team owners only: a team credential lends access to everyone on the team. */
+app.post('/api/teams/:id/connections', requireUser(db), async (c) => {
+  const teamId = c.req.param('id');
+  const role = await teamRole(db, teamId, c.get('user').id);
+  if (!role) return c.notFound();
+  if (role !== 'owner') return c.json({ error: 'only team owners can add team integrations' }, 403);
+  const body = await c.req.json<{ slug?: string; label?: string; url?: string; credential?: string }>();
+  if (!body.slug || !body.url) return c.json({ error: 'slug and url are required' }, 400);
+  const saved = await saveTeamConnection(db, { teamId, userId: c.get('user').id, slug: body.slug, label: body.label, url: body.url, credential: body.credential });
+  return saved.ok ? c.json(saved.connection, 201) : c.json({ error: saved.error }, 400);
+});
+
+app.delete('/api/teams/:id/connections/:slug', requireUser(db), async (c) => {
+  const teamId = c.req.param('id');
+  const role = await teamRole(db, teamId, c.get('user').id);
+  if (!role) return c.notFound();
+  if (role !== 'owner') return c.json({ error: 'only team owners can remove team integrations' }, 403);
+  return (await removeTeamConnection(db, teamId, c.req.param('slug'))) ? c.json({ ok: true }) : c.notFound();
+});
 
 /* ---- chats (M29, ADR 0026): team chats and direct chats, light sessions ---- */
 
@@ -1047,6 +1092,15 @@ sessionRoutes.get('/integrations', async (c) => {
   const mine = await serversForUser(db, s.id, c.get('user').id);
   return c.json({
     mine,
+    // M30: the team's shared connections that apply to YOU here — empty unless the
+    // session is a team's and you're on it. `overridden`: your own wins.
+    team: (await teamServersFor(db, s.id, c.get('user').id)).map((t) => ({
+      slug: t.slug,
+      label: t.label,
+      teamName: t.team!.name,
+      hasCredential: t.hasCredential,
+      overridden: mine.some((m) => m.slug === t.slug),
+    })),
     // M28: your connections not yet in this session, offered to attach.
     available: (await listConnections(db, c.get('user').id)).filter((x) => !mine.some((m) => m.id === x.id)),
     inSession: await slugsInSession(db, s.id),
@@ -1095,11 +1149,12 @@ sessionRoutes.get('/integrations/:slug/tools', async (c) => {
   const s = await resolve(c);
   if (!s) return c.notFound();
 
-  const mine = await serversForUser(db, s.id, c.get('user').id);
-  const server = mine.find((m) => m.slug === c.req.param('slug'));
+  // Your own, or your team's where you have none (M30) — whichever you'd use.
+  const usable = await usableServers(db, s.id, c.get('user').id);
+  const server = usable.find((m) => m.slug === c.req.param('slug'));
   if (!server) return c.notFound();
 
-  return c.json(await discoverTools(db, server.id));
+  return c.json(await discoverTools(db, server));
 });
 
 /**

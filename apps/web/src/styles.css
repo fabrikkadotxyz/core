@@ -1742,3 +1742,15 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 .add-mine { padding: 6px 0; }
 .manual-agent { margin: 8px 0; }
 .manual-agent summary { cursor: pointer; margin-bottom: 6px; }
+
+/* M30: a team credential is marked as shared everywhere it appears (ADR 0028). */
+.badge-shared {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--warn-border);
+  border-radius: 5px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}

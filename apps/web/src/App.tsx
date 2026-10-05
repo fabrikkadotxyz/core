@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage.tsx';
 import { AllSessionsPage } from './pages/AllSessionsPage.tsx';
 import { HomePage } from './pages/HomePage.tsx';
 import { IntegrationsPage } from './pages/IntegrationsPage.tsx';
+import { TeamIntegrationsPage } from './pages/TeamIntegrationsPage.tsx';
 import { DevicesPage } from './pages/DevicesPage.tsx';
 import { PairPage } from './pages/PairPage.tsx';
 import { AppShell } from './shell/AppShell.tsx';
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/sessions" element={<AllSessionsPage />} />
           <Route path="/teams/:id/sessions" element={<AllSessionsPage />} />
           <Route path="/teams/:id" element={<TeamPage />} />
+          <Route path="/teams/:id/integrations" element={<TeamIntegrationsPage />} />
           <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/devices" element={<DevicesPage />} />
           <Route path="/pair/:code" element={<PairPage />} />

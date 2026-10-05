@@ -561,6 +561,54 @@ export const sessionMcpToolGrants = pgTable(
   (t) => [primaryKey({ columns: [t.sessionId, t.serverSlug, t.toolName] })],
 );
 
+/**
+ * A connection the TEAM owns (M30, ADR 0028). Added by team owners; used in the
+ * team's sessions by its current members and their agents — never attached, and
+ * never used where a participant has attached their own for the same slug.
+ *
+ * Its own table rather than an owner-or-team column on `mcp_servers`, so no query
+ * meaning "this person's own credential" can lend someone the team's by accident.
+ */
+export const teamMcpServers = pgTable(
+  'team_mcp_servers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    teamId: uuid('team_id')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    slug: text('slug').notNull(),
+    label: text('label').notNull(),
+    url: text('url').notNull(),
+    /** AES-256-GCM. Never returned by any read API, never logged. */
+    sealedCredential: text('sealed_credential'),
+    addedByUserId: uuid('added_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('team_mcp_servers_team_slug').on(t.teamId, t.slug)],
+);
+
+/**
+ * Who used a team credential. The vendor's log names the team's account; this
+ * names the participant. No arguments, no results — who acted, not what they sent.
+ */
+export const teamMcpCalls = pgTable(
+  'team_mcp_calls',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    teamMcpServerId: uuid('team_mcp_server_id')
+      .notNull()
+      .references(() => teamMcpServers.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+    /** The person, or the owner of the agent that called. */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    agentName: text('agent_name'),
+    toolName: text('tool_name').notNull(),
+    ok: boolean('ok').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('team_mcp_calls_server_idx').on(t.teamMcpServerId, t.createdAt)],
+);
+
 /* -------------------------------------------------------------------------- */
 /* M10 — runs                                                                 */
 /* -------------------------------------------------------------------------- */

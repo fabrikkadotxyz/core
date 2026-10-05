@@ -268,6 +268,16 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
 
       <section className="side-section" aria-label="Integrations">
         <h2>Integrations</h2>
+        {team && (
+          <NavLink
+            to={`/teams/${team.id}/integrations`}
+            className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')}
+            onClick={onNavigate}
+          >
+            <span className="side-icon" aria-hidden>⚇</span>
+            <span className="side-label">Team integrations</span>
+          </NavLink>
+        )}
         <NavLink to="/integrations" className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
           <span className="side-icon" aria-hidden>⚇</span>
           <span className="side-label">Personal integrations</span>

@@ -135,6 +135,21 @@ export const connections = {
   remove: (slug: string) => call<{ ok: true }>(`/me/connections/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
 };
 
+/** M30: the team's shared connections. Owners manage them; members see they exist. */
+export const teamConnections = {
+  list: (teamId: string) =>
+    call<{
+      connections: { id: string; slug: string; label: string; url: string; hasCredential: boolean; addedBy: string | null; createdAt: string }[];
+      canManage: boolean;
+      uses: { slug: string; toolName: string; person: string | null; agent: string | null; session: string | null; ok: boolean; at: string }[];
+      encryptionConfigured: boolean;
+    }>(`/teams/${teamId}/connections`),
+  save: (teamId: string, body: { slug: string; url: string; label?: string; credential?: string }) =>
+    call<{ id: string }>(`/teams/${teamId}/connections`, { method: 'POST', body }),
+  remove: (teamId: string, slug: string) =>
+    call<{ ok: true }>(`/teams/${teamId}/connections/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
+};
+
 /* ------------------------------------------------------------- templates */
 
 export const templates = {
@@ -259,6 +274,8 @@ export const sessions = {
       mine: { id: string; slug: string; label: string; url: string; hasCredential: boolean }[];
       /** M28: your saved connections not yet in this session. */
       available: { id: string; slug: string; label: string; url: string; hasCredential: boolean }[];
+      /** M30: the team's shared connections that apply to you here. */
+      team: { slug: string; label: string; teamName: string; hasCredential: boolean; overridden: boolean }[];
       inSession: { slug: string; label: string; attachedBy: number }[];
       grants: { serverSlug: string; toolName: string; allowed: boolean }[];
       encryptionConfigured: boolean;

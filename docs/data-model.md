@@ -421,6 +421,53 @@ chose to report: an opaque id, a label, and which agent tools are installed. Pat
 and policies stay in the host's own config on the machine, which is what makes a
 run request incapable of pointing anywhere else (security.md, Threat 9).
 
+### M30 — team credentials
+
+```
+team_mcp_servers                          -- a connection the TEAM owns (ADR 0028)
+  id                uuid pk
+  team_id           uuid -> teams.id not null (cascade)
+  slug              text not null         -- the integration, same namespace as mcp_servers.slug
+  label             text not null
+  url               text not null         -- streamable HTTP only, as M8
+  sealed_credential text                  -- AES-256-GCM; never returned by any API
+  added_by_user_id  uuid -> users.id (set null)
+  created_at        timestamptz not null
+  unique (team_id, slug)
+
+team_mcp_calls                            -- who used a team credential
+  id                  uuid pk
+  team_mcp_server_id  uuid -> team_mcp_servers.id not null (cascade)
+  session_id          uuid -> sessions.id (set null)
+  user_id             uuid -> users.id (set null)  -- the person, or the agent's owner
+  agent_name          text                -- the agent's display name, when an agent called
+  tool_name           text not null       -- upstream name, e.g. "list_issues"
+  ok                  boolean not null
+  created_at          timestamptz not null
+  index (team_mcp_server_id, created_at)
+```
+
+**A separate table from `mcp_servers`, not an owner-or-team column.** A personal
+connection is attached to sessions one by one (`session_mcp_servers`); a team
+connection is never attached. It applies in every session whose `team_id` is its
+team, to that team's current members. Folding both into one table would make
+every query that means "this person's own credential" one `WHERE` away from
+lending someone the team's.
+
+**No join table to sessions.** Where a team credential applies is derived on
+every listing and call from `sessions.team_id` and `team_members`, so leaving
+the team or moving the session ends access on the next call, with nothing to
+clean up.
+
+**Precedence is per slug:** a participant's own `mcp_servers` row attached to
+the session wins over the team's row with the same slug. Grants
+(`session_mcp_tool_grants`) are keyed by slug, so one grant covers whichever
+credential a participant ends up using.
+
+**`team_mcp_calls` stores no arguments and no results.** It answers *who* acted
+through a shared account, which the vendor's log can't. What they sent is the
+vendor's record to keep.
+
 ### M19 — links
 
 ```

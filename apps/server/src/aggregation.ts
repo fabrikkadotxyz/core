@@ -3,13 +3,15 @@
  *
  * External servers are re-exposed through the session endpoint as
  * `<slug>__<tool>`, and every call routes to the **calling participant's own**
- * credential — never the session's, and never someone else's (ADR 0004). A server
+ * credential — never the session's, and never someone else's (ADR 0004). The one
+ * exception is a TEAM credential (M30, ADR 0028): in a team's sessions its members
+ * use it where they have attached none of their own, marked as shared. A server
  * a participant has not attached is absent from their tool list entirely, rather
  * than present-and-denied, which would leak the session's topology.
  *
  * HTTP only. See ADR 0014 for why stdio is not here.
  */
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { Database } from '@fabrikka/db';
 import {
@@ -19,6 +21,12 @@ import {
   seal,
   sessionMcpServers,
   sessionMcpToolGrants,
+  sessions,
+  teamMcpCalls,
+  teamMcpServers,
+  teamMembers,
+  teams,
+  users,
 } from '@fabrikka/db';
 
 /** Namespacing separator. Double underscore, as in `github__create_issue`. */
@@ -32,6 +40,14 @@ export interface AttachedServer {
   hasCredential: boolean;
 }
 
+/**
+ * A server a participant may use in a session: their own, or — where they have
+ * none for that slug — their team's (M30). `team` is set exactly when it is shared.
+ */
+export interface UsableServer extends AttachedServer {
+  team?: { id: string; name: string };
+}
+
 export interface AggregatedTool {
   /** Namespaced name as the agent sees it. */
   name: string;
@@ -39,6 +55,8 @@ export interface AggregatedTool {
   upstreamName: string;
   description?: string;
   inputSchema: unknown;
+  /** The team whose shared credential backs this tool; absent when it is your own. */
+  sharedBy?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -60,10 +78,15 @@ export type AttachResult =
  * while attaching in a session). Re-saving without a credential keeps the one
  * already sealed.
  */
-export async function saveConnection(
-  db: Database,
-  opts: { userId: string; slug: string; label?: string; url: string; credential?: string },
-): Promise<{ ok: true; server: AttachedServer } | { ok: false; error: string }> {
+/**
+ * The checks every connection passes, personal or team: a slug, an http(s) URL,
+ * and a credential sealed here or not at all.
+ */
+function checkConnection(opts: {
+  slug: string;
+  url: string;
+  credential?: string;
+}): { ok: true; slug: string; sealed: string | null } | { ok: false; error: string } {
   const slug = opts.slug.trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(slug)) {
     return { ok: false, error: 'slug must be lowercase letters, digits, - or _' };
@@ -92,6 +115,16 @@ export async function saveConnection(
       return { ok: false, error: (err as Error).message };
     }
   }
+  return { ok: true, slug, sealed };
+}
+
+export async function saveConnection(
+  db: Database,
+  opts: { userId: string; slug: string; label?: string; url: string; credential?: string },
+): Promise<{ ok: true; server: AttachedServer } | { ok: false; error: string }> {
+  const checked = checkConnection(opts);
+  if (!checked.ok) return checked;
+  const { slug, sealed } = checked;
 
   const [row] = await db
     .insert(mcpServers)
@@ -272,6 +305,160 @@ export async function slugsInSession(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Team credentials (M30, ADR 0028)                                           */
+/* -------------------------------------------------------------------------- */
+
+export interface TeamConnection {
+  id: string;
+  slug: string;
+  label: string;
+  url: string;
+  hasCredential: boolean;
+  addedBy: string | null;
+  createdAt: string;
+}
+
+/** A team's shared connections — never the credential, only whether one is set. */
+export async function listTeamConnections(db: Database, teamId: string): Promise<TeamConnection[]> {
+  const rows = await db
+    .select({
+      id: teamMcpServers.id,
+      slug: teamMcpServers.slug,
+      label: teamMcpServers.label,
+      url: teamMcpServers.url,
+      sealed: teamMcpServers.sealedCredential,
+      addedBy: users.displayName,
+      createdAt: teamMcpServers.createdAt,
+    })
+    .from(teamMcpServers)
+    .leftJoin(users, eq(users.id, teamMcpServers.addedByUserId))
+    .where(eq(teamMcpServers.teamId, teamId))
+    .orderBy(teamMcpServers.slug);
+  return rows.map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    label: r.label,
+    url: r.url,
+    hasCredential: !!r.sealed,
+    addedBy: r.addedBy,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+/**
+ * Add or replace one of the team's connections. The caller must already be known
+ * to be a team OWNER — the route checks; this only stores. Re-saving without a
+ * credential keeps the one already sealed.
+ */
+export async function saveTeamConnection(
+  db: Database,
+  opts: { teamId: string; userId: string; slug: string; label?: string; url: string; credential?: string },
+): Promise<{ ok: true; connection: TeamConnection } | { ok: false; error: string }> {
+  const checked = checkConnection(opts);
+  if (!checked.ok) return checked;
+  const label = opts.label?.trim() || checked.slug;
+
+  await db
+    .insert(teamMcpServers)
+    .values({
+      teamId: opts.teamId,
+      slug: checked.slug,
+      label,
+      url: opts.url,
+      sealedCredential: checked.sealed,
+      addedByUserId: opts.userId,
+    })
+    .onConflictDoUpdate({
+      target: [teamMcpServers.teamId, teamMcpServers.slug],
+      set: {
+        label,
+        url: opts.url,
+        addedByUserId: opts.userId,
+        ...(checked.sealed ? { sealedCredential: checked.sealed } : {}),
+      },
+    });
+  const saved = (await listTeamConnections(db, opts.teamId)).find((c) => c.slug === checked.slug)!;
+  return { ok: true, connection: saved };
+}
+
+/** Remove one of the team's connections: gone from every session of the team at once. */
+export async function removeTeamConnection(db: Database, teamId: string, slug: string): Promise<boolean> {
+  const done = await db
+    .delete(teamMcpServers)
+    .where(and(eq(teamMcpServers.teamId, teamId), eq(teamMcpServers.slug, slug)))
+    .returning({ id: teamMcpServers.id });
+  return done.length > 0;
+}
+
+/** Recent calls made with the team's credentials, newest first. For team owners. */
+export async function teamConnectionUses(
+  db: Database,
+  teamId: string,
+  limit = 50,
+): Promise<{ slug: string; toolName: string; person: string | null; agent: string | null; session: string | null; ok: boolean; at: string }[]> {
+  const rows = await db
+    .select({
+      slug: teamMcpServers.slug,
+      toolName: teamMcpCalls.toolName,
+      person: users.displayName,
+      agent: teamMcpCalls.agentName,
+      session: sessions.title,
+      ok: teamMcpCalls.ok,
+      at: teamMcpCalls.createdAt,
+    })
+    .from(teamMcpCalls)
+    .innerJoin(teamMcpServers, eq(teamMcpServers.id, teamMcpCalls.teamMcpServerId))
+    .leftJoin(users, eq(users.id, teamMcpCalls.userId))
+    .leftJoin(sessions, eq(sessions.id, teamMcpCalls.sessionId))
+    .where(eq(teamMcpServers.teamId, teamId))
+    .orderBy(desc(teamMcpCalls.createdAt))
+    .limit(limit);
+  return rows.map((r) => ({ ...r, at: r.at.toISOString() }));
+}
+
+/**
+ * The team credentials a user may use in this session: the session must belong to
+ * a team, and the user must be on it NOW. Derived on every call — leaving the team
+ * or moving the session ends access with nothing to clean up.
+ */
+export async function teamServersFor(db: Database, sessionId: string, userId: string): Promise<UsableServer[]> {
+  const rows = await db
+    .select({
+      id: teamMcpServers.id,
+      slug: teamMcpServers.slug,
+      label: teamMcpServers.label,
+      url: teamMcpServers.url,
+      sealed: teamMcpServers.sealedCredential,
+      teamId: teams.id,
+      teamName: teams.name,
+    })
+    .from(sessions)
+    .innerJoin(teams, eq(teams.id, sessions.teamId))
+    .innerJoin(teamMembers, and(eq(teamMembers.teamId, teams.id), eq(teamMembers.userId, userId)))
+    .innerJoin(teamMcpServers, eq(teamMcpServers.teamId, teams.id))
+    .where(eq(sessions.id, sessionId));
+  return rows.map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    label: r.label,
+    url: r.url,
+    hasCredential: !!r.sealed,
+    team: { id: r.teamId, name: r.teamName },
+  }));
+}
+
+/**
+ * Everything a user may use in this session: their own attached servers, plus the
+ * team's for every slug they have none of. Their own always wins (ADR 0028).
+ */
+export async function usableServers(db: Database, sessionId: string, userId: string): Promise<UsableServer[]> {
+  const own = await serversForUser(db, sessionId, userId);
+  const mine = new Set(own.map((s) => s.slug));
+  const team = (await teamServersFor(db, sessionId, userId)).filter((s) => !mine.has(s.slug));
+  return [...own, ...team];
+}
+
+/* -------------------------------------------------------------------------- */
 /* Grants                                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -354,15 +541,16 @@ async function connect(url: string, credential: string | null): Promise<Client> 
   return client;
 }
 
-/** Decrypt a participant's credential for one upstream call. */
+/** Decrypt the credential behind a usable server — a person's own, or the team's. */
 async function credentialFor(
   db: Database,
-  serverId: string,
+  server: Pick<UsableServer, 'id' | 'team'>,
 ): Promise<{ url: string; credential: string | null } | null> {
+  const table = server.team ? teamMcpServers : mcpServers;
   const [row] = await db
-    .select({ url: mcpServers.url, sealed: mcpServers.sealedCredential })
-    .from(mcpServers)
-    .where(eq(mcpServers.id, serverId))
+    .select({ url: table.url, sealed: table.sealedCredential })
+    .from(table)
+    .where(eq(table.id, server.id))
     .limit(1);
   if (!row) return null;
   return { url: row.url, credential: openSealed(row.sealed) };
@@ -371,19 +559,19 @@ async function credentialFor(
 /**
  * The tools a specific participant may use in this session.
  *
- * Intersection of: servers THEY attached, and tools the SESSION granted. A
- * participant who has attached nothing gets an empty list and cannot tell what
- * anyone else attached.
+ * Intersection of: servers THEY may use (their own, or their team's where they
+ * have none — M30), and tools the SESSION granted. A participant who has nothing
+ * gets an empty list and cannot tell what anyone else attached.
  */
 export async function toolsForParticipant(
   db: Database,
   sessionId: string,
   participantId: string,
 ): Promise<AggregatedTool[]> {
-  const userId = await userForParticipant(db, sessionId, participantId);
-  if (!userId) return [];
+  const who = await identify(db, sessionId, participantId);
+  if (!who) return [];
 
-  const servers = await serversForUser(db, sessionId, userId);
+  const servers = await usableServers(db, sessionId, who.userId);
   if (servers.length === 0) return [];
 
   const granted = await grantedTools(db, sessionId, servers.map((s) => s.slug));
@@ -392,7 +580,7 @@ export async function toolsForParticipant(
   const tools: AggregatedTool[] = [];
 
   for (const server of servers) {
-    const conn = await credentialFor(db, server.id);
+    const conn = await credentialFor(db, server);
     if (!conn) continue;
 
     let client: Client | undefined;
@@ -409,6 +597,7 @@ export async function toolsForParticipant(
           upstreamName: t.name,
           description: t.description,
           inputSchema: t.inputSchema,
+          sharedBy: server.team?.name,
         });
       }
     } catch (err) {
@@ -426,9 +615,9 @@ export async function toolsForParticipant(
 /** Tools an upstream server offers, for the grants UI. Owner-facing. */
 export async function discoverTools(
   db: Database,
-  serverId: string,
+  server: Pick<UsableServer, 'id' | 'team'>,
 ): Promise<{ name: string; description?: string }[]> {
-  const conn = await credentialFor(db, serverId);
+  const conn = await credentialFor(db, server);
   if (!conn) return [];
 
   let client: Client | undefined;
@@ -451,8 +640,10 @@ export type CallResult =
 /**
  * Call an aggregated tool as a specific participant.
  *
- * Re-checks the grant and the participant's own attachment at call time rather
- * than trusting the earlier list: a grant may have been revoked since.
+ * Re-checks the grant, the participant's own attachment and their team
+ * membership at call time rather than trusting the earlier list: any of them may
+ * have changed since. A call made with a team credential is recorded with who
+ * made it (ADR 0028).
  */
 export async function callAggregatedTool(
   db: Database,
@@ -467,12 +658,12 @@ export async function callAggregatedTool(
   const upstreamName = rest.join(SEP);
   if (!slug || !upstreamName) return { ok: false, error: 'unknown tool' };
 
-  const userId = await userForParticipant(db, opts.sessionId, opts.participantId);
-  if (!userId) return { ok: false, error: 'unknown tool' };
+  const who = await identify(db, opts.sessionId, opts.participantId);
+  if (!who) return { ok: false, error: 'unknown tool' };
 
-  const servers = await serversForUser(db, opts.sessionId, userId);
+  const servers = await usableServers(db, opts.sessionId, who.userId);
   const server = servers.find((s) => s.slug === slug);
-  // Not attached BY THIS PARTICIPANT: indistinguishable from not existing, so a
+  // Not usable BY THIS PARTICIPANT: indistinguishable from not existing, so a
   // caller cannot probe what others have attached.
   if (!server) return { ok: false, error: 'unknown tool' };
 
@@ -481,29 +672,55 @@ export async function callAggregatedTool(
     return { ok: false, error: `${opts.toolName} is not permitted in this session` };
   }
 
-  const conn = await credentialFor(db, server.id);
+  const conn = await credentialFor(db, server);
   if (!conn) return { ok: false, error: 'unknown tool' };
+
+  // The vendor's log will name the team's account; this row names who acted.
+  const record = (ok: boolean) =>
+    server.team
+      ? db
+          .insert(teamMcpCalls)
+          .values({
+            teamMcpServerId: server.id,
+            sessionId: opts.sessionId,
+            userId: who.userId,
+            agentName: who.agentName,
+            toolName: upstreamName,
+            ok,
+          })
+          .then(() => {})
+          .catch((err) => console.error('[aggregation] could not record a team call:', (err as Error).message))
+      : Promise.resolve();
 
   let client: Client | undefined;
   try {
     client = await connect(conn.url, conn.credential);
     const result = await client.callTool({ name: upstreamName, arguments: opts.args });
+    await record(!result.isError);
     return { ok: true, content: result.content };
   } catch (err) {
+    await record(false);
     return { ok: false, error: `${slug} call failed: ${(err as Error).message}` };
   } finally {
     await client?.close().catch(() => {});
   }
 }
 
-/** The user behind a participant, or null for an agent. */
-async function userForParticipant(
+/**
+ * Whose credentials a participant acts with: a person's own, or — for an agent —
+ * its owner's (ADR 0004). Null for anyone else.
+ */
+async function identify(
   db: Database,
   sessionId: string,
   participantId: string,
-): Promise<string | null> {
+): Promise<{ userId: string; agentName: string | null } | null> {
   const [row] = await db
-    .select({ userId: participants.userId, sessionAgentId: participants.sessionAgentId })
+    .select({
+      userId: participants.userId,
+      sessionAgentId: participants.sessionAgentId,
+      displayName: participants.displayName,
+    })
     .from(participants)
     .where(
       and(eq(participants.id, participantId), eq(participants.sessionId, sessionId)),
@@ -511,11 +728,14 @@ async function userForParticipant(
     .limit(1);
 
   if (!row) return null;
-  if (row.userId) return row.userId;
+  if (row.userId) return { userId: row.userId, agentName: null };
 
   // An agent acts with ITS OWNER's credentials — that is what makes audit
   // attribution correct upstream (ADR 0004).
-  if (row.sessionAgentId) return ownerOfAgent(db, row.sessionAgentId);
+  if (row.sessionAgentId) {
+    const owner = await ownerOfAgent(db, row.sessionAgentId);
+    return owner ? { userId: owner, agentName: row.displayName } : null;
+  }
   return null;
 }
 

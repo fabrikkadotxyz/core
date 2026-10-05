@@ -152,6 +152,14 @@ are not about to overwrite an edit you never saw. See
 [ADR 0013](decisions/0013-context-is-append-only-with-explicit-removal.md).
 Added at M8: aggregated external tools, namespaced `<server>__<tool>` (e.g. `github__create_issue`).
 
+Each aggregated tool's description ends with **whose credential it uses**:
+`(via github, using your own credential)`, or, for a team credential (M30,
+[ADR 0028](decisions/0028-team-credentials-are-shared-marked-and-lose-to-your-own.md)),
+`(via github, using <team>'s shared credential: the vendor sees the team's account, not yours)`.
+The tool name is the same either way. When both exist, the participant's own
+credential is used. A team credential is offered only in that team's sessions,
+only to its members and their agents.
+
 #### Links (added at M19)
 
 What the session is about, outside it: tickets, PRs, repos, docs, dashboards and

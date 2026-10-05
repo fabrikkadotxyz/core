@@ -187,6 +187,29 @@ GitHub audit log says: alice
 
 Tool grants (`session_mcp_tool_grants`) are **tool-level and default-deny**. Server-level allow/deny is too coarse: "GitHub read but not merge" is the actual requirement.
 
+### Team credentials (M30)
+
+[ADR 0028](decisions/0028-team-credentials-are-shared-marked-and-lose-to-your-own.md)
+admits one exception to per-participant credentials: a connection the **team**
+owns. It is bounded so neither of ADR 0004's failures returns:
+
+| Risk | Control |
+| --- | --- |
+| Joining a room lends you access | Only **team members** (and agents whose owner is one) can use it, and only in that team's sessions. A guest or a one-session invitee never gets it. Re-checked on every listing and call. |
+| A member adds a credential everyone then wields | Only **team owners** add, replace or remove one. |
+| Using it lets you act on the vendor unchecked | Grants are still per tool, default-deny, set by the session owner. Adding a team credential grants nothing. |
+| Your own access is quietly replaced by the team's | **Your own credential wins**, per integration. The team's only fills a gap. |
+| An agent mistakes it for its owner's account | Every tool backed by one says so in its description: *using <team>'s shared credential*. |
+| The vendor's log names only "the team" | Every call is recorded with the participant who made it, the tool and the outcome, never its arguments. Team owners see recent uses. |
+
+```
+Session "Triage" (team: Platform)
+  sentry:  team's ✓ (Platform's token, added by fede)
+           alice — member, no own sentry  → team's token; call recorded as alice
+           bob   — member, own sentry     → bob's token (his own wins)
+           carol — guest, not on Platform → sentry tools absent
+```
+
 ## Threat 4 — resource exhaustion and loops
 
 Two agents in a session, each reacting to the other, will burn tokens until a

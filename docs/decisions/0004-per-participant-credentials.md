@@ -1,6 +1,6 @@
 # 0004 — MCP credentials are per-participant
 
-**Status:** Accepted
+**Status:** Accepted — superseded for team credentials only by [0028](0028-team-credentials-are-shared-marked-and-lose-to-your-own.md)
 **Date:** 2026-09-25
 
 ## Context

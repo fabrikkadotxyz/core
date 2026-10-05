@@ -153,6 +153,14 @@ enforced, not advisory:
    an arbitrary-command executor driven by database rows; local servers belong to
    the bridge ([ADR 0014](decisions/0014-aggregation-is-http-only-and-credentials-are-encrypted.md)).
 
+**Team credentials (M30).** A team owner can add a connection that belongs to the
+team, under *Team integrations*. Members, and their agents, use it in that team's
+sessions wherever they haven't attached their own. Every call made with it is
+recorded with the participant who made it, the tool and the outcome (never the
+arguments), and team owners see recent uses on the same page. See
+[ADR 0028](decisions/0028-team-credentials-are-shared-marked-and-lose-to-your-own.md).
+The record has no retention limit yet; it is one small row per call.
+
 ### The encryption key
 
 Credentials are sealed with AES-256-GCM under `FABRIKKA_ENCRYPTION_KEY`:

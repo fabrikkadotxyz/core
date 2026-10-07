@@ -21,6 +21,8 @@ export async function createUser(
     password: string;
     displayName: string;
     isInstanceOwner?: boolean;
+    /** Only a deployment that verified the address says so (ADR 0029). */
+    emailVerified?: boolean;
   },
 ): Promise<CreateUserResult> {
   const email = input.email.trim().toLowerCase();
@@ -47,6 +49,7 @@ export async function createUser(
       passwordHash: await hashPassword(input.password),
       displayName,
       isInstanceOwner: input.isInstanceOwner ?? false,
+      emailVerifiedAt: input.emailVerified ? new Date() : null,
     })
     .returning();
 

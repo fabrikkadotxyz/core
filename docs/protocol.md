@@ -812,6 +812,45 @@ they do for `fabrikka watch`. What the host adds is local: it resolves `grantId`
 against its own config to a folder and a policy, and refuses to run if the grant is
 gone, the folder is missing, or the provider has no verified policy.
 
+## Extending the server (M32)
+
+For deployments, not agents: how a program built on the core adds what it needs,
+such as a sign-up page ([ADR 0029](decisions/0029-the-core-is-a-library-a-deployment-extends-it.md)).
+This is the core's library contract. Anything not listed here is internal.
+
+```ts
+import { createApp } from '@fabrikka/server';
+
+const core = createApp({ extensions: [myExtension] });
+await core.start(); // listens on PORT, as the core's own entry point does
+
+const myExtension: Extension = {
+  name: 'signup',
+  mount(app, kit) {
+    app.post('/api/signup', async (c) => { /* … */ });
+  },
+};
+```
+
+`mount` runs once, before the core's web app catch-all, so an extension can
+serve its own pages as well as its own `/api/<name>/…` routes.
+
+| Kit member | What it does |
+| --- | --- |
+| `db` | The database handle. An extension keeps its own tables in its own Postgres schema, with its own migrations. |
+| `publicUrl` | The instance's public origin, for building links. |
+| `requireUser` | Middleware: the request's signed-in user, or 401. |
+| `findUserByEmail(email)` | `{ id, email, displayName }` or null. |
+| `createAccountWithOwnTeam({ email, password, displayName, teamName, emailVerified })` | Creates the user **and** a new team they own, in one transaction, and returns both. Fails if the email is taken. **The only account-creating function in the kit**: it can't put anyone into an existing team or session. |
+| `signIn(c, userId)` | Starts a login session and sets the cookie, as `/api/auth/login` does. |
+| `sendEmail({ to, subject, text })` | Sends through the configured transport. Resolves `false` when none is configured. |
+| `canSendEmail` | Whether a transport is configured. |
+| `rateLimit(key, { max, windowMs })` | `true` while under the limit. In memory, per process. |
+| `advertise({ signupUrl })` | The login page then offers *Create an account*, linking there. |
+
+`GET /api/auth/options` returns what the login page should offer:
+`{ passwordReset: boolean, signupUrl: string | null }`.
+
 ## Presence
 
 `agent_connections.status`, reported to the UI and via `list_participants`:

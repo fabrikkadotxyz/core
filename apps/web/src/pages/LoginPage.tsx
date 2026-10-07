@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 
@@ -11,6 +11,11 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [offers, setOffers] = useState<{ passwordReset: boolean; signupUrl: string | null } | null>(null);
+
+  useEffect(() => {
+    auth.options().then(setOffers).catch(() => setOffers({ passwordReset: false, signupUrl: null }));
+  }, []);
 
   if (loading) return <main className="centered">Loading…</main>;
   if (user) {
@@ -70,13 +75,29 @@ export function LoginPage() {
         </button>
 
         {/*
-          There is no "sign up" link: accounts come from an invite link or the
-          admin CLI, and password recovery is an operator action. See ADR 0007.
+          What's offered depends on the instance, never on a mode (ADR 0007, 0029):
+          reset by email only with an email transport, and "Create an account"
+          only if a deployment's extension advertised a sign-up page. Otherwise
+          accounts come from invite links, and recovery is the operator's CLI.
         */}
-        <p className="hint">
-          No account? You need an invite link. Forgot your password? Ask whoever
-          runs this instance to run <code>admin reset-password</code>.
-        </p>
+        {offers?.passwordReset && (
+          <p className="hint">
+            <Link to="/reset">Forgot password?</Link>
+          </p>
+        )}
+        {offers?.signupUrl && (
+          <p className="hint">
+            New here? <a href={offers.signupUrl}>Create an account</a>
+          </p>
+        )}
+        {offers && !offers.signupUrl && (
+          <p className="hint">No account? You need an invite link.</p>
+        )}
+        {offers && !offers.passwordReset && (
+          <p className="hint">
+            Forgot your password? Ask whoever runs this instance to run <code>admin reset-password</code>.
+          </p>
+        )}
       </form>
     </main>
   );

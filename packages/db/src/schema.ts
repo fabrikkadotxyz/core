@@ -45,9 +45,9 @@ export const users = pgTable('users', {
   /** Set by `admin create-user --owner`. Instance-level, not per-session. */
   isInstanceOwner: boolean('is_instance_owner').notNull().default(false),
   /**
-   * Always null self-hosted: email is an identifier, not a proven address
-   * (ADR 0007). Recorded so cloud verification can layer on without a schema
-   * change; nothing in the core reads it.
+   * Null unless a deployment verified the address before creating the account
+   * (ADR 0007, 0029): a deployment's sign-up sets it through the kit. Email is an
+   * identifier, not a proven address, and nothing in the core reads it.
    */
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true })
@@ -175,6 +175,21 @@ export const messages = pgTable(
  * password reset must cut access immediately. Only the SHA-256 of the cookie
  * value is stored, so reading this table yields nothing usable.
  */
+/**
+ * One emailed password-reset link (M32, ADR 0029). Only the SHA-256 of the
+ * link's token is stored; single use, one hour. Rows exist only on an instance
+ * with an email transport — without one, recovery is `admin reset-password`.
+ */
+export const passwordResets = pgTable('password_resets', {
+  tokenHash: text('token_hash').primaryKey(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const authSessions = pgTable(
   'auth_sessions',
   {

@@ -26,8 +26,11 @@ reading uploaded PDFs (their stories wait on M18's connections), **M21** teams a
 **M22** team-visible sessions and guests, **M23** comments on outputs, and **M24**
 catch-up and handoffs (its stories' vendor half waits on M18), **M25** session
 templates, **M27** export, **M28** a Slack-like home with a team switcher, and
-**M29** team chats and direct chats. M14 (Google Docs) and M18 (connections) wait on real vendor
-accounts — see [`docs/roadmap.md`](docs/roadmap.md).
+**M29** team chats and direct chats, **M30** team integrations (credentials a team
+shares), **M31** the local host (your agents in folders you grant, safely), and
+**M32** the server as a library, with password reset by email when an email
+transport is configured. M14 (Google Docs) and M18 (connections) wait on real
+vendor accounts — see [`docs/roadmap.md`](docs/roadmap.md).
 
 ## How agents join
 
@@ -90,7 +93,7 @@ link*, and send it however you like. Forgot a password?
 | [`docs/security.md`](docs/security.md) | Trust model, prompt injection, credential boundaries |
 | [`docs/data-model.md`](docs/data-model.md) | Schema and what each table is for |
 | [`docs/operations.md`](docs/operations.md) | Running an instance: bootstrap, admin CLI, invites, backups |
-| [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M31 and their acceptance tests |
+| [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M32 and their acceptance tests |
 | [`docs/decisions/`](docs/decisions/) | ADRs — why each of the above is the way it is |
 
 ## License

@@ -89,6 +89,11 @@ export const auth = {
   /** A session invite returns `session`; a team invite (M21) returns `team`. */
   signup: (body: SignupBody) =>
     call<{ user: AuthUser } & InviteDestination>('/auth/signup', { method: 'POST', body }),
+  /** M32: what to offer — reset by email (a transport is configured), and a sign-up page if a deployment has one. */
+  options: () => call<{ passwordReset: boolean; signupUrl: string | null }>('/auth/options'),
+  requestReset: (email: string) => call<{ ok: true }>('/auth/password-reset', { method: 'POST', body: { email } }),
+  confirmReset: (token: string, password: string) =>
+    call<{ ok: true }>('/auth/password-reset/confirm', { method: 'POST', body: { token, password } }),
 };
 
 /* --------------------------------------------------------------- invites */

@@ -1,6 +1,6 @@
 # 0007 — Email is a transport, not a mechanism
 
-**Status:** Accepted
+**Status:** Accepted — registration policy and password reset amended by [0029](0029-the-core-is-a-library-a-deployment-extends-it.md)
 **Date:** 2026-09-26
 
 ## Context

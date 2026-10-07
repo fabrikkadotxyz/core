@@ -67,15 +67,31 @@ needs no mail configuration.
 ## Email (optional, cloud)
 
 Email is a transport for links the system already generates, never a
-prerequisite. With no notifier configured the default is `none` and every
-feature still works — invites are copied by hand and password resets go through
-the CLI.
+prerequisite. With no transport configured every feature still works: invites
+are copied by hand and password resets go through the CLI.
 
-Configuring a notifier adds email-shaped affordances (*Send invite by email*,
-emailed reset links, signup verification) on top of the same flows. It is not a
-different code path and there is no deployment-mode flag.
+Configuring one adds email-shaped affordances on top of the same flows. It is not
+a different code path and there is no deployment-mode flag. Since M32
+([ADR 0029](decisions/0029-the-core-is-a-library-a-deployment-extends-it.md)):
 
-Not implemented yet; tracked in `docs/roadmap.md` under Phase I.
+| `FABRIKKA_MAIL` | Effect |
+| --- | --- |
+| unset or `none` | No email. The default. |
+| `log` | Each message is printed to the server log. For a quick local try. |
+| `file:<dir>` | Each message is written to `<dir>` as one JSON file. For development and the acceptance checks. |
+
+With a transport configured, the login page offers **Forgot password?**: a
+single-use link, valid for one hour, that signs the account out everywhere once
+used. A transport for a real email provider comes later.
+*Send invite by email* is not built yet.
+
+## Deployments that extend the core
+
+The server is also a library (M32). A deployment can be a small program that
+calls `createApp({ extensions })` from `@fabrikka/server`, adds its own routes,
+tables and pages, and starts it. A sign-up page for a hosted instance is built
+that way. The kit an extension may use is listed in
+`docs/protocol.md`. Everything else in the core is internal.
 
 ## Running agents unattended
 

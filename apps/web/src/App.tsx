@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { AuthProvider, useAuth } from './auth-context.tsx';
 import { InvitePage } from './pages/InvitePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
+import { ForgotPasswordPage, ResetPasswordPage } from './pages/ResetPage.tsx';
 import { AllSessionsPage } from './pages/AllSessionsPage.tsx';
 import { HomePage } from './pages/HomePage.tsx';
 import { IntegrationsPage } from './pages/IntegrationsPage.tsx';
@@ -21,6 +22,9 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         {/* Unauthenticated on purpose: an invite is how you get an account. */}
         <Route path="/invite/:token" element={<InvitePage />} />
+        {/* M32: password reset by email, offered only with an email transport. */}
+        <Route path="/reset" element={<ForgotPasswordPage />} />
+        <Route path="/reset/:token" element={<ResetPasswordPage />} />
         {/* M28: every signed-in page lives in one shell, beside one sidebar that
             stays mounted as you move between pages. */}
         <Route element={<Shell />}>

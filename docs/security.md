@@ -62,6 +62,29 @@ account is created by **redeeming an invite**. There is no open signup route, so
 an instance exposed to the internet has no anonymous write surface, and signup
 and invite-acceptance are one code path rather than two.
 
+**A deployment may open registration, but only into a new, empty team**
+(M32, [ADR 0029](decisions/0029-the-core-is-a-library-a-deployment-extends-it.md)). The core still has no sign-up
+route. An extension, such as a deployment's sign-up page, can create accounts
+through exactly one kit function, `createAccountWithOwnTeam`, which makes the user
+and a brand-new team they own in one transaction. The kit has no way to create an
+account inside an existing team or session. So registering grants nothing: such
+an account reaches nobody else's data, and gets further in only by invite.
+In-process extension code is trusted, like the core itself. The kit is a
+contract, not a sandbox.
+
+### Password reset by email (M32)
+
+Offered only when an email transport is configured (`FABRIKKA_MAIL`). Without
+one, recovery is the operator's `admin reset-password`.
+
+| Risk | Control |
+| --- | --- |
+| A reset link is a bearer credential in an inbox | 32 random bytes, only the SHA-256 stored; **single use**; **one hour**; a newer request does not revoke an older link, but each still expires within the hour. |
+| Finding out who has an account | The request answers identically whether or not the email is registered, and sends nothing when it isn't. |
+| Flooding someone's inbox, or guessing at scale | At most 5 requests per email and 20 per IP per 15 minutes; past that, refused with 429. In memory, so per process. |
+| A stolen session survives the reset | Completing a reset deletes every `auth_sessions` row for the user, as the CLI reset does. |
+| The link leaks through the Referer header or logs | The token is in the URL path of a page that posts it once and then replaces the URL; the page loads no third-party resources. |
+
 ### Invite links are bearer credentials in a URL
 
 This is the real exposure introduced by not sending email. An invite link pasted

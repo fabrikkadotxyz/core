@@ -503,6 +503,9 @@ body {
 .centered {
   display: grid;
   place-content: center;
+  /* The column is as wide as the content's natural width, which a long
+     paragraph makes wider than a card's 380px cap: centre the card in it. */
+  justify-items: center;
   min-height: 100vh;
   padding: 1rem;
   color: var(--text);

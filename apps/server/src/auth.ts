@@ -49,11 +49,20 @@ export async function login(
   const ok = await verifyPassword(password, user?.passwordHash ?? null);
   if (!user || !ok) return null;
 
+  return openLoginSession(db, user.id);
+}
+
+/**
+ * Open a login session for a user already proven to be who they say — by a
+ * password above, or by a deployment's own check (the kit's `signIn`, M32).
+ * Returns the cookie's token; only its hash is stored.
+ */
+export async function openLoginSession(db: Database, userId: string): Promise<string> {
   const token = generateToken();
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 86_400_000);
 
   await db.insert(authSessions).values({
-    userId: user.id,
+    userId,
     tokenHash: hashToken(token),
     expiresAt,
   });

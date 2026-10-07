@@ -169,6 +169,13 @@
       "when": 1791157397598,
       "tag": "0023_team_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791384496293,
+      "tag": "0024_password_resets",
+      "breakpoints": true
     }
   ]
 }

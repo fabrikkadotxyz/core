@@ -1241,6 +1241,58 @@ itself enforces
 10. A teammate's mention of your `owner_only` agent is refused before it ever
     reaches the host, as today.
 
+## M32 — The core as a library: extensions, email, and password reset by email
+
+> A hosted instance needs a way for a stranger to start, and a way back in for
+> someone who forgot a password and can't run the CLI. A deployment adds its
+> sign-up and other routes without forking, using the core as a library
+> ([ADR 0029](decisions/0029-the-core-is-a-library-a-deployment-extends-it.md)).
+> This milestone is the core's half: the library, the kit and email.
+
+- **`createApp(options)`.** The server module becomes a function that builds the
+  app unstarted. The core's own entry point is `createApp().start()`: running the
+  core alone is unchanged, and every existing acceptance check passes untouched.
+- **Extensions and the kit.** `options.extensions` mount their routes before the
+  web app's catch-all and receive the kit. The kit's functions are documented in
+  `docs/protocol.md`:
+  - **Accounts:** `createAccountWithOwnTeam` (the only way the kit creates an
+    account: a new user and a new team they own, in one transaction), `signIn`,
+    `findUserByEmail`.
+  - **Email:** `sendEmail`.
+  - **Rate limiting:** `rateLimit`.
+  - **Other:** `requireUser`, `publicUrl`, the database handle.
+  - **Advertising:** `advertise({ signupUrl })`, which makes the login page offer
+    *Create an account*.
+- **Email transport.** `FABRIKKA_MAIL`: `none` (the default), `log`, or
+  `file:<dir>`. A provider transport comes later (M45, SMTP).
+- **Password reset by email**, for self-hosters too, offered only when a
+  transport is configured:
+  - **The link:** single-use, hashed at rest, valid for one hour.
+  - **Using it** logs the account out everywhere.
+  - **The request** answers the same whether or not the email has an account, and
+    is rate-limited per email and per IP.
+- **`GET /api/auth/options`** tells the login page what to offer: password reset,
+  and a sign-up page if an extension advertised one.
+
+**Test.** Clicks are counted from the login page.
+1. With no `FABRIKKA_MAIL`: the login page offers no *Forgot password?* and no
+   *Create an account*. Asking for a reset is refused. `pnpm admin
+   reset-password` still works.
+2. With `FABRIKKA_MAIL=file:<dir>`: *Forgot password?* → enter the email →
+   **Send** → open the link from the email → new password → **Save**: **4
+   clicks**. The old password stops working, and every other login of that
+   account is signed out.
+3. The same link a second time is refused. A link older than an hour is refused.
+4. An email with no account gets the same answer and no message is sent. After
+   five requests for one address within fifteen minutes, further requests are
+   refused for a while.
+5. A test deployment (`createApp` plus a fixture extension, on another port):
+   - its route answers, and the login page offers *Create an account*;
+   - `createAccountWithOwnTeam` makes a user who owns one new team with only
+     themselves in it, and who sees no other team and no session;
+   - an invite from someone else still brings them into that person's team.
+6. The core's own server, started as before, offers none of the fixture's routes.
+
 ## Later — Shared agents on infrastructure the team runs
 
 > Not scheduled. Recorded so that when it comes, it starts from the rule rather

@@ -53,6 +53,21 @@ messages
 
 **Why `participants` exists.** Author and mention never branch on human-vs-agent. `@fede` and `@claude-fede` are the same kind of row, differing by `kind`. This is what makes `@claude-fede` and `@claude-alice` — both Claude Code, different identities — fall out for free, and it means renaming a display name doesn't orphan historical messages.
 
+### M32 — password reset by email
+
+```
+password_resets                           -- one emailed reset link (ADR 0029)
+  token_hash   text pk                    -- SHA-256 of the link's token; the token itself is never stored
+  user_id      uuid -> users.id not null (cascade)
+  expires_at   timestamptz not null       -- one hour after it was requested
+  used_at      timestamptz                -- set on use; a used row is refused
+  created_at   timestamptz not null
+```
+
+Rows exist only when an email transport is configured. `users.email_verified_at`
+(reserved at M1) is now written: by `createAccountWithOwnTeam` when the
+deployment that calls it has verified the address. The core never reads it.
+
 ### M1 — auth, membership, invites
 
 No outbound email is required for any of this — see

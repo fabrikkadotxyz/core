@@ -846,6 +846,7 @@ serve its own pages as well as its own `/api/<name>/…` routes.
 | `sendEmail({ to, subject, text })` | Sends through the configured transport. Resolves `false` when none is configured. |
 | `canSendEmail` | Whether a transport is configured. |
 | `rateLimit(key, { max, windowMs })` | `true` while under the limit. In memory, per process. |
+| `clientIp(c)` | The request's peer address, for rate limits. The socket's address: behind a proxy it's the proxy's, until the core trusts a forwarding header. |
 | `advertise({ signupUrl })` | The login page then offers *Create an account*, linking there. |
 
 `GET /api/auth/options` returns what the login page should offer:

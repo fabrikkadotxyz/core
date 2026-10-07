@@ -1259,7 +1259,7 @@ itself enforces
     account: a new user and a new team they own, in one transaction), `signIn`,
     `findUserByEmail`.
   - **Email:** `sendEmail`.
-  - **Rate limiting:** `rateLimit`.
+  - **Rate limiting:** `rateLimit`, `clientIp`.
   - **Other:** `requireUser`, `publicUrl`, the database handle.
   - **Advertising:** `advertise({ signupUrl })`, which makes the login page offer
     *Create an account*.

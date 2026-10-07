@@ -11,6 +11,7 @@
  * job. In-process code is trusted; the kit is a contract, not a sandbox.
  */
 import type { Context, Hono, MiddlewareHandler } from 'hono';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { eq } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import { teamMembers, teams, users } from '@fabrikka/db';
@@ -53,6 +54,8 @@ export interface Kit {
   sendEmail(message: EmailMessage): Promise<boolean>;
   readonly canSendEmail: boolean;
   rateLimit(key: string, opts: { max: number; windowMs: number }): boolean;
+  /** The request's peer address, for rate limits. The socket's, not a header's: behind a proxy it's the proxy's. */
+  clientIp(c: Context): string;
   /** Tell the login page a sign-up page exists. */
   advertise(offer: { signupUrl?: string }): void;
 }
@@ -122,6 +125,7 @@ export function createKit(opts: {
       return opts.mailer.configured;
     },
     rateLimit,
+    clientIp: (c) => getConnInfo(c).remote.address ?? 'unknown',
 
     advertise(offer) {
       if (offer.signupUrl) opts.advertised.signupUrl = offer.signupUrl;

@@ -100,15 +100,21 @@ export async function startRunner(
     log(`  directory : ${cwd}`);
     log(
       `  policy    : ${
-        policy === 'read'
-          ? 'read only — reads files in this folder, changes nothing'
-          : policy === 'edit'
-            ? 'edit in folder — edits files here; no shell, no web'
-            : opts.provider === 'codex'
-              ? 'full — codex exec --approve-for-me (workspace-write sandbox)'
+        opts.provider === 'codex'
+          ? policy === 'read'
+            ? 'read only — Codex changes nothing; no network, none of your other Codex tools'
+            : policy === 'edit'
+              ? 'edit in folder — Codex changes only this folder; no network, none of your other Codex tools'
+              : 'full — codex exec --approve-for-me (workspace-write sandbox)'
+          : policy === 'read'
+            ? 'read only — reads files in this folder, changes nothing'
+            : policy === 'edit'
+              ? 'edit in folder — edits files here; no shell, no web'
               : 'full — claude -p --dangerously-skip-permissions (no sandbox)'
       }`,
     );
+    // ADR 0032: Codex's sandbox doesn't confine reads — said where consent is given.
+    if (opts.provider === 'codex' && policy !== 'full') log('  note      : Codex can read files anywhere on this computer.');
     log('');
     log('  Runs start without permission prompts, in the directory above.');
     log('  Only mentions the server authorises can trigger them.');

@@ -235,7 +235,8 @@ export const sessions = {
   addAgent: (ref: SessionRef, body: { displayName: string; provider?: string }) =>
     call<CreatedAgentView>(`${base(ref)}/agents`, { method: 'POST', body }),
   /** M31: an agent that runs on one of your paired computers, in a granted folder. */
-  addHostAgent: (ref: SessionRef, body: { deviceId: string; grantId: string; displayName?: string }) =>
+  /** M35: `provider` picks Claude Code or Codex when the computer has both. */
+  addHostAgent: (ref: SessionRef, body: { deviceId: string; grantId: string; displayName?: string; provider?: string }) =>
     call<{ agent: { displayName: string }; online: boolean }>(`${base(ref)}/agents/host`, { method: 'POST', body }),
   agentHosts: (ref: SessionRef) =>
     call<Record<string, { deviceName: string; label: string | null; online: boolean }>>(`${base(ref)}/agents/hosts`),

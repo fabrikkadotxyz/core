@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { inDesktopApp, openFolders } from '../desktop.ts';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type {
   ActivityEvent,
@@ -1147,6 +1148,8 @@ function AgentsPanel({
   const [myDevices, setMyDevices] = useState<DeviceSummary[] | null>(null);
   const [picking, setPicking] = useState(false);
   const [choice, setChoice] = useState<string>('');
+  const [tool, setTool] = useState<'claude-code' | 'codex'>('claude-code');
+  const [codexOk, setCodexOk] = useState(false);
   const [hosts, setHosts] = useState<Record<string, { deviceName: string; label: string | null; online: boolean }>>({});
 
   const refresh = useCallback(() => {
@@ -1176,15 +1179,29 @@ function AgentsPanel({
   };
 
   const folders = (myDevices ?? []).flatMap((d) =>
-    d.grants.filter((g) => g.usable).map((g) => ({ key: `${d.id}|${g.id}`, deviceId: d.id, grantId: g.id, device: d.name, label: g.label, online: d.online })),
+    d.grants.filter((g) => g.usable).map((g) => ({
+      key: `${d.id}|${g.id}`,
+      deviceId: d.id,
+      grantId: g.id,
+      device: d.name,
+      label: g.label,
+      online: d.online,
+      // M35: the agent tools that computer has and the host can run.
+      tools: g.providers.filter((p) => p === 'claude-code' || p === 'codex'),
+    })),
   );
+  const chosen = folders.find((x) => x.key === choice) ?? folders[0];
+  // The tool: asked only when the computer has both; otherwise whichever it has.
+  const toolFor = (f: (typeof folders)[number] | undefined) => (f?.tools.includes(tool) ? tool : f?.tools[0]);
+  const effectiveTool = toolFor(chosen);
+  const needsCodexOk = effectiveTool === 'codex' && !codexOk;
 
   const addMine = async () => {
-    const f = folders.find((x) => x.key === choice) ?? folders[0];
-    if (!f) return;
+    const f = chosen;
+    if (!f || needsCodexOk) return;
     setError(null);
     try {
-      await sessions.addHostAgent(ref_, { deviceId: f.deviceId, grantId: f.grantId });
+      await sessions.addHostAgent(ref_, { deviceId: f.deviceId, grantId: f.grantId, provider: effectiveTool });
       setPicking(false);
       refresh();
       onChanged();
@@ -1221,7 +1238,16 @@ function AgentsPanel({
                   (one command to paste), then grant a folder there.
                 </>
               ) : (
-                <>No folder granted yet on {myDevices.map((d) => d.name).join(', ')}. Grant one in the host's window.</>
+                <>
+                  No folder granted yet on {myDevices.map((d) => d.name).join(', ')}.{' '}
+                  {inDesktopApp() ? (
+                    <button className="link small" onClick={() => openFolders().catch(() => {})}>
+                      Add folders…
+                    </button>
+                  ) : (
+                    <>On that computer: the Fabrikka app's menu-bar icon → Folders….</>
+                  )}
+                </>
               )}
             </p>
           )}
@@ -1236,7 +1262,31 @@ function AgentsPanel({
                   </span>
                 </label>
               ))}
-              <button onClick={addMine}>Add</button>
+              {chosen && chosen.tools.length > 1 && (
+                <div className="tool-choice">
+                  <span className="muted small">Which agent?</span>
+                  {(['claude-code', 'codex'] as const).map((t) => (
+                    <label key={t} className="check">
+                      <input type="radio" name="tool" checked={effectiveTool === t} onChange={() => setTool(t)} />
+                      <span>{t === 'codex' ? 'Codex' : 'Claude Code'}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {effectiveTool === 'codex' && (
+                // ADR 0032: Codex's sandbox confines writes, not reads. Said where it's chosen.
+                <label className="check codex-caveat">
+                  <input type="checkbox" checked={codexOk} onChange={(e) => setCodexOk(e.target.checked)} />
+                  <span className="small">
+                    I understand: <strong>Codex can read files anywhere on this computer.</strong> In Read only and
+                    Edit-in-folder folders it changes nothing outside the folder, has no network, and none of my
+                    other Codex tools.
+                  </span>
+                </label>
+              )}
+              <button onClick={addMine} disabled={needsCodexOk}>
+                Add
+              </button>
             </>
           )}
           <button className="link small" onClick={() => setPicking(false)}>
@@ -1459,9 +1509,10 @@ function AgentSetup({
           <p className="hint danger-hint">
             {agent.provider === 'codex' ? (
               <>
-                <strong>Runs start without approval prompts</strong>, inside Codex's
-                workspace-write sandbox: they can run commands in that folder. Only
-                mentions from you can trigger them.
+                <strong>Runs start without approval prompts, in Edit in folder</strong>: Codex
+                changes only that folder, with no network and none of your other Codex
+                tools — but it can read files anywhere on this computer. Only mentions
+                from you can trigger them.
               </>
             ) : (
               <>

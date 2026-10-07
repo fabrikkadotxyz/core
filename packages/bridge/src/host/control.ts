@@ -153,6 +153,7 @@ const PAGE = `<!doctype html>
       <button>Grant folder</button>
     </form>
     <p class="muted" id="policyhelp"></p>
+    <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code agents read only inside the folder.</p>
     <p class="error" id="adderror"></p>
   </div>
   <h2>Agents on this computer</h2><div id="agents"></div>

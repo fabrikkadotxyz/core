@@ -119,8 +119,10 @@ try {
 
   let devs = (await req('/devices', { jar: me })).json;
   // By name, newest first: an earlier run (or a person's own machine) may have
-  // left a device with the same name on this account.
-  const dev = devs.filter((d) => d.name === cfg.deviceName).sort((a, b) => String(b.lastSeenAt ?? '').localeCompare(String(a.lastSeenAt ?? '')))[0];
+  // left a device with the same name on this account. The one just paired
+  // hasn't been seen yet, so a missing lastSeenAt sorts first.
+  const lastSeen = (d) => d.lastSeenAt ?? '9999';
+  const dev = devs.filter((d) => d.name === cfg.deviceName).sort((a, b) => String(lastSeen(b)).localeCompare(String(lastSeen(a))))[0];
   check(!!dev, 'Your devices lists the computer');
   for (let i = 0; i < 50 && !(await req('/devices', { jar: me })).json.find((d) => d.id === dev.id)?.online; i++) await sleep(100);
   check((await req('/devices', { jar: me })).json.find((d) => d.id === dev.id)?.online === true, '…online');

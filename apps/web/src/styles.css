@@ -1761,3 +1761,7 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 /* M33: the install command beside its Copy button. */
 .copy-row { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
 .copy-row code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+
+/* M35: the agent-tool choice in "Add my agent", and Codex's read caveat (ADR 0032). */
+.tool-choice { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.codex-caveat { align-items: flex-start; padding: 8px 10px; border: 1px solid var(--warn-border); border-radius: 8px; background: var(--warn-soft); }

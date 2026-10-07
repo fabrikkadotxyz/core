@@ -30,7 +30,8 @@ import { addAgentToSession } from './agents.ts';
 
 const PAIRING_TTL_MS = 10 * 60_000;
 /** Agent tools whose host policies were verified (ADR 0027). Codex isn't, yet. */
-export const HOST_PROVIDERS = ['claude-code'];
+/** Agent tools the host may run: both verified (ADR 0027 for Claude Code, 0032 for Codex). */
+export const HOST_PROVIDERS = ['claude-code', 'codex'];
 
 export class DeviceError extends Error {}
 
@@ -225,10 +226,11 @@ export async function bindAgent(
   const provider = opts.provider ?? grant.providers.find((p) => HOST_PROVIDERS.includes(p));
   if (!provider || !grant.providers.includes(provider)) throw new DeviceError('no supported agent tool is installed on that device');
   if (!HOST_PROVIDERS.includes(provider)) {
-    throw new DeviceError(`${provider} can't run from the host yet: its folder policies aren't verified (ADR 0027)`);
+    throw new DeviceError(`${provider} can't run from the host: its folder policies aren't verified`);
   }
 
-  const base = (opts.displayName ?? `claude-${opts.user.displayName}`).replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 40);
+  const prefix = provider === 'codex' ? 'codex' : 'claude';
+  const base = (opts.displayName ?? `${prefix}-${opts.user.displayName}`).replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 40);
   let created: Awaited<ReturnType<typeof addAgentToSession>> | null = null;
   for (let n = 1; n <= 20 && !created?.ok; n++) {
     created = await addAgentToSession(db, {

@@ -135,7 +135,7 @@ The session UI generates the command under *Agents → While away*.
 | | Claude Code | Codex |
 | --- | --- | --- |
 | Spawn | `claude -p …` with the policy's flags | `codex exec … --approve-for-me` |
-| Policy | **`edit` by default**: files in the folder only, no shell, no web. `--policy read` or `--policy full` (no sandbox) | `full` only, the one verified so far; the UI's command passes `--policy full` |
+| Policy | **`edit` by default**: files in the folder only, no shell, no web. `--policy read` or `--policy full` (no sandbox) | `read`, `edit` or `full` (M35). Writes and network confined, **reads are not**; see ADR 0032 |
 | Sandbox | enforced by Claude Code's own tool restrictions; none under `full` | workspace-write |
 | Session tools during the run | yes, via `--mcp-config` | yes, via `-c mcp_servers.…` overrides |
 | How the answer gets posted | the agent calls `post_message` itself | the same |

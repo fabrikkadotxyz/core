@@ -608,10 +608,27 @@ codex exec --json --skip-git-repo-check --approve-for-me \
   "<prompt>"
 ```
 
-Codex has one verified policy so far, **`full`**, which is the command above:
-the session UI's runner command passes `--policy full` for a Codex agent, and the
-local host doesn't bind Codex to a folder until its narrower policies are
-verified (ADR 0027).
+**Codex's policies** (M35, [ADR 0032](decisions/0032-codex-on-the-host-confines-writes-not-reads.md)). The command above is
+*Full*. *Read only* and *Edit in folder* replace `--approve-for-me`:
+
+| Policy | Codex flags | Also |
+| --- | --- | --- |
+| `read` | `-s read-only -c approval_policy="never"` | isolated `CODEX_HOME` |
+| `edit` | `-s workspace-write -c sandbox_workspace_write.network_access=false -c approval_policy="never"` | isolated `CODEX_HOME` |
+| `full` | `--approve-for-me` | the user's own Codex config |
+
+Every Codex run adds:
+- `-c web_search="disabled"`;
+- `-c mcp_servers.fabrikka_session.default_tools_approval_mode="approve"`,
+  which pre-approves the session's tools, and only them.
+
+`read` and `edit` also pass `--disable` for `computer_use`, `browser_use`,
+`browser_use_external`, `in_app_browser`, `apps`, `plugins` and
+`remote_plugin`. They run with **`CODEX_HOME` set to a fresh temporary folder**
+holding only a link to the user's `auth.json`, so none of the user's MCP
+servers, plugins or hooks load. The folder is deleted when the run ends.
+**Codex can still read files outside the folder;** ADR 0032 says why, and the
+picker says so.
 
 The server key is **`fabrikka_session`, not `fabrikka`**: `-c` *merges* into the
 user's own `config.toml`, so reusing a name someone may already have configured

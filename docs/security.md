@@ -436,6 +436,22 @@ there. What holds the line
   working at once. The host shows when it's running, logs every run locally, and
   stops everything on one click.
 
+### Codex on the host (M35)
+
+Codex's sandbox confines **writes, network and its own reach-outside tools**,
+not **reads** ([ADR 0032](decisions/0032-codex-on-the-host-confines-writes-not-reads.md)). In *Read only* and *Edit in folder*, a
+Codex agent:
+- changes nothing outside the folder (*Read only*: nothing at all);
+- reaches no network, and has none of the user's own Codex MCP servers,
+  through a per-run isolated `CODEX_HOME`;
+- **can read any file the user can.**
+
+A prompt-injected Codex agent could therefore read a secret elsewhere on the
+machine and post it to the session. The picker states this, and adding a Codex
+agent takes a confirming tick. The delivery gate (Threat 1) still decides who
+can mention it at all. Claude Code's policies confine reads too, and are
+unchanged.
+
 ### The desktop app (M34)
 
 The app runs the host as its own child and talks to it over stdin and stdout
@@ -444,7 +460,7 @@ website to reach. The terminal host keeps its defended `127.0.0.1` page.
 
 | Risk | Control |
 | --- | --- |
-| The remote web app, in the app's main window, drives the host (grants itself a folder) | Host commands are permitted only to the bundled local `folders` window. **No capability names a remote URL**, so the main window has no host command at all. Checked by the M34 acceptance script. |
+| The remote web app, in the app's main window, drives the host (grants itself a folder) | Host commands are permitted only to the bundled local `folders` window. The instance's own origin gets one command, `open_folders`, which opens that window and takes no argument: the person still picks the folder and its policy there. Granted at runtime for the configured origin only. No capability file names a remote URL. Checked by the M34 acceptance script. |
 | A page names an arbitrary path to grant | Grant takes no path from any page: Rust opens the native folder picker and passes the chosen folder to the host. The host's own refusals (home, root, ancestors of home) still apply. |
 | Two hosts with one device token both act on a mention | A lock file in `~/.fabrikka`; a second host refuses to start. |
 | The app installs or manages agent runtimes | It supervises only Fabrikka's own client (ADR 0002). |

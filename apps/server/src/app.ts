@@ -925,7 +925,7 @@ export function createApp(options: CreateAppOptions = {}) {
   sessionRoutes.post('/agents/host', async (c) => {
     const s = await resolve(c);
     if (!s) return c.notFound();
-    const body = await c.req.json<{ deviceId?: string; grantId?: string; displayName?: string }>();
+    const body = await c.req.json<{ deviceId?: string; grantId?: string; displayName?: string; provider?: string }>();
     try {
       const agent = await bindAgent(db, {
         sessionId: s.id,
@@ -936,6 +936,8 @@ export function createApp(options: CreateAppOptions = {}) {
         deviceId: body.deviceId ?? '',
         grantId: body.grantId ?? '',
         displayName: body.displayName,
+        // M35: Claude Code or Codex, when the computer has both; else whichever it has.
+        provider: body.provider,
       });
       // Only the new binding goes out, with its own token: re-minting the others
       // would revoke tokens that running agents are using.
@@ -2165,10 +2167,9 @@ export function createApp(options: CreateAppOptions = {}) {
   FABRIKKA_TOKEN=${token} \\
   ` +
       `${BRIDGE_COMMAND.join(' ')} watch --dir .` +
-      // Claude Code gets the default policy, `edit` (ADR 0027). Codex has only one
-      // verified policy, `full` (its workspace-write sandbox); without the flag the
-      // runner refuses to start it.
-      (provider === 'codex' ? ' --provider codex --policy full' : '');
+      // Both tools get the default policy, `edit`: verified for Claude Code (ADR
+      // 0027) and, with its read caveat, for Codex (ADR 0032).
+      (provider === 'codex' ? ' --provider codex' : '');
 
     // Phrased for the provider's own CLI. Codex takes the token from the
     // environment because it rejects a literal `bearer_token`, which conveniently

@@ -475,9 +475,9 @@ check(
 );
 check(
   codexSetup.runnerCommand.includes('--provider codex') &&
-    // Codex's only verified policy is `full`; without it the runner refuses to start (ADR 0027).
-    codexSetup.runnerCommand.includes('--policy full'),
-  "the codex runner command names its provider and its one verified policy, full",
+    // Since M35 Codex's edit policy is verified (ADR 0032): the default, not full.
+    !codexSetup.runnerCommand.includes('--policy full'),
+  "the codex runner command names its provider, and runs at the default policy (edit), not full",
 );
 
 const otherSetup = (

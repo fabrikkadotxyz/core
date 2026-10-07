@@ -1420,6 +1420,48 @@ itself enforces
    the instance serves. `--app` refuses a mismatched checksum and installs
    nothing.
 
+## M35 — Codex on the local host
+
+> Until now **Add my agent** offered Claude Code only: Codex's folder policies
+> weren't verified. [ADR 0032](decisions/0032-codex-on-the-host-confines-writes-not-reads.md) records what verifying them found. Codex
+> confines writes, network and its other tools, but **not reads**, and the
+> picker says so.
+
+- **Codex policies** (the runner and the host alike):
+  - *Read only:* `-s read-only`.
+  - *Edit in folder:* `-s workspace-write`, network off.
+  - *Full:* `--approve-for-me`, as today.
+  - **All three:** `approval_policy="never"`, web search off, and Fabrikka's
+    MCP server pre-approved (`default_tools_approval_mode="approve"`).
+  - ***Read only* and *Edit in folder* also:** a per-run isolated `CODEX_HOME`
+    (only `auth.json`, linked; deleted afterwards), so none of the user's MCP
+    servers, plugins or hooks load. Codex's computer-use, browser, app and
+    plugin features are switched off.
+- **The host accepts Codex** (`HOST_PROVIDERS` gains `codex`). A Codex agent is
+  named `codex-<you>`.
+- **The picker:** when a computer has both tools, *Run in which folder?* also
+  asks **Claude Code / Codex**. Choosing Codex shows the read caveat, and adding
+  it takes a confirming tick.
+- **The Folders window and the host's page** carry the same caveat next to the
+  policies.
+
+**Test.**
+1. In a session: **Setup → Add my agent →** a folder **→ Codex →** tick the
+   caveat **→ Add**: **5 clicks**, counted from the session. The agent is
+   `codex-<you>`, shown "on <computer> · <folder>".
+2. Mention it in an *Edit in folder* folder asking to fix a typo: the file is
+   fixed and the answer is posted.
+3. In a *Read only* folder: the same request changes nothing, and the answer
+   still arrives.
+4. Scripted, with `FABRIKKA_TEST_SPAWN=1` (real Codex runs), through the host
+   exactly as it runs Codex:
+   - an *Edit* run can't write outside its folder or reach the network;
+   - none of the user's own MCP servers is available;
+   - *Read only* writes nothing, even inside the folder.
+5. Scripted, always: each policy's Codex arguments, the isolated home (only
+   `auth.json`), the server accepting a Codex binding, and the caveat present in
+   the picker and the Folders window.
+
 ## Later — Shared agents on infrastructure the team runs
 
 > Not scheduled. Recorded so that when it comes, it starts from the rule rather

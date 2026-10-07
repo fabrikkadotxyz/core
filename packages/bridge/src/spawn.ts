@@ -11,7 +11,7 @@
  */
 import { spawn } from 'node:child_process';
 import { summarise, type ActivityLine } from './redact.ts';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,9 +31,41 @@ export type Policy = 'read' | 'edit' | 'full';
 
 export const POLICIES: Policy[] = ['read', 'edit', 'full'];
 
-/** Providers whose read/edit policies were verified. Codex isn't, yet (ADR 0027). */
+/**
+ * Every policy is verified for both tools: Claude Code in M31 (ADR 0027), Codex
+ * in M35 (ADR 0032) — whose read/edit confine writes, network and its other
+ * tools, but not reads, as its picker says.
+ */
 export function policyVerified(provider: Provider, policy: Policy): boolean {
-  return policy === 'full' || provider === 'claude-code';
+  return POLICIES.includes(policy) && (provider === 'claude-code' || provider === 'codex');
+}
+
+/** Codex features that reach beyond its sandboxed shell: off in read and edit (ADR 0032). */
+const CODEX_OFF = ['computer_use', 'browser_use', 'browser_use_external', 'in_app_browser', 'apps', 'plugins', 'remote_plugin'];
+
+/** The Codex flags for a policy. Exactly the ones scripts/spikes/m35-codex-policies.mjs verified. */
+export function codexPolicyArgs(policy: Policy): string[] {
+  // Today's runner behaviour: auto-approve inside the workspace-write sandbox.
+  if (policy === 'full') return ['--approve-for-me'];
+  const common = ['-c', 'approval_policy="never"', ...CODEX_OFF.flatMap((f) => ['--disable', f])];
+  if (policy === 'read') return ['-s', 'read-only', ...common];
+  return ['-s', 'workspace-write', '-c', 'sandbox_workspace_write.network_access=false', ...common];
+}
+
+/**
+ * A fresh Codex home for one run: a link to the user's sign-in and nothing else,
+ * so none of their MCP servers (some run outside Codex's sandbox — computer
+ * control, a JavaScript REPL), plugins, hooks or memories load. Inside `dir`,
+ * which the run deletes when it ends. ADR 0032, finding 5.
+ */
+async function isolatedCodexHome(dir: string): Promise<string> {
+  const home = join(dir, 'codex-home');
+  await mkdir(home, { mode: 0o700 });
+  const auth = join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'auth.json');
+  // Signed in with an API key instead? Then there's no auth.json, and the key in
+  // the environment still works.
+  if (existsSync(auth)) await symlink(auth, join(home, 'auth.json'));
+  return home;
 }
 
 /** The Claude Code flags for a policy. Exactly the ones the spike verified. */
@@ -256,15 +288,19 @@ async function runCodex(req: SpawnRequest): Promise<SpawnResult> {
   const lastMessagePath = join(dir, 'last.txt');
 
   try {
+    const policy = req.policy ?? 'full';
     const options = [
       '--json',
       '--skip-git-repo-check',
-      // Auto-approve under the workspace-write sandbox, so an unattended run
-      // does not stall on a prompt nobody will answer.
-      '--approve-for-me',
+      // The folder's policy (ADR 0032). `full` is today's --approve-for-me.
+      ...codexPolicyArgs(policy),
+      '-c',
+      'web_search="disabled"',
       '-o',
       lastMessagePath,
     ];
+    // read and edit: none of the user's own Codex setup (ADR 0032, finding 4).
+    const codexHome = policy === 'full' ? null : await isolatedCodexHome(dir);
 
     if (req.mcp) {
       // A distinct key, because `-c` MERGES into whatever the user already has
@@ -277,6 +313,10 @@ async function runCodex(req: SpawnRequest): Promise<SpawnResult> {
         `mcp_servers.${CODEX_MCP_KEY}.url="${req.mcp.url}"`,
         '-c',
         `mcp_servers.${CODEX_MCP_KEY}.bearer_token_env_var="FABRIKKA_RUN_TOKEN"`,
+        // Every MCP call needs approval, and prompts are off: pre-approve the
+        // session's own tools, and only them (ADR 0032, finding 6).
+        '-c',
+        `mcp_servers.${CODEX_MCP_KEY}.default_tools_approval_mode="approve"`,
       );
     }
 
@@ -296,6 +336,7 @@ async function runCodex(req: SpawnRequest): Promise<SpawnResult> {
         // Passed in the environment, not on the command line or in a file: it is
         // then invisible to `ps` and leaves nothing behind.
         ...(req.mcp ? { FABRIKKA_RUN_TOKEN: req.mcp.token } : {}),
+        ...(codexHome ? { CODEX_HOME: codexHome } : {}),
       },
       (line) => emitCodexActivity(line, req),
     );

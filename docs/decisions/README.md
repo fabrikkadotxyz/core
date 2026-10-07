@@ -64,3 +64,4 @@ What we rejected and why.
 | [0029](0029-the-core-is-a-library-a-deployment-extends-it.md) | The core is a library; a deployment extends it | Accepted |
 | [0030](0030-every-instance-serves-its-own-client-installer.md) | Every instance serves its own client, with a one-line installer | Accepted |
 | [0031](0031-the-desktop-app-runs-the-local-host.md) | The desktop app runs the local host; signing waits for launch | Proposed |
+| [0032](0032-codex-on-the-host-confines-writes-not-reads.md) | Codex on the local host confines writes, not reads, and says so | Proposed |

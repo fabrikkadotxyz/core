@@ -6,6 +6,7 @@
  * It shows exactly what the session list already showed, arranged by team. No
  * new permission lives here.
  */
+import { Select, TeamInitial } from '../components/Select.tsx';
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import type { SessionSummary } from '@fabrikka/types';
@@ -191,22 +192,22 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
     <nav className="sidebar" aria-label="Workspace">
       <div className="side-top">
         {teams.length > 0 ? (
-          <select
-            className="team-switcher"
+          <Select
+            tone="sidebar"
+            label="Team"
             value={team?.id ?? ''}
-            aria-label="Team"
-            onChange={(e) => {
-              selectTeam(e.target.value || null);
+            options={teams.map((t) => ({
+              value: t.id,
+              label: t.name,
+              description: `${t.memberCount} ${t.memberCount === 1 ? 'member' : 'members'}`,
+              leading: <TeamInitial name={t.name} />,
+            }))}
+            onChange={(id) => {
+              selectTeam(id || null);
               navigate('/');
               onNavigate();
             }}
-          >
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+          />
         ) : (
           <strong className="side-brand">Fabrikka</strong>
         )}

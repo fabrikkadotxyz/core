@@ -134,6 +134,12 @@ const PAGE = `<!doctype html>
   .tag { font-size:12px; padding:1px 8px; border-radius:20px; background:var(--tint); color:var(--accent); }
   .tag.run { background:#fde8e2; color:var(--danger); }
   .update { border-color:var(--accent); background:var(--tint); } [hidden] { display:none !important; }
+  /* M36: the policy as a segmented control: all three choices visible. */
+  .segmented { display:inline-flex; padding:3px; gap:2px; border:1px solid var(--border); border-radius:9px; background:var(--bg); }
+  .segmented button { border:0; background:transparent; color:var(--muted); padding:5px 11px; border-radius:7px; font-weight:500; cursor:pointer; }
+  .segmented button:hover { color:var(--text); }
+  .segmented button[aria-checked="true"] { background:#fff; color:var(--text); font-weight:600; box-shadow:0 1px 2px rgba(41,50,65,.12), 0 0 0 1px var(--border); }
+  .segmented button[aria-checked="true"][data-value="full"] { color:var(--danger); }
   table { width:100%; border-collapse:collapse; font-size:13px; } td { padding:5px 6px; border-top:1px solid var(--border); vertical-align:top; }
 </style></head><body>
 <header><span class="dot" id="dot"></span><strong>Fabrikka host</strong><span id="who" class="muted" style="color:#c9dbe6"></span><span class="spacer"></span><button class="stop" id="stop">Stop all runs</button></header>
@@ -145,11 +151,7 @@ const PAGE = `<!doctype html>
   <div class="card">
     <form id="add" class="row">
       <input id="path" placeholder="/Users/you/code/project" aria-label="Folder path">
-      <select id="policy" aria-label="What agents may do">
-        <option value="edit">Edit in folder</option>
-        <option value="read">Read only</option>
-        <option value="full">Full (commands, network)</option>
-      </select>
+      <span class="segmented" role="radiogroup" aria-label="What agents may do" id="policy"></span>
       <button>Grant folder</button>
     </form>
     <p class="muted" id="policyhelp"></p>
@@ -166,6 +168,9 @@ const HELP = {
   full: 'Anything the agent tool can do: shell commands, network, files anywhere it can reach. Only for folders you would let a stranger run commands in.'
 };
 const $ = (id) => document.getElementById(id);
+const POLICY_NAMES = { edit: 'Edit in folder', read: 'Read only', full: 'Full' };
+const segmented = (name, value) => Object.keys(POLICY_NAMES).map((p) =>
+  '<button type="button" role="radio" data-seg="' + esc(name) + '" data-value="' + p + '" aria-checked="' + (p === value) + '" tabindex="' + (p === value ? 0 : -1) + '">' + POLICY_NAMES[p] + '</button>').join('');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
 async function api(method, path, body) {
   const r = await fetch(path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
@@ -178,7 +183,7 @@ function render(s) {
   if (s.updateAvailable) $('update').innerHTML = '<strong>Update available</strong> <span class="muted">' + esc(s.version) + ' → ' + esc(s.latestVersion) + '</span><div class="muted">In a terminal: <code>fabrikka update</code>, then start the host again.</div>';
   $('who').textContent = s.deviceName + ' · ' + (s.connected ? 'connected to ' + s.server : 'reconnecting…') + (s.providers.length ? ' · ' + s.providers.join(', ') : ' · no agent tools found');
   $('grants').innerHTML = s.grants.length ? s.grants.map((g) => '<div class="card row"><div class="grow"><strong>' + esc(g.label) + '</strong><div class="path">' + esc(g.path) + '</div></div>' +
-    '<select data-policy="' + g.id + '">' + ['edit','read','full'].map((p) => '<option value="' + p + '"' + (p === g.policy ? ' selected' : '') + '>' + ({edit:'Edit in folder',read:'Read only',full:'Full'})[p] + '</option>').join('') + '</select>' +
+    '<span class="segmented" role="radiogroup" aria-label="What agents may do in ' + esc(g.label) + '">' + segmented(g.id, g.policy) + '</span>' +
     '<button class="link" data-remove="' + g.id + '">Remove</button>' + (g.policy === 'full' ? '<div class="warn" style="flex-basis:100%">Full: agents can run any command on this computer from this folder.</div>' : '') + '</div>').join('')
     : '<p class="muted">No folders yet. Grant one below, then use “Add my agent” in a session.</p>';
   $('agents').innerHTML = s.agents.length ? s.agents.map((a) => '<div class="card row"><div class="grow"><strong>@' + esc(a.agent) + '</strong> <span class="muted">in ' + esc(a.session) + '</span></div><span class="tag">' + esc(a.folder ?? 'folder removed') + '</span>' + (a.running ? '<span class="tag run">running</span>' : a.active ? '<span class="tag">ready</span>' : '<span class="tag">not running</span>') + '</div>').join('')
@@ -186,14 +191,24 @@ function render(s) {
   $('log').innerHTML = s.log.length ? s.log.map((e) => '<tr><td class="muted">' + new Date(e.at).toLocaleTimeString() + '</td><td>@' + esc(e.agent) + '</td><td>' + esc(e.folder) + ' · ' + esc(e.policy) + '</td><td>' + esc(e.event) + (e.detail ? ' — ' + esc(e.detail) : '') + '</td></tr>').join('') : '<tr><td class="muted">Nothing has run yet.</td></tr>';
 }
 async function refresh() { try { render(await api('GET', '/api/state')); } catch {} }
-$('policy').onchange = () => { $('policyhelp').textContent = HELP[$('policy').value]; };
-$('policy').onchange();
+let newPolicy = 'edit';
+const drawNew = () => { $('policy').innerHTML = segmented('new', newPolicy); $('policyhelp').textContent = HELP[newPolicy]; };
+drawNew();
+async function choose(name, value) {
+  if (name === 'new') { newPolicy = value; return drawNew(); }
+  if (value === 'full' && !confirm('Full lets agents run any command on this computer from this folder. Continue?')) return refresh();
+  render(await api('POST', '/api/grants/' + name, { policy: value }));
+}
+document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-seg]'); if (b) choose(b.dataset.seg, b.dataset.value); });
+document.addEventListener('keydown', (e) => {
+  const b = e.target.closest && e.target.closest('[data-seg]'); if (!b || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+  e.preventDefault(); const keys = Object.keys(POLICY_NAMES);
+  const next = keys[(keys.indexOf(b.dataset.value) + (e.key === 'ArrowRight' ? 1 : keys.length - 1)) % keys.length];
+  Promise.resolve(choose(b.dataset.seg, next)).then(() => document.querySelector('[data-seg="' + b.dataset.seg + '"][data-value="' + next + '"]')?.focus());
+});
 $('add').onsubmit = async (e) => { e.preventDefault(); $('adderror').textContent = '';
-  if ($('policy').value === 'full' && !confirm('Full lets agents run any command on this computer from this folder. Grant it anyway?')) return;
-  try { render(await api('POST', '/api/grants', { path: $('path').value, policy: $('policy').value })); $('path').value = ''; } catch (err) { $('adderror').textContent = err.message; } };
-document.addEventListener('change', async (e) => { const id = e.target.dataset && e.target.dataset.policy; if (!id) return;
-  if (e.target.value === 'full' && !confirm('Full lets agents run any command on this computer from this folder. Continue?')) { refresh(); return; }
-  render(await api('POST', '/api/grants/' + id, { policy: e.target.value })); });
+  if (newPolicy === 'full' && !confirm('Full lets agents run any command on this computer from this folder. Grant it anyway?')) return;
+  try { render(await api('POST', '/api/grants', { path: $('path').value, policy: newPolicy })); $('path').value = ''; } catch (err) { $('adderror').textContent = err.message; } };
 document.addEventListener('click', async (e) => { const id = e.target.dataset && e.target.dataset.remove; if (id) render(await api('DELETE', '/api/grants/' + id)); });
 $('stop').onclick = async () => render(await api('POST', '/api/stop'));
 refresh(); setInterval(refresh, 2000);

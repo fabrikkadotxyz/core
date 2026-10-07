@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Select, TeamInitial } from '../components/Select.tsx';
 import { inDesktopApp, openFolders } from '../desktop.ts';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type {
@@ -952,14 +953,15 @@ function TeamPanel({
   return (
     <Panel title="Team">
       {isOwner ? (
-        <select value={team?.id ?? ''} onChange={(e) => change(e.target.value)} aria-label="Session team">
-          <option value="">No team</option>
-          {mine.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          label="Session team"
+          value={team?.id ?? ''}
+          options={[
+            { value: '', label: 'No team', description: 'Only people you add' },
+            ...mine.map((t) => ({ value: t.id, label: t.name, leading: <TeamInitial name={t.name} /> })),
+          ]}
+          onChange={(v) => change(v)}
+        />
       ) : (
         <p className="small">{team!.name}</p>
       )}
@@ -1304,15 +1306,16 @@ function AgentsPanel({
           placeholder="agent name, e.g. claude-fede"
           aria-label="Agent name"
         />
-        <select
+        <Select
+          label="Agent tool"
           value={provider}
-          onChange={(e) => setProvider(e.target.value)}
-          aria-label="Provider"
-        >
-          <option value="claude-code">Claude Code</option>
-          <option value="codex">Codex</option>
-          <option value="other">Other MCP agent</option>
-        </select>
+          options={[
+            { value: 'claude-code', label: 'Claude Code' },
+            { value: 'codex', label: 'Codex' },
+            { value: 'other', label: 'Other MCP agent', description: 'Anything that speaks MCP' },
+          ]}
+          onChange={(v) => setProvider(v)}
+        />
         <button type="submit" disabled={!name.trim()}>
           Add agent
         </button>
@@ -1733,13 +1736,12 @@ function LinksPanel({ ref_, version, readOnly = false }: { ref_: SessionRef; ver
       )}
       {!readOnly && (
       <div className="link-add">
-        <select value={type} onChange={(e) => setType(e.target.value as LinkType)} aria-label="Link type">
-          {LINK_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+        <Select
+          label="Link type"
+          value={type}
+          options={LINK_TYPES.map((t) => ({ value: t, label: t === 'pr' ? 'PR' : t[0]!.toUpperCase() + t.slice(1) }))}
+          onChange={(v) => setType(v as LinkType)}
+        />
         <input
           value={url}
           placeholder="Paste a URL and press Enter"

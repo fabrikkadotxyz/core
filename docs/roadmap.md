@@ -1462,6 +1462,68 @@ itself enforces
    `auth.json`), the server accepting a Codex binding, and the caveat present in
    the picker and the Folders window.
 
+## M36 — A selector worthy of the app, and a resizable sidebar
+
+> Native `<select>` menus render as the operating system's own pop-up buttons:
+> grey, dated, and inside the desktop app (WKWebView on macOS) they look like a
+> different program. This is an application people should enjoy opening.
+
+- **One selector component** for the web app (`components/Select.tsx`):
+  - **Looks:** a button in the app's palette showing the current choice, and a
+    popover list. Options can carry a short description, and the team switcher
+    shows each team's initial, the way a chat app's workspace menu does.
+  - **Keyboard:** ↑ ↓ Home End to move, Enter or Space to choose, Escape to
+    close, and typing jumps to an option.
+  - **Behaviour:** closes on an outside click. It opens upward when there's no
+    room below.
+  - **Accessible:** the listbox pattern (`aria-haspopup`, `aria-expanded`,
+    `role="listbox"`/`option`, `aria-activedescendant`).
+  - It **replaces every native select** in the web app: the team switcher, a
+    session's team, the agent tool and the link type.
+- **Folder policies become a segmented control** (*Edit in folder · Read only
+  · Full*) in the desktop app's Folders window and on the terminal host's page.
+  All three choices stay visible, which suits a security setting better than a
+  hidden menu. *Full* keeps its warning.
+- **The sidebar is resizable**, like Slack's:
+  - drag its right edge between 200 and 420px;
+  - double-click the edge to restore 248px;
+  - the width is remembered per browser (`localStorage`, a convenience only);
+  - the edge is focusable, and ← → resize it by 16px
+    (`role="separator"`, with its current, minimum and maximum values);
+  - narrow screens keep the drawer and have no handle.
+
+**Test.**
+1. Every menu that was a native select now opens the app's own list, in the
+   light and dark palettes, in the browser and in the desktop app.
+2. Keyboard only: Tab to the team switcher, ↓ to open, ↓ ↓ Enter to switch
+   team, and Escape closes without choosing. A screen reader announces it as a
+   listbox with the selected option.
+3. Drag the sidebar edge to about 360px; reload, and it's still 360px.
+   Double-click the edge: back to 248px. It can't go below 200 or above 420.
+4. Folders window: a folder's policy changes with one click on the segment.
+   Choosing *Full* shows its warning.
+5. Under 900px wide, the sidebar is the drawer as before, with no handle.
+
+## Later — Resuming offline agents
+
+An agent that was mentioned while its runner or host was offline (the laptop
+asleep, the app quit) misses the mention today. Mentions queue on the server,
+but nothing brings the agent back, and nothing tells the person who mentioned
+it what's happening. Wanted:
+- **The session shows it plainly:** "@claude-alice is offline. It'll pick this
+  up when Alice's laptop is back," instead of silence.
+- **When the host reconnects, it picks up the mentions it missed,** in order,
+  within the delivery gate and turn budget. Already-answered ones are skipped,
+  and ones too old to matter are summarised rather than replayed.
+- **Optionally nudge the owner** (the desktop app's notification, later email)
+  that their agent has work waiting.
+- **A way for the owner to resume it by hand from the web** ("Run now on
+  Alice's laptop"), which only works while that computer is online. The
+  web never starts anything on a machine by itself.
+
+It needs a decision on what "missed" means across a session that moved on
+without the agent, so it gets an ADR first.
+
 ## Later — Shared agents on infrastructure the team runs
 
 > Not scheduled. Recorded so that when it comes, it starts from the rule rather

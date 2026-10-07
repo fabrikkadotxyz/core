@@ -1675,11 +1675,6 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 .sidebar .link { color: var(--light-cyan); }
 .side-top { display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px; }
 .side-brand { padding: 6px 8px; }
-.team-switcher {
-  font-weight: 600; width: 100%;
-  background: rgba(224, 251, 252, 0.08); color: var(--side-strong); border-color: var(--side-border);
-}
-.team-switcher option { color: var(--text); background: var(--panel); }
 .side-brand { color: var(--side-strong); }
 .side-section { margin-top: 10px; display: flex; flex-direction: column; gap: 1px; }
 .side-section h2 {
@@ -1765,3 +1760,76 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 /* M35: the agent-tool choice in "Add my agent", and Codex's read caveat (ADR 0032). */
 .tool-choice { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .codex-caveat { align-items: flex-start; padding: 8px 10px; border: 1px solid var(--warn-border); border-radius: 8px; background: var(--warn-soft); }
+
+/* ---- M36: the app's own selector (components/Select.tsx) ---- */
+.select { position: relative; display: inline-flex; min-width: 0; }
+.select-button {
+  display: inline-flex; align-items: center; gap: 8px; width: 100%; min-width: 0;
+  padding: 0.45rem 0.6rem 0.45rem 0.7rem; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+.select-button:hover { border-color: var(--accent); }
+.select-button:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--selected); }
+.select-button[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--selected); }
+.select-button:disabled { opacity: 0.55; cursor: default; }
+.select-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select-chevron { width: 12px; height: 12px; flex: 0 0 auto; color: var(--muted); transition: transform 140ms ease; }
+.select-button[aria-expanded="true"] .select-chevron { transform: rotate(180deg); }
+.select-leading { flex: 0 0 auto; display: inline-flex; }
+
+.select-list {
+  position: absolute; z-index: 60; left: 0; top: calc(100% + 6px); min-width: 100%; max-width: min(360px, 90vw);
+  max-height: 300px; overflow-y: auto; margin: 0; padding: 4px; list-style: none;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(41, 50, 65, 0.18), 0 2px 6px rgba(41, 50, 65, 0.08);
+  outline: none; animation: select-in 110ms ease-out;
+}
+.select-list.up { top: auto; bottom: calc(100% + 6px); }
+@keyframes select-in { from { opacity: 0; transform: translateY(-3px); } }
+.select-list.up { animation-name: select-in-up; }
+@keyframes select-in-up { from { opacity: 0; transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) { .select-list, .select-chevron { animation: none; transition: none; } }
+
+.select-option {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; cursor: pointer;
+  user-select: none;
+}
+.select-option.active { background: var(--hover); }
+.select-option.chosen .select-label { font-weight: 600; }
+.select-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.select-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select-description { font-size: 0.75rem; color: var(--muted); }
+.select-check { width: 12px; height: 12px; flex: 0 0 auto; color: var(--accent); }
+
+/* In the dark sidebar: the team switcher. */
+.select-sidebar { display: flex; width: 100%; }
+.select-sidebar .select-button {
+  background: rgba(224, 251, 252, 0.06); border-color: var(--side-border); color: var(--side-strong); font-weight: 600;
+  padding: 0.5rem 0.6rem;
+}
+.select-sidebar .select-button:hover, .select-sidebar .select-button[aria-expanded="true"] { background: var(--side-hover); border-color: rgba(224, 251, 252, 0.28); box-shadow: none; }
+.select-sidebar .select-button:focus-visible { box-shadow: 0 0 0 2px var(--powder-blue); }
+.select-sidebar .select-chevron { color: var(--side-muted); }
+.team-initial {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px;
+  background: var(--powder-blue); color: var(--jet-black); font-size: 0.75rem; font-weight: 700;
+}
+
+/* ---- M36: the resizable sidebar ---- */
+/* The handle belongs to the shell, not the sidebar: the sidebar scrolls, and a
+   handle inside it would scroll away with its content. */
+.shell { --side-w: 248px; position: relative; }
+.sidebar { width: var(--side-w); flex-basis: var(--side-w); }
+.side-resize {
+  position: absolute; top: 0; left: calc(var(--side-w) - 3px); width: 7px; height: 100%; z-index: 5; cursor: col-resize;
+  background: transparent; border: 0; padding: 0;
+}
+.side-resize::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent;
+  transition: background 120ms ease, width 120ms ease, left 120ms ease;
+}
+.side-resize:hover::after, .side-resize.dragging::after, .side-resize:focus-visible::after { left: 2px; width: 3px; background: var(--powder-blue); }
+.side-resize:focus-visible { outline: none; }
+body.resizing-sidebar { cursor: col-resize; user-select: none; }
+@media (max-width: 900px) { .side-resize { display: none; } }

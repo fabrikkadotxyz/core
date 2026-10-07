@@ -163,7 +163,13 @@ export const connections = {
       encryptionConfigured: boolean;
     }>('/me/connections'),
   /** M18: vendors this instance offers, by category. */
-  catalogue: () => call<{ categories: Record<string, string>; entries: CatalogueItem[]; encryptionConfigured: boolean }>('/connections/catalogue'),
+  catalogue: () =>
+    call<{
+      categories: Record<string, string>;
+      entries: CatalogueItem[];
+      unavailable: { id: string; name: string; category: string; missing: string[] }[];
+      encryptionConfigured: boolean;
+    }>('/connections/catalogue'),
   /** M18: begin signing in to a vendor; the browser then goes to `authorizeUrl`. */
   startOAuth: (entry: string, fields?: Record<string, string>) =>
     call<{ authorizeUrl: string }>('/connections/oauth/start', { method: 'POST', body: { entry, fields } }),

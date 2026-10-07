@@ -15,7 +15,7 @@ type Conn = Awaited<ReturnType<typeof connections.list>>['connections'][number];
 
 export function IntegrationsPage() {
   const [list, setList] = useState<Conn[] | null>(null);
-  const [catalogue, setCatalogue] = useState<{ categories: Record<string, string>; entries: CatalogueItem[] } | null>(null);
+  const [catalogue, setCatalogue] = useState<Awaited<ReturnType<typeof connections.catalogue>> | null>(null);
   const [encryption, setEncryption] = useState(true);
   const [params, setParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +28,7 @@ export function IntegrationsPage() {
         setEncryption(r.encryptionConfigured);
       })
       .catch(() => setList([]));
-    connections.catalogue().then(setCatalogue).catch(() => setCatalogue({ categories: {}, entries: [] }));
+    connections.catalogue().then(setCatalogue).catch(() => setCatalogue({ categories: {}, entries: [], unavailable: [], encryptionConfigured: true }));
   }, []);
   useEffect(load, [load]);
 
@@ -48,8 +48,13 @@ export function IntegrationsPage() {
   };
 
   const byCategory = Object.entries(catalogue?.categories ?? {})
-    .map(([key, name]) => ({ key, name, entries: (catalogue?.entries ?? []).filter((e) => e.category === key) }))
-    .filter((c) => c.entries.length > 0);
+    .map(([key, name]) => ({
+      key,
+      name,
+      entries: (catalogue?.entries ?? []).filter((e) => e.category === key),
+      unavailable: (catalogue?.unavailable ?? []).filter((e) => e.category === key),
+    }))
+    .filter((c) => c.entries.length + c.unavailable.length > 0);
 
   return (
     <div className="page">
@@ -111,7 +116,7 @@ export function IntegrationsPage() {
 
         <h2>Add a connection</h2>
         {byCategory.length === 0 && catalogue && (
-          <p className="muted small">No vendors are set up on this instance yet. Use a custom connection below.</p>
+          <p className="muted small">No vendors are listed on this server yet. Use a custom connection below.</p>
         )}
         {byCategory.map((cat) => (
           <section key={cat.key} className="catalogue-category">
@@ -119,6 +124,19 @@ export function IntegrationsPage() {
             <div className="catalogue-grid">
               {cat.entries.map((e) => (
                 <CatalogueCard key={e.id} entry={e} onConnect={connect} />
+              ))}
+              {cat.unavailable.map((u) => (
+                // Not hidden: say what this server is missing, so whoever runs it knows what to set.
+                <div key={u.id} className="catalogue-card unavailable">
+                  <div className="catalogue-head">
+                    <strong>{u.name}</strong>
+                    <span className="badge">not set up on this server</span>
+                  </div>
+                  <p className="muted small">
+                    Whoever runs this server needs to add {u.missing.map((m) => <code key={m}>{m}</code>).reduce<React.ReactNode[]>((acc, el, i) => (i ? [...acc, ' and ', el] : [el]), [])}{' '}
+                    (see “Connections by vendor” in docs/operations.md).
+                  </p>
+                </div>
               ))}
             </div>
           </section>

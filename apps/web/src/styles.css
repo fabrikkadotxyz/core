@@ -1853,3 +1853,5 @@ body.resizing-sidebar { cursor: col-resize; user-select: none; }
 .custom-connection { margin-top: 18px; }
 .custom-connection > form { margin-top: 10px; }
 .preset-buttons { display: inline-flex; gap: 8px; margin-left: 6px; }
+.catalogue-card.unavailable { background: var(--bg-sunken); border-style: dashed; }
+.catalogue-card.unavailable strong { color: var(--muted); }

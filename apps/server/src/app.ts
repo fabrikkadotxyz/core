@@ -165,7 +165,7 @@ import {
 } from './sessions.ts';
 
 import { createKit, type Advertised, type Extension } from './kit.ts';
-import { offeredEntries, setExtraEntries } from './connections/catalogue/registry.ts';
+import { offeredEntries, setExtraEntries, unconfiguredEntries } from './connections/catalogue/registry.ts';
 import { CATEGORY_NAMES, type CatalogueEntry } from './connections/catalogue/types.ts';
 import { completeFlow, OAuthError, startFlow } from './connections/oauth.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -580,6 +580,8 @@ export function createApp(options: CreateAppOptions = {}) {
           status: have?.status ?? null,
         };
       }),
+      // Vendors this server can't offer yet, so the page can say why instead of hiding them.
+      unavailable: unconfiguredEntries().map(({ entry, missing }) => ({ id: entry.id, name: entry.name, category: entry.category, missing })),
       encryptionConfigured: isEncryptionConfigured(),
     });
   });

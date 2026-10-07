@@ -34,6 +34,13 @@ export function offeredEntries(): CatalogueEntry[] {
   return allEntries().filter(isConfigured);
 }
 
+/** Entries this instance can't offer yet, and the settings each one is missing. */
+export function unconfiguredEntries(): { entry: CatalogueEntry; missing: string[] }[] {
+  return allEntries()
+    .filter((e) => !isConfigured(e))
+    .map((e) => ({ entry: e, missing: [e.auth.client!.idEnv, e.auth.client!.secretEnv].filter((k) => !process.env[k]) }));
+}
+
 export function findEntry(id: string): CatalogueEntry | undefined {
   return allEntries().find((e) => e.id === id);
 }

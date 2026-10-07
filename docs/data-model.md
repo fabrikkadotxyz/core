@@ -58,7 +58,10 @@ messages
 ```
 mcp_servers  (M8, extended)
   entry               text                -- the catalogue entry it came from ("github", "jira"); null for a custom connection
-  auth                text not null default 'token'   -- token | oauth
+  auth                text not null default 'token'   -- token (Bearer) | basic | oauth
+                                          -- basic: a custom connection signing in with a username (an email) and an API token,
+                                          --        sent as `Authorization: Basic base64(user:token)` (Atlassian's personal API tokens);
+                                          --        sealed_credential holds that base64 value
   sealed_refresh_token text               -- AES-256-GCM, like sealed_credential (which holds the access token)
   token_expires_at    timestamptz         -- null: the vendor's token doesn't expire (GitHub OAuth Apps)
   oauth_client_id     uuid -> oauth_clients.id (set null)  -- null for a pre-registered client from the environment

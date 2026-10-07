@@ -548,9 +548,9 @@ export function createApp(options: CreateAppOptions = {}) {
   );
 
   app.post('/api/me/connections', requireUser(db), async (c) => {
-    const body = await c.req.json<{ slug?: string; label?: string; url?: string; credential?: string }>();
+    const body = await c.req.json<{ slug?: string; label?: string; url?: string; credential?: string; username?: string }>();
     if (!body.slug || !body.url) return c.json({ error: 'slug and url are required' }, 400);
-    const saved = await saveConnection(db, { userId: c.get('user').id, slug: body.slug, label: body.label, url: body.url, credential: body.credential });
+    const saved = await saveConnection(db, { userId: c.get('user').id, slug: body.slug, label: body.label, url: body.url, credential: body.credential, username: body.username });
     return saved.ok ? c.json(saved.server, 201) : c.json({ error: saved.error }, 400);
   });
 

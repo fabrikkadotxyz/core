@@ -57,7 +57,10 @@ const handler = createMcpHandler((ctx) => {
 });
 
 app.all('/mcp', async (c) => {
-  const bearer = c.req.header('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const header = c.req.header('authorization') ?? '';
+  // Basic too (Atlassian-style personal API tokens): reported as basic:<user>:<token>.
+  const basic = /^Basic\s+(.+)$/i.exec(header)?.[1];
+  const bearer = basic ? `basic:${Buffer.from(basic, 'base64').toString()}` : /^Bearer\s+(.+)$/i.exec(header)?.[1];
   if (!bearer) return c.json({ error: 'unauthorized' }, 401);
 
   return handler.fetch(c.req.raw, {

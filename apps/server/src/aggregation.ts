@@ -121,11 +121,28 @@ function checkConnection(opts: {
 
 export async function saveConnection(
   db: Database,
-  opts: { userId: string; slug: string; label?: string; url: string; credential?: string },
+  opts: {
+    userId: string;
+    slug: string;
+    label?: string;
+    url: string;
+    credential?: string;
+    /**
+     * Basic sign-in (an email and an API token, e.g. Atlassian's personal API
+     * tokens): the credential is then sent as `Basic base64(username:credential)`.
+     */
+    username?: string;
+  },
 ): Promise<{ ok: true; server: AttachedServer } | { ok: false; error: string }> {
-  const checked = checkConnection(opts);
+  const username = opts.username?.trim();
+  if (username && !opts.credential) return { ok: false, error: 'an API token is required with an email' };
+  if (username?.includes(':')) return { ok: false, error: 'the email cannot contain ":"' };
+  // Basic: seal the encoded pair, so the call only has to prefix it.
+  const credential = username ? Buffer.from(`${username}:${opts.credential}`).toString('base64') : opts.credential;
+  const checked = checkConnection({ ...opts, credential });
   if (!checked.ok) return checked;
   const { slug, sealed } = checked;
+  const auth = username ? 'basic' : 'token';
 
   const [row] = await db
     .insert(mcpServers)
@@ -135,14 +152,15 @@ export async function saveConnection(
       label: opts.label?.trim() || slug,
       url: opts.url,
       sealedCredential: sealed,
+      auth,
     })
     .onConflictDoUpdate({
       target: [mcpServers.ownerId, mcpServers.slug],
       set: {
         label: opts.label?.trim() || slug,
         url: opts.url,
-        // Re-attaching without a credential keeps the existing one.
-        ...(sealed ? { sealedCredential: sealed } : {}),
+        // Re-attaching without a credential keeps the existing one, and its scheme.
+        ...(sealed ? { sealedCredential: sealed, auth } : {}),
       },
     })
     .returning();
@@ -538,9 +556,14 @@ export async function listGrants(
  * in memory between requests, keyed by user, which is a larger thing to get right
  * than it is worth at this scale.
  */
-async function connect(url: string, credential: string | null, extraHeaders: Record<string, string> = {}): Promise<Client> {
+async function connect(
+  url: string,
+  credential: string | null,
+  extraHeaders: Record<string, string> = {},
+  scheme: 'Bearer' | 'Basic' = 'Bearer',
+): Promise<Client> {
   const headers: Record<string, string> = { ...extraHeaders };
-  if (credential) headers.Authorization = `Bearer ${credential}`;
+  if (credential) headers.Authorization = `${scheme} ${credential}`;
   const transport = new StreamableHTTPClientTransport(new URL(url), {
     requestInit: Object.keys(headers).length ? { headers } : undefined,
   });
@@ -553,7 +576,7 @@ async function connect(url: string, credential: string | null, extraHeaders: Rec
 async function credentialFor(
   db: Database,
   server: Pick<UsableServer, 'id' | 'team'>,
-): Promise<{ url: string; credential: string | null; headers: Record<string, string> } | null> {
+): Promise<{ url: string; credential: string | null; headers: Record<string, string>; scheme?: 'Bearer' | 'Basic' } | null> {
   if (server.team) {
     const [row] = await db
       .select({ url: teamMcpServers.url, sealed: teamMcpServers.sealedCredential })
@@ -574,7 +597,7 @@ async function credentialFor(
     const token = await freshAccessToken(db, server.id);
     return token ? { url: row.url, credential: token, headers: row.headers ?? {} } : null;
   }
-  return { url: row.url, credential: openSealed(row.sealed), headers: row.headers ?? {} };
+  return { url: row.url, credential: openSealed(row.sealed), headers: row.headers ?? {}, scheme: row.auth === 'basic' ? 'Basic' : 'Bearer' };
 }
 
 /**
@@ -606,7 +629,7 @@ export async function toolsForParticipant(
 
     let client: Client | undefined;
     try {
-      client = await connect(conn.url, conn.credential, conn.headers);
+      client = await connect(conn.url, conn.credential, conn.headers, conn.scheme);
       const { tools: upstream } = await client.listTools();
 
       for (const t of upstream) {
@@ -643,7 +666,7 @@ export async function discoverTools(
 
   let client: Client | undefined;
   try {
-    client = await connect(conn.url, conn.credential, conn.headers);
+    client = await connect(conn.url, conn.credential, conn.headers, conn.scheme);
     const { tools } = await client.listTools();
     return tools.map((t) => ({ name: t.name, description: t.description }));
   } catch (err) {
@@ -715,7 +738,7 @@ export async function callAggregatedTool(
 
   let client: Client | undefined;
   try {
-    client = await connect(conn.url, conn.credential, conn.headers);
+    client = await connect(conn.url, conn.credential, conn.headers, conn.scheme);
     const result = await client.callTool({ name: upstreamName, arguments: opts.args });
     await record(!result.isError);
     return { ok: true, content: result.content };

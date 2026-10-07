@@ -342,6 +342,27 @@ check(
   'aggregation does not disturb the session’s own tools',
 );
 
+/* ------- 10. a custom connection signing in with an email + API token (Basic) */
+
+const BASIC_TOKEN = `atl-token-${stamp}`;
+const savedBasic = await req('/me/connections', {
+  method: 'POST',
+  body: { slug: 'basicvendor', url: UPSTREAM, credential: BASIC_TOKEN, username: 'me@example.com' },
+  jar: fede,
+});
+check(savedBasic.status === 201 && !JSON.stringify(savedBasic.json).includes(BASIC_TOKEN), 'an email + API token connection saves, and the token is never returned');
+await req(`${base}/integrations`, { method: 'POST', body: { slug: 'basicvendor' }, jar: fede });
+await req(`${base}/integrations/basicvendor/tools/whoami`, { method: 'PUT', body: { allowed: true }, jar: fede });
+const basicCall = await callTool(mcpUrl, fedeAgent.token, 'basicvendor__whoami', {});
+check(
+  basicCall.value?.seen_token === `basic:me@example.com:${BASIC_TOKEN}`,
+  'IT GOES UPSTREAM AS Basic base64(email:token), the way Atlassian takes a personal API token',
+);
+const listedBasic = await req('/me/connections', { jar: fede });
+check(listedBasic.json.connections.find((c) => c.slug === 'basicvendor')?.auth === 'basic', '…and is listed as an email + API token connection');
+check((await req('/me/connections', { method: 'POST', body: { slug: 'basicvendor2', url: UPSTREAM, username: 'x@example.com' }, jar: fede })).status === 400, 'an email without a token is refused');
+await req('/me/connections/basicvendor', { method: 'DELETE', jar: fede });
+
 /* ----------------------------------------------------- cleanup */
 
 await req(base, { method: 'DELETE', jar: fede });

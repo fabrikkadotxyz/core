@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { connections, type CatalogueItem } from '../api.ts';
+import { Select } from '../components/Select.tsx';
 
 type Conn = Awaited<ReturnType<typeof connections.list>>['connections'][number];
 
@@ -90,7 +91,14 @@ export function IntegrationsPage() {
                 {c.status === 'needs_reconnect' && <span className="badge-shared">needs reconnecting</span>}
                 <br />
                 <span className="muted small">
-                  {c.auth === 'oauth' ? 'signed in with the vendor' : c.hasCredential ? 'token stored' : 'no token'} · in{' '}
+                  {c.auth === 'oauth'
+                    ? 'signed in with the vendor'
+                    : c.auth === 'basic'
+                      ? 'email + API token stored'
+                      : c.hasCredential
+                        ? 'token stored'
+                        : 'no token'}{' '}
+                  · in{' '}
                   {c.sessions} session{c.sessions === 1 ? '' : 's'}
                 </span>
               </span>
@@ -196,6 +204,9 @@ function CustomConnection({ onSaved }: { onSaved: () => void }) {
   const [slug, setSlug] = useState('');
   const [url, setUrl] = useState('');
   const [token, setToken] = useState('');
+  // Basic: some vendors take a personal API token only with your email (Atlassian's).
+  const [scheme, setScheme] = useState<'bearer' | 'basic'>('bearer');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   return (
     <form
@@ -204,10 +215,16 @@ function CustomConnection({ onSaved }: { onSaved: () => void }) {
         e.preventDefault();
         setError(null);
         try {
-          await connections.save({ slug: slug.trim(), url: url.trim(), credential: token || undefined });
+          await connections.save({
+            slug: slug.trim(),
+            url: url.trim(),
+            credential: token || undefined,
+            username: scheme === 'basic' ? email.trim() : undefined,
+          });
           setSlug('');
           setUrl('');
           setToken('');
+          setEmail('');
           onSaved();
         } catch (err) {
           setError((err as Error).message);
@@ -216,15 +233,27 @@ function CustomConnection({ onSaved }: { onSaved: () => void }) {
     >
       <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="name, e.g. sentry" aria-label="Connection name" />
       <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/mcp" aria-label="MCP server URL" />
+      <Select
+        label="Sign in with"
+        value={scheme}
+        options={[
+          { value: 'bearer', label: 'A token', description: 'Sent as a Bearer token: GitHub, most servers' },
+          { value: 'basic', label: 'Email + API token', description: "Sent as Basic: Atlassian's personal API tokens" },
+        ]}
+        onChange={(v) => setScheme(v)}
+      />
+      {scheme === 'basic' && (
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your email at that vendor" type="email" autoComplete="off" aria-label="Email" />
+      )}
       <input
         value={token}
         onChange={(e) => setToken(e.target.value)}
-        placeholder="token (yours; optional)"
+        placeholder={scheme === 'basic' ? 'API token' : 'token (yours; optional)'}
         type="password"
         autoComplete="off"
-        aria-label="Token"
+        aria-label={scheme === 'basic' ? 'API token' : 'Token'}
       />
-      <button type="submit" disabled={!slug.trim() || !url.trim()}>
+      <button type="submit" disabled={!slug.trim() || !url.trim() || (scheme === 'basic' && (!email.trim() || !token))}>
         Save connection
       </button>
       {error && <p className="error">{error}</p>}

@@ -226,6 +226,24 @@ only once the instance has a GitHub OAuth App:
 A GitHub OAuth App has one callback URL, so each instance, hosted or
 self-hosted, registers its own.
 
+### Custom connections that sign in with an email and an API token
+
+Some vendors take a personal API token only as HTTP Basic, with your email as the
+username. *Custom connection → Sign in with: Email + API token* sends
+`Authorization: Basic base64(email:token)` on every call, built from what you
+typed and stored sealed, like any credential.
+
+**Atlassian (Jira, Confluence) with a personal API token:**
+1. An org admin switches API tokens on: Atlassian Administration → **Rovo** →
+   **Rovo MCP server** → *Authentication* → **API token**. It's off by default.
+2. Create a token at id.atlassian.com → Security → API tokens.
+3. Custom connection: URL `https://mcp.atlassian.com/v2/mcp`, **Email + API
+   token**, your Atlassian email and the token.
+
+Some Atlassian tools aren't available with token sign-in, and the tools must be
+told which site (`cloudId`) to use. The catalogue's Jira and Confluence
+entries, which sign in with OAuth, need neither the admin switch nor a token.
+
 ### The encryption key
 
 Credentials are sealed with AES-256-GCM under `FABRIKKA_ENCRYPTION_KEY`:

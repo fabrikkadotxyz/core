@@ -63,3 +63,4 @@ What we rejected and why.
 | [0028](0028-team-credentials-are-shared-marked-and-lose-to-your-own.md) | Team credentials: shared, marked as shared, and second to your own | Accepted |
 | [0029](0029-the-core-is-a-library-a-deployment-extends-it.md) | The core is a library; a deployment extends it | Accepted |
 | [0030](0030-every-instance-serves-its-own-client-installer.md) | Every instance serves its own client, with a one-line installer | Accepted |
+| [0031](0031-the-desktop-app-runs-the-local-host.md) | The desktop app runs the local host; signing waits for launch | Proposed |

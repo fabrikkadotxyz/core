@@ -1357,6 +1357,69 @@ itself enforces
 7. The installer never runs `sudo`, and never installs Node, Claude Code or
    Codex.
 
+## M34 — The desktop app runs your agents
+
+> M9's app is a thin shell; your agents still need a terminal. [ADR 0031](decisions/0031-the-desktop-app-runs-the-local-host.md):
+> the app runs the local host itself, with its own bundled Node, a tray, and a
+> Folders window that reaches the host with no network port. Unsigned until
+> launch; the instance's installer can put it in place.
+
+- **Host, `--control stdio`:** no HTTP page, no listening port. JSON lines on
+  stdin and stdout: requests `{ id, op, … }` → replies `{ id, ok, … }`, plus the
+  pushed event `{ event: 'pair', url, code }`. Every log line goes to stderr, so
+  stdout carries only the protocol. The operations are the local page's: `state`,
+  `grant`, `policy`, `remove`, `stop`.
+- **One host per machine:** a lock file in `~/.fabrikka`. A second host, from
+  the app or a terminal, refuses to start and says which process holds it.
+- **The app:**
+  - bundles an official Node build (pinned version, checksum-verified when
+    fetched) as a Tauri sidecar, and `fabrikka.mjs` as a resource;
+  - starts the host for the saved server, restarts it if it dies, and stops it
+    on quit;
+  - is a single instance: opening it again focuses the running one.
+- **Tray:** status (connected, running), plus **Open Fabrikka**, **Folders…**,
+  **Stop all runs**, **Start at login** and **Quit**.
+- **Folders window** (bundled, local): the grants with their policy, and **Add
+  folder**. Rust opens the native picker; no page ever supplies a path.
+- **Pairing:** the host's `pair` event opens the pairing page in the main
+  window, where you're signed in.
+- **Capabilities:**
+  - the host commands are allowed only to the local `folders` window;
+  - no capability names a remote URL;
+  - the main window, which shows the remote instance, can call no host
+    command.
+- **Installer, `--app`** (macOS on Apple Silicon):
+  - downloads `Fabrikka-macos-arm64.zip` and its `.sha256` from the instance,
+    and refuses a mismatch;
+  - unpacks into `~/Applications` with `ditto`;
+  - writes the instance's address into the app's settings, and opens it;
+  - needs no Node and touches no PATH.
+
+  The instance serves the zip when one has been built (`pnpm --filter
+  @fabrikka/desktop package`).
+- **Start at login** is on by default, chosen on the first-run page, and
+  toggled in the tray.
+
+**Test.**
+1. `curl -fsSL <instance>/install.sh | bash -s -- --app`: the app is in
+   `~/Applications`, opens without a Gatekeeper prompt, and goes straight to
+   sign-in for that instance.
+2. Sign in. The pairing page opens in the app: **Connect this computer**, **1
+   click**. The tray shows "connected".
+3. Tray → **Folders…** → **Add folder** → pick a folder → **Choose**: **3
+   clicks**. Then **Setup → Add my agent → Add** in a session (3 clicks), and a
+   mention gets its answer from that folder.
+4. No process from the app listens on a TCP port for the host's control
+   (`lsof`). The terminal host started meanwhile refuses: the lock is held.
+5. **Quit** stops the host and its runs. Reopening starts it again, already
+   paired. With **Start at login** on, it's registered as a login item.
+6. Scripted: every stdout line of a `--control stdio` host is JSON, and its
+   operations work, including the refusals (home folder, a missing path). The
+   capability files give host commands to the `folders` window only, and name
+   no remote URL. The app bundle's `fabrikka.mjs` is byte-identical to the one
+   the instance serves. `--app` refuses a mismatched checksum and installs
+   nothing.
+
 ## Later — Shared agents on infrastructure the team runs
 
 > Not scheduled. Recorded so that when it comes, it starts from the rule rather

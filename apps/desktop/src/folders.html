@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Fabrikka — folders</title>
+    <!--
+      M34 (ADR 0031): the host's controls, inside the app. A bundled page: the only
+      window allowed the host commands. It never sends a path — "Add folder" asks
+      Rust, which opens the native folder picker.
+    -->
+    <style>
+      :root {
+        --bg: #f7fcfd; --panel: #ffffff; --border: #c9dde8; --text: #293241; --muted: #5d6d82;
+        --accent: #3d5a80; --tint: #e0fbfc; --peach: #ee6c4d; --danger: #c4492b; --ok: #2e7d5b;
+        color-scheme: light;
+        font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #1d2430; --panel: #252e3c; --border: #36445a; --text: #e3edf3; --muted: #9aabbd; --accent: #98c1d9; --tint: rgba(152,193,217,.14); color-scheme: dark; }
+      }
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body { margin: 0; background: var(--bg); color: var(--text); padding: 20px; }
+      main { max-width: 620px; margin: 0 auto; display: grid; gap: 18px; }
+      header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      h1 { font-size: 1.1rem; margin: 0; }
+      h2 { font-size: 0.95rem; margin: 0 0 8px; }
+      .muted { color: var(--muted); font-size: 13px; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+      .dot.on { background: var(--ok); }
+      .spacer { flex: 1; }
+      .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .list { display: grid; gap: 8px; }
+      .grow { flex: 1; min-width: 0; }
+      .path { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+      .warn { flex-basis: 100%; color: var(--danger); font-size: 13px; }
+      button, select { font: inherit; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 6px 10px; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+      button.stop { background: var(--peach); border-color: var(--peach); color: #fff; }
+      button.link { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; }
+      button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .tag { font-size: 12px; padding: 1px 8px; border-radius: 20px; background: var(--tint); color: var(--accent); }
+      .tag.run { background: #fde8e2; color: var(--danger); }
+      .error { color: var(--danger); }
+      .add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .update { border-color: var(--accent); background: var(--tint); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="dot" id="dot"></span>
+        <h1>Folders your agents may work in</h1>
+        <span class="spacer"></span>
+        <button class="stop" id="stop">Stop all runs</button>
+      </header>
+      <p class="muted" id="who">Starting…</p>
+      <div class="card update" id="update" hidden></div>
+      <p class="error" id="error" hidden></p>
+
+      <section>
+        <div class="list" id="grants"></div>
+        <div class="add" style="margin-top: 10px">
+          <button class="primary" id="add">Add folder…</button>
+          <label class="muted">as
+            <select id="newPolicy">
+              <option value="edit">Edit in folder</option>
+              <option value="read">Read only</option>
+              <option value="full">Full</option>
+            </select>
+          </label>
+        </div>
+        <p class="muted" id="policyHelp">Edit in folder: read and edit files here only — no shell, no web.</p>
+      </section>
+
+      <section>
+        <h2>Agents on this computer</h2>
+        <div class="list" id="agents"></div>
+      </section>
+    </main>
+
+    <script>
+      const { invoke } = window.__TAURI__.core;
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+      const POLICY = { edit: 'Edit in folder', read: 'Read only', full: 'Full' };
+      const HELP = {
+        edit: 'Edit in folder: read and edit files here only — no shell, no web.',
+        read: 'Read only: read files here, change nothing.',
+        full: 'Full: agents can run any command on this computer from this folder.',
+      };
+
+      function showError(message) {
+        $('error').textContent = message || '';
+        $('error').hidden = !message;
+      }
+
+      function render(s) {
+        $('dot').className = 'dot' + (s.connected ? ' on' : '');
+        $('who').textContent = s.deviceName + ' · ' + (s.connected ? 'connected to ' + s.server : 'connecting…') +
+          (s.providers.length ? ' · ' + s.providers.join(', ') : ' · no agent tools found — install Claude Code or Codex');
+        $('update').hidden = !s.updateAvailable;
+        if (s.updateAvailable) $('update').innerHTML = '<strong>Update available</strong> <span class="muted">' + esc(s.version) + ' → ' + esc(s.latestVersion) + '. Install the new app from your Fabrikka site.</span>';
+        $('grants').innerHTML = s.grants.length
+          ? s.grants.map((g) =>
+              '<div class="card"><div class="grow"><strong>' + esc(g.label) + '</strong><div class="path">' + esc(g.path) + '</div></div>' +
+              '<select data-policy="' + esc(g.id) + '">' + Object.keys(POLICY).map((p) => '<option value="' + p + '"' + (p === g.policy ? ' selected' : '') + '>' + POLICY[p] + '</option>').join('') + '</select>' +
+              '<button class="link" data-remove="' + esc(g.id) + '">Remove</button>' +
+              (g.policy === 'full' ? '<div class="warn">Full: agents can run any command on this computer from this folder.</div>' : '') +
+              '</div>').join('')
+          : '<p class="muted">No folders yet. Add one, then use “Add my agent” in a session.</p>';
+        $('agents').innerHTML = s.agents.length
+          ? s.agents.map((a) =>
+              '<div class="card"><div class="grow"><strong>@' + esc(a.agent) + '</strong> <span class="muted">in ' + esc(a.session) + '</span></div>' +
+              '<span class="tag">' + esc(a.folder ?? 'folder removed') + '</span>' +
+              (a.running ? '<span class="tag run">running</span>' : a.active ? '<span class="tag">ready</span>' : '<span class="tag">not running</span>') +
+              '</div>').join('')
+          : '<p class="muted">None yet. In a session: Setup → Add my agent.</p>';
+      }
+
+      async function refresh() {
+        try {
+          render(await invoke('host_state'));
+          showError('');
+        } catch (e) {
+          showError(String(e));
+        }
+      }
+
+      $('newPolicy').addEventListener('change', (e) => ($('policyHelp').textContent = HELP[e.target.value]));
+
+      $('add').addEventListener('click', async () => {
+        const policy = $('newPolicy').value;
+        if (policy === 'full') {
+          // No confirm() in this webview flow: say it plainly before the picker opens.
+          showError('Full lets agents run any command from that folder. Choose the folder only if that is what you want.');
+        }
+        try {
+          await invoke('host_add_folder', { policy });
+          await refresh();
+        } catch (e) {
+          showError(String(e));
+        }
+      });
+
+      document.addEventListener('change', async (e) => {
+        const id = e.target.dataset && e.target.dataset.policy;
+        if (!id) return;
+        try {
+          await invoke('host_policy', { grantId: id, policy: e.target.value });
+        } catch (err) {
+          showError(String(err));
+        }
+        refresh();
+      });
+
+      document.addEventListener('click', async (e) => {
+        const id = e.target.dataset && e.target.dataset.remove;
+        if (!id) return;
+        try {
+          await invoke('host_remove', { grantId: id });
+        } catch (err) {
+          showError(String(err));
+        }
+        refresh();
+      });
+
+      $('stop').addEventListener('click', async () => {
+        try {
+          await invoke('host_stop');
+        } catch (e) {
+          showError(String(e));
+        }
+        refresh();
+      });
+
+      refresh();
+      setInterval(refresh, 3000);
+    </script>
+  </body>
+</html>

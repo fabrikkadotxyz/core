@@ -20,7 +20,16 @@ export function openBrowser(url: string): void {
   }
 }
 
-export async function pair(server: string, deviceName: string, log: (...a: unknown[]) => void): Promise<string> {
+/**
+ * `onUrl` replaces opening a browser: the desktop app (M34) opens the pairing
+ * page in its own window, where the person is already signed in.
+ */
+export async function pair(
+  server: string,
+  deviceName: string,
+  log: (...a: unknown[]) => void,
+  onUrl: (url: string, code: string) => void = (url) => openBrowser(url),
+): Promise<string> {
   const res = await fetch(`${server}/api/devices/pair`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -34,7 +43,7 @@ export async function pair(server: string, deviceName: string, log: (...a: unkno
   log(`  Connect this computer to Fabrikka: confirm the code ${userCode}`);
   log(`  ${url}`);
   log('');
-  openBrowser(url);
+  onUrl(url, userCode);
 
   for (;;) {
     await sleep(2000);

@@ -279,9 +279,23 @@ key.
 
 ## Desktop app
 
-A thin Tauri shell around the same web app. It adds no product surface — the
-things desktop uniquely enables (local MCP servers, local files, local-only
-sessions) are Phase II.
+A Tauri app around the same web app that, since M34, also **runs your agents**:
+it carries its own Node and the instance's client, and runs the local host for
+you, with a tray icon and a **Folders** window ([ADR 0031](decisions/0031-the-desktop-app-runs-the-local-host.md)).
+
+```bash
+pnpm --filter @fabrikka/desktop node:fetch   # once: the pinned official Node build, checksum-verified
+pnpm --filter @fabrikka/desktop package      # builds the app and the zip the instance serves
+```
+
+Install it on a Mac from the instance: `curl -fsSL https://<instance>/install.sh
+| bash -s -- --app`. If the tray says "the bundled client is missing: unknown
+path", the app was started from a path that runs through a symlink (as macOS's
+`/var` does): Tauri won't trust its own location there. Install into
+`~/Applications`, which the installer does. It's unsigned until launch: a copy downloaded with a browser
+needs System Settings → Privacy & Security → **Open Anyway**. The installer
+route needs nothing like that, because `curl` doesn't mark files as downloaded.
+
 
 ```bash
 pnpm --filter @fabrikka/web build     # the server serves this

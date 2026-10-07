@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tauri dev",
-    "build": "tauri build",
+    "dev": "node scripts/fetch-node.mjs && node scripts/copy-client.mjs && tauri dev",
+    "build": "node scripts/fetch-node.mjs && node scripts/copy-client.mjs && tauri build",
+    "package": "node scripts/package.mjs",
+    "node:fetch": "node scripts/fetch-node.mjs",
     "tauri": "tauri",
     "test": "cd src-tauri && cargo test"
   },

@@ -11,7 +11,8 @@
     "security": {
       "csp": null,
       "capabilities": [
-        "default"
+        "default",
+        "folders"
       ]
     },
     "withGlobalTauri": true
@@ -29,6 +30,16 @@
       "icons/icon.png"
     ],
     "shortDescription": "A private session layer for humans and AI agents",
-    "longDescription": "Fabrikka is a private-by-default session layer where humans and AI agents work on the same problem."
+    "longDescription": "Fabrikka is a private-by-default session layer where humans and AI agents work on the same problem.",
+    "externalBin": [
+      "binaries/node"
+    ],
+    "resources": {
+      "resources/fabrikka.mjs": "fabrikka.mjs"
+    },
+    "macOS": {
+      "signingIdentity": "-",
+      "entitlements": "Entitlements.plist"
+    }
   }
 }

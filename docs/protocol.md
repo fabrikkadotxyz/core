@@ -813,6 +813,24 @@ they do for `fabrikka watch`. What the host adds is local: it resolves `grantId`
 against its own config to a folder and a policy, and refuses to run if the grant is
 gone, the folder is missing, or the provider has no verified policy.
 
+### Controlling a host over stdio (M34)
+
+Between the desktop app and the host it runs ([ADR 0031](decisions/0031-the-desktop-app-runs-the-local-host.md)): not a
+network protocol. `fabrikka host --control stdio` opens no control page and no
+port. It reads one JSON object per line on stdin and writes one per line on
+stdout. Logs go to stderr only.
+
+| Request (stdin) | Reply (stdout) |
+| --- | --- |
+| `{ id, op: 'state' }` | `{ id, ok: true, state }`: the same object the local page shows |
+| `{ id, op: 'grant', path, policy, label? }` | `{ id, ok: true, grant }`, or `{ id, ok: false, error }` for a refused path (home, root, an ancestor of home, missing) |
+| `{ id, op: 'policy', grantId, policy }` | `{ id, ok: true }` |
+| `{ id, op: 'remove', grantId }` | `{ id, ok: true }` |
+| `{ id, op: 'stop' }` | `{ id, ok: true }`: every run stopped |
+
+Pushed: `{ event: 'pair', url, code }` when the host needs pairing. The app opens
+`url` where the user is signed in.
+
 ## Extending the server (M32)
 
 For deployments, not agents: how a program built on the core adds what it needs,

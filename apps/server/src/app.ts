@@ -167,7 +167,7 @@ import {
 import { createKit, type Advertised, type Extension } from './kit.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { mailerFromEnv } from './mail.ts';
-import { clientRelease, installCommand, installScript, manifest } from './client.ts';
+import { APP_ZIP_NAME, appRelease, clientRelease, installCommand, installScript, manifest } from './client.ts';
 import { completePasswordReset, requestPasswordReset } from './password-reset.ts';
 import { rateLimit } from './rate-limit.ts';
 
@@ -201,7 +201,42 @@ export function createApp(options: CreateAppOptions = {}) {
   const { db } = createClient();
 
   const app = new Hono<AuthEnv>();
-  const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
+  const { injectWebSocket, upgradeWebSocket: rawUpgradeWebSocket } = createNodeWebSocket({ app });
+
+  /**
+   * Every socket handler, guarded. They're async and nothing awaits them: one
+   * that throws would be an unhandled rejection, which ends the process — so a
+   * single bad frame from any paired host or bridge could take the server down
+   * (found by M34's acceptance check). A failure is logged; the server stays up.
+   */
+  type SocketEvents = Parameters<Parameters<typeof rawUpgradeWebSocket>[1] extends infer E ? (c: Context, events: E) => void : never>[1];
+  const upgradeWebSocket = (createEvents: (c: Context) => SocketEvents | Promise<SocketEvents>) =>
+    rawUpgradeWebSocket((c: Context) => {
+      // Synchronous when the setup is: handing the handlers back even a tick
+      // late lets the socket's first frames go unheard (a host's first "grants").
+      const created = createEvents(c);
+      return created instanceof Promise ? created.then((e) => guard(c, e)) : guard(c, created);
+    });
+
+  function guard(c: Context, events: SocketEvents): SocketEvents {
+    const wrapped: Record<string, unknown> = {};
+    for (const [name, handler] of Object.entries(events)) {
+      wrapped[name] =
+        typeof handler === 'function'
+          ? (...args: unknown[]) => {
+              const fail = (err: unknown) => console.error(`[socket] ${c.req.path} ${name} failed:`, (err as Error)?.message ?? err);
+              try {
+                const result = (handler as (...a: unknown[]) => unknown)(...args);
+                if (result instanceof Promise) return result.catch(fail);
+                return result;
+              } catch (err) {
+                fail(err);
+              }
+            }
+          : handler;
+    }
+    return wrapped as typeof events;
+  }
 
   /**
    * The web dev server proxies /api to this origin, so browser requests are
@@ -238,7 +273,21 @@ export function createApp(options: CreateAppOptions = {}) {
     const release = await clientRelease();
     if (!release) return c.notFound();
     c.header('cache-control', 'no-store');
-    return c.json(manifest(release, PUBLIC_URL));
+    return c.json(manifest(release, PUBLIC_URL, await appRelease()));
+  });
+  // M34: the desktop app's zip and its checksum, for `install.sh --app`.
+  app.get(`/downloads/${APP_ZIP_NAME}`, async (c) => {
+    const zip = await appRelease();
+    if (!zip) return c.notFound();
+    c.header('content-type', 'application/zip');
+    c.header('cache-control', 'no-store');
+    return c.body(new Uint8Array(zip.bytes));
+  });
+  app.get(`/downloads/${APP_ZIP_NAME}.sha256`, async (c) => {
+    const zip = await appRelease();
+    if (!zip) return c.notFound();
+    c.header('cache-control', 'no-store');
+    return c.text(`${zip.sha256}  ${APP_ZIP_NAME}\n`);
   });
   app.get('/downloads/fabrikka.mjs', async (c) => {
     const release = await clientRelease();

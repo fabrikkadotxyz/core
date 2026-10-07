@@ -13,9 +13,8 @@
 import { randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { POLICIES, type Policy } from '../spawn.ts';
-import { checkGrantPath, defaultLabel, newGrantId } from './grants.ts';
 import type { Host } from './host.ts';
+import { addGrant, removeGrant, updateGrant } from './ops.ts';
 
 const PREFERRED_PORT = Number(process.env.FABRIKKA_HOST_PORT ?? 17621);
 
@@ -57,32 +56,19 @@ export async function startControl(host: Host, say: (...a: unknown[]) => void): 
     if (req.method === 'GET' && url.pathname === '/api/state') return send(res, 200, host.state());
 
     if (req.method === 'POST' && url.pathname === '/api/grants') {
-      const body = (await json(req)) as { path?: string; label?: string; policy?: Policy };
-      const checked = checkGrantPath(body.path ?? '');
-      if (!checked.ok) return send(res, 400, { error: checked.error });
-      if (host.cfg.grants.some((g) => g.path === checked.path)) return send(res, 400, { error: 'that folder is already granted' });
-      const policy = POLICIES.includes(body.policy as Policy) ? (body.policy as Policy) : 'edit';
-      host.cfg.grants.push({ id: newGrantId(), label: (body.label ?? '').trim().slice(0, 80) || defaultLabel(checked.path), path: checked.path, policy });
-      host.grantsChanged();
-      return send(res, 201, host.state());
+      const added = addGrant(host, (await json(req)) as { path?: string; label?: string; policy?: unknown });
+      return added.ok ? send(res, 201, host.state()) : send(res, 400, { error: added.error });
     }
 
     const m = /^\/api\/grants\/([A-Za-z0-9_-]+)$/.exec(url.pathname);
     if (m) {
-      const grant = host.cfg.grants.find((g) => g.id === m[1]);
-      if (!grant) return send(res, 404, { error: 'no such grant' });
-      if (req.method === 'DELETE') {
-        host.cfg.grants = host.cfg.grants.filter((g) => g !== grant);
-        host.grantsChanged();
-        return send(res, 200, host.state());
-      }
-      if (req.method === 'POST') {
-        const body = (await json(req)) as { label?: string; policy?: Policy };
-        if (body.policy && POLICIES.includes(body.policy)) grant.policy = body.policy;
-        if (body.label?.trim()) grant.label = body.label.trim().slice(0, 80);
-        host.grantsChanged();
-        return send(res, 200, host.state());
-      }
+      const done =
+        req.method === 'DELETE'
+          ? removeGrant(host, m[1]!)
+          : req.method === 'POST'
+            ? updateGrant(host, m[1]!, (await json(req)) as { label?: string; policy?: unknown })
+            : null;
+      if (done) return done.ok ? send(res, 200, host.state()) : send(res, done.error === 'no such grant' ? 404 : 400, { error: done.error });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/stop') {

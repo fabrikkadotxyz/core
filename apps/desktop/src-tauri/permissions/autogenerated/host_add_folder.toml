@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-host-add-folder"
+description = "Enables the host_add_folder command without any pre-configured scope."
+commands.allow = ["host_add_folder"]
+
+[[permission]]
+identifier = "deny-host-add-folder"
+description = "Denies the host_add_folder command without any pre-configured scope."
+commands.deny = ["host_add_folder"]

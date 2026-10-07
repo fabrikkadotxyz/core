@@ -118,7 +118,9 @@ try {
   check((await req('/devices/pair/confirm', { method: 'POST', body: { code }, jar: me })).status === 400, 'a code works once');
 
   let devs = (await req('/devices', { jar: me })).json;
-  const dev = devs.find((d) => d.name === cfg.deviceName);
+  // By name, newest first: an earlier run (or a person's own machine) may have
+  // left a device with the same name on this account.
+  const dev = devs.filter((d) => d.name === cfg.deviceName).sort((a, b) => String(b.lastSeenAt ?? '').localeCompare(String(a.lastSeenAt ?? '')))[0];
   check(!!dev, 'Your devices lists the computer');
   for (let i = 0; i < 50 && !(await req('/devices', { jar: me })).json.find((d) => d.id === dev.id)?.online; i++) await sleep(100);
   check((await req('/devices', { jar: me })).json.find((d) => d.id === dev.id)?.online === true, '…online');

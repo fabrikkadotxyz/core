@@ -14,6 +14,9 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const DIST = resolve(import.meta.dirname, '../../../packages/bridge/dist');
+/** M34: the desktop app's zip, when `pnpm --filter @fabrikka/desktop package` has built one. */
+export const APP_ZIP_NAME = 'Fabrikka-macos-arm64.zip';
+const APP_ZIP = resolve(import.meta.dirname, '../../../apps/desktop/dist-app', APP_ZIP_NAME);
 const FILE = resolve(DIST, 'cli.js');
 const NODE = '>=22';
 
@@ -40,7 +43,20 @@ export async function clientRelease(): Promise<ClientRelease | null> {
   return release;
 }
 
-export function manifest(release: ClientRelease, publicUrl: string) {
+let cachedApp: { mtimeMs: number; release: Omit<ClientRelease, 'version'> } | null = null;
+
+/** The desktop app this instance serves (macOS, Apple Silicon), or null. */
+export async function appRelease(): Promise<Omit<ClientRelease, 'version'> | null> {
+  const info = await stat(APP_ZIP).catch(() => null);
+  if (!info) return null;
+  if (cachedApp?.mtimeMs === info.mtimeMs) return cachedApp.release;
+  const bytes = await readFile(APP_ZIP);
+  const release = { sha256: createHash('sha256').update(bytes).digest('hex'), size: bytes.length, bytes };
+  cachedApp = { mtimeMs: info.mtimeMs, release };
+  return release;
+}
+
+export function manifest(release: ClientRelease, publicUrl: string, app?: Omit<ClientRelease, 'version'> | null) {
   return {
     version: release.version,
     file: 'fabrikka.mjs',
@@ -48,6 +64,8 @@ export function manifest(release: ClientRelease, publicUrl: string) {
     sha256: release.sha256,
     size: release.size,
     node: NODE,
+    // M34: the desktop app, per platform. Absent when this instance has none.
+    apps: app ? [{ platform: 'darwin-arm64', url: `${publicUrl}/downloads/${APP_ZIP_NAME}`, sha256: app.sha256, size: app.size }] : [],
   };
 }
 
@@ -65,7 +83,8 @@ export function installScript(publicUrl: string): string {
 # Fabrikka client installer for ${publicUrl}
 # (ADR 0030). It installs only Fabrikka's own client, into your home folder,
 # without sudo: never Node, never an agent runtime. Options, after "| bash -s --":
-#   --no-connect       install only; run \`fabrikka host\` later
+#   --app              install the desktop app instead (macOS, Apple Silicon); no Node needed
+#   --no-connect       install only; don't start the host (or open the app)
 #   --no-modify-path   don't add ~/.local/bin to your shell's startup file
 set -eu
 
@@ -77,8 +96,10 @@ die() { printf 'fabrikka: %s\\n' "$*" >&2; exit 1; }
 main() {
   connect=1
   modify_path=1
+  app=0
   for arg in "$@"; do
     case "$arg" in
+      --app) app=1 ;;
       --no-connect) connect=0 ;;
       --no-modify-path) modify_path=0 ;;
       *) die "unknown option: $arg" ;;
@@ -91,6 +112,11 @@ main() {
     http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*|http://\\[::1\\]|http://\\[::1\\]:*) ;;
     *) die "refusing to install from $FABRIKKA_SERVER: it isn't https" ;;
   esac
+
+  if [ "$app" = 1 ]; then
+    install_app
+    return
+  fi
 
   command -v node >/dev/null 2>&1 || die "Fabrikka needs Node.js 22 or newer, and none was found. Install it from https://nodejs.org or your package manager, then run this again."
   major=$(node -p 'process.versions.node.split(".")[0]')
@@ -150,6 +176,41 @@ main() {
     exec "$bin/fabrikka" host --server "$FABRIKKA_SERVER"
   fi
   say "done. Connect this computer with: fabrikka host"
+}
+
+# The desktop app (M34, ADR 0031): it carries its own Node, so nothing here needs
+# one — the checksum is the system's shasum, the unpacking is ditto.
+install_app() {
+  [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" = arm64 ] || die "the desktop app is for macOS on Apple Silicon for now. Run this again without --app to install the command-line client."
+  for tool in curl shasum ditto; do command -v "$tool" >/dev/null 2>&1 || die "$tool is needed"; done
+
+  zip_url="$FABRIKKA_SERVER/downloads/${APP_ZIP_NAME}"
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  curl -fsSL "$zip_url.sha256" -o "$tmp/app.sha256" || die "this server has no desktop app to install"
+  expected=$(cut -d' ' -f1 < "$tmp/app.sha256")
+  say "downloading the desktop app from $FABRIKKA_SERVER"
+  curl -fsSL "$zip_url" -o "$tmp/app.zip" || die "the download failed"
+  actual=$(shasum -a 256 "$tmp/app.zip" | cut -d' ' -f1)
+  [ "$actual" = "$expected" ] || die "the download doesn't match its checksum, so nothing was installed"
+
+  apps="$HOME/Applications"
+  mkdir -p "$apps"
+  rm -rf "$apps/Fabrikka.app"
+  ditto -x -k "$tmp/app.zip" "$apps"
+  say "installed Fabrikka.app in $apps"
+
+  # Point the app at this instance, so its first launch goes straight to sign-in.
+  settings="$HOME/Library/Application Support/dev.fabrikka.app"
+  mkdir -p "$settings"
+  printf '%s' "$FABRIKKA_SERVER" > "$settings/server-url"
+
+  if [ "$connect" = 1 ]; then
+    say "opening Fabrikka"
+    open "$apps/Fabrikka.app"
+  else
+    say "done. Open Fabrikka from $apps"
+  fi
 }
 
 # Called on the last line, so a download cut short can't run half an installer.

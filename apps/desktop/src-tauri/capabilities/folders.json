@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "folders",
+  "description": "The bundled Folders window, and only it, controls the host: its state, its folders and their policies, stopping runs (M34, ADR 0031). Folder paths come from the native picker in Rust, never from this page.",
+  "windows": ["folders"],
+  "permissions": [
+    "core:default",
+    "allow-host-state",
+    "allow-host-add-folder",
+    "allow-host-policy",
+    "allow-host-remove",
+    "allow-host-stop"
+  ]
+}

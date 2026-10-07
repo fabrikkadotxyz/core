@@ -15,6 +15,8 @@ import { policyVerified } from '../spawn.ts';
 import { startRunner, type RunnerHandle } from '../watch.ts';
 import { HOST_HOME, loadHostConfig, saveHostConfig, type HostConfig } from './config.ts';
 import { startControl } from './control.ts';
+import { acquireHostLock } from './lock.ts';
+import { send, startStdioControl } from './stdio.ts';
 import { openBrowser, pair } from './pair.ts';
 import { VERSION } from '../version.ts';
 
@@ -243,18 +245,39 @@ export async function runHost(argv: string[], say: (...a: unknown[]) => void): P
     const i = argv.indexOf(`--${name}`);
     return i >= 0 ? argv[i + 1] : undefined;
   };
+  const stdio = flag('control') === 'stdio';
+  if (flag('control') && !stdio) throw new Error('--control takes "stdio" (M34)');
+
+  // One host per machine (M34): the app and a terminal host share this config.
+  const lock = acquireHostLock();
+  if (!lock.ok) {
+    say(`another Fabrikka host is already running on this computer (process ${lock.holder}) — the desktop app, or another terminal.`);
+    process.exit(3);
+  }
+
+  // Under the app, the channel opens before pairing: the app going away ends us
+  // at once, even mid-pairing (M34: an app quit during pairing once left its host
+  // running), and the tray's questions get an answer while we wait.
+  const channel = stdio ? startStdioControl() : null;
+
   const cfg = loadHostConfig(flag('server'));
   if (!cfg.deviceToken) {
-    cfg.deviceToken = await pair(cfg.server, cfg.deviceName, say);
+    // Under the app, the pairing page opens in its window; in a terminal, in the browser.
+    cfg.deviceToken = await pair(cfg.server, cfg.deviceName, say, stdio ? (url, code) => send({ event: 'pair', url, code }) : undefined);
     saveHostConfig(cfg);
   }
   saveHostConfig(cfg);
 
   const host = new Host(cfg, say);
   host.connect();
-  const control = await startControl(host, say);
-  say(`folders and runs: ${control.url}`);
-  if (cfg.grants.length === 0 || argv.includes('--open')) openBrowser(control.url);
+  if (channel) {
+    // The app's Folders window is the control surface: no page, no port (ADR 0031).
+    channel.attach(host);
+  } else {
+    const control = await startControl(host, say);
+    say(`folders and runs: ${control.url}`);
+    if (cfg.grants.length === 0 || argv.includes('--open')) openBrowser(control.url);
+  }
 
   const shutdown = () => {
     host.stopAll();

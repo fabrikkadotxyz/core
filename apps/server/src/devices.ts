@@ -165,8 +165,11 @@ export async function setGrants(
   deviceId: string,
   grants: { id: string; label: string; providers: string[] }[],
 ): Promise<void> {
+  const seen = new Set<string>();
   const clean = grants
     .filter((g) => typeof g.id === 'string' && g.id.length > 0 && g.id.length <= 64)
+    // One row per grant id, even if a frame repeats one: the key is (device, grant).
+    .filter((g) => !seen.has(g.id) && Boolean(seen.add(g.id)))
     .slice(0, 100)
     .map((g) => ({
       deviceId,
@@ -175,6 +178,10 @@ export async function setGrants(
       providers: (Array.isArray(g.providers) ? g.providers : []).map(String).slice(0, 10),
     }));
   await db.transaction(async (tx) => {
+    // Two frames from one host arrive back to back (a grant, then a policy
+    // change). Lock the device's row first, so their replace-all-grants
+    // transactions run one after the other instead of colliding on the key.
+    await tx.select({ id: devices.id }).from(devices).where(eq(devices.id, deviceId)).for('update');
     await tx.delete(deviceGrants).where(eq(deviceGrants.deviceId, deviceId));
     if (clean.length) await tx.insert(deviceGrants).values(clean);
   });

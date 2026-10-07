@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Only what the shell needs: opening a window and navigating to the configured server.",
+  "description": "The main window's own bundled first-run page: choose the server. It has no host command. No capability names a remote URL, so the remote web app this window then shows has no IPC at all (ADR 0031).",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "allow-connect", "allow-forget"]
 }

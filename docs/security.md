@@ -436,6 +436,20 @@ there. What holds the line
   working at once. The host shows when it's running, logs every run locally, and
   stops everything on one click.
 
+### The desktop app (M34)
+
+The app runs the host as its own child and talks to it over stdin and stdout
+([ADR 0031](decisions/0031-the-desktop-app-runs-the-local-host.md)), so in the app there is **no local control port** for a
+website to reach. The terminal host keeps its defended `127.0.0.1` page.
+
+| Risk | Control |
+| --- | --- |
+| The remote web app, in the app's main window, drives the host (grants itself a folder) | Host commands are permitted only to the bundled local `folders` window. **No capability names a remote URL**, so the main window has no host command at all. Checked by the M34 acceptance script. |
+| A page names an arbitrary path to grant | Grant takes no path from any page: Rust opens the native folder picker and passes the chosen folder to the host. The host's own refusals (home, root, ancestors of home) still apply. |
+| Two hosts with one device token both act on a mention | A lock file in `~/.fabrikka`; a second host refuses to start. |
+| The app installs or manages agent runtimes | It supervises only Fabrikka's own client (ADR 0002). |
+| An unsigned app trains people to override macOS | Unsigned builds are for the owner and testers, installed by the instance's installer (checksum-verified, no quarantine because `curl` fetched it). Customers get signed, notarized builds at launch. |
+
 ### Installing the client (M33)
 
 `curl … | bash` runs code from the instance on the user's machine. The installer

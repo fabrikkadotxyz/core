@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-host-policy"
+description = "Enables the host_policy command without any pre-configured scope."
+commands.allow = ["host_policy"]
+
+[[permission]]
+identifier = "deny-host-policy"
+description = "Denies the host_policy command without any pre-configured scope."
+commands.deny = ["host_policy"]

@@ -5,13 +5,13 @@
     <title>Connect to Fabrikka</title>
     <style>
       :root {
-        --bg: #0e0f13;
-        --panel: #16181f;
-        --border: #262a35;
-        --text: #e6e8ee;
-        --muted: #8b91a3;
-        --accent: #7c9cff;
-        color-scheme: dark;
+        --bg: #f7fcfd;
+        --panel: #ffffff;
+        --border: #c9dde8;
+        --text: #293241;
+        --muted: #5d6d82;
+        --accent: #3d5a80;
+        color-scheme: light;
         font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
       }
       * { box-sizing: border-box; }
@@ -38,12 +38,13 @@
       button {
         background: var(--accent);
         border-color: var(--accent);
-        color: #0b0d12;
+        color: #ffffff;
         font-weight: 600;
         cursor: pointer;
       }
       button:disabled { opacity: 0.45; cursor: default; }
-      .error { color: #f87171; font-size: 0.8rem; }
+      .error { color: #c4492b; font-size: 0.8rem; }
+      label.check { display: flex; gap: 0.5rem; align-items: center; font-size: 0.85rem; }
     </style>
   </head>
   <body>
@@ -60,6 +61,7 @@
         placeholder="https://fabrikka.example.com"
         required
       />
+      <label class="check"><input type="checkbox" id="login" checked /> Start Fabrikka when I log in, so my agents can run</label>
       <button type="submit" id="go">Connect</button>
       <p class="error" id="error"></p>
     </form>
@@ -76,7 +78,10 @@
         button.disabled = true;
         try {
           // withGlobalTauri means no npm dependency for a page this small.
-          await window.__TAURI__.core.invoke('connect', { url: urlInput.value });
+          await window.__TAURI__.core.invoke('connect', {
+            url: urlInput.value,
+            startAtLogin: document.getElementById('login').checked,
+          });
         } catch (err) {
           error.textContent = String(err);
           button.disabled = false;

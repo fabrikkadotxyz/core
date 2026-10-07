@@ -28,6 +28,7 @@ import type {
 import { LINK_TYPES } from '@fabrikka/types';
 import {
   ApiError,
+  connections,
   openStream,
   devices,
   sessions,
@@ -1867,9 +1868,19 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
   const [credential, setCredential] = useState('');
   const [tools, setTools] = useState<Record<string, { name: string }[]>>({});
   const [error, setError] = useState<string | null>(null);
+  // M18: which of my connections come from a catalogue entry with grant presets.
+  const [presetSlugs, setPresetSlugs] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {
     sessions.integrations(ref_).then(setState).catch(() => {});
+    connections
+      .list()
+      .then(async (mine) => {
+        const cat = await connections.catalogue();
+        const withPresets = new Set(cat.entries.filter((e) => e.presets).map((e) => e.id));
+        setPresetSlugs(new Set(mine.connections.filter((c) => c.entry && withPresets.has(c.entry)).map((c) => c.slug)));
+      })
+      .catch(() => {});
   }, [ref_]);
 
   useEffect(load, [load]);
@@ -1971,6 +1982,23 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
                 <span className="muted small">
                   {m.hasCredential ? 'credential set' : 'no credential'}
                 </span>
+                {isOwner && presetSlugs.has(m.slug) && (
+                  // M18: a shortcut over the per-tool grants, never a new permission model.
+                  <span className="preset-buttons" role="group" aria-label={`What agents may do with ${m.label}`}>
+                    {(['none', 'read', 'write'] as const).map((p) => (
+                      <button
+                        key={p}
+                        className="link small"
+                        onClick={async () => {
+                          await sessions.setPreset(ref_, m.slug, p).catch((err) => setError((err as Error).message));
+                          load();
+                        }}
+                      >
+                        {p === 'none' ? 'Allow nothing' : p === 'read' ? 'Read' : 'Read & write'}
+                      </button>
+                    ))}
+                  </span>
+                )}
                 <button
                   className="link small"
                   onClick={async () => {

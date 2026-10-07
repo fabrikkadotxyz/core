@@ -787,44 +787,74 @@ Connections are offered **by category**, and each one is the **vendor's own MCP
 server** ([ADR 0024](decisions/0024-connections-are-categories-over-vendor-mcp-servers.md)).
 Fabrikka writes no vendor adapters, and agents use the vendor's tools directly.
 
-| Category | Catalogue entries (verify each before listing it) |
-| --- | --- |
-| Code host | GitHub, GitLab |
-| Issue tracker | Jira, Linear, ClickUp |
-| Observability | Sentry, Grafana, Rollbar |
-| Docs | Confluence, Notion |
+**First wave, in this order (2026-10-07): GitHub, Jira, Confluence, Grafana.**
+Probed before any code (unauthenticated requests to each server and its OAuth
+metadata):
 
-- **Add a connection → Issue tracker → Jira.** Each catalogue entry knows its
-  endpoint and how it authenticates. You never paste a URL for a listed vendor.
-- **OAuth per the MCP authorization spec**: discovery, dynamic client
-  registration where the vendor supports it, PKCE. It works on `localhost`, so a
-  local instance needs no domain.
-- Credentials stay **per user and sealed** (ADRs 0004, 0014, unchanged). Every
-  call still runs under the calling participant's own account.
-- **Grant presets per category**, *Read* and *Read & write*, expand to the per-tool
-  default-deny grants M8 already enforces. A preset is a shortcut, not a new
-  permission model.
-- **Custom connection** stays: any streamable-HTTP MCP server, URL and token, as at
-  M8.
-- **A vendor whose MCP server is stdio-only can't be connected through the
-  session** (ADR 0014). Its catalogue entry says so, and shows the snippet that
-  adds it to your own agent's config instead.
+| Vendor | Category | MCP server | Sign-in | Operator setup |
+| --- | --- | --- | --- | --- |
+| GitHub | Code host | `https://api.githubcopilot.com/mcp/` | OAuth via `github.com/login/oauth`: PKCE, **no dynamic registration** | **A GitHub OAuth App**, once per instance (`GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`). Without one, GitHub is absent. |
+| Jira | Issue tracker | `https://mcp.atlassian.com/v1/mcp` | OAuth: PKCE, dynamic registration | none |
+| Confluence | Docs | the same Atlassian server | the same: **one Atlassian connection serves both entries** | none |
+| Grafana | Observability | `https://mcp.grafana.com/mcp` (Grafana Cloud) | OAuth 2.1: PKCE, dynamic registration; the stack is chosen with an `X-Grafana-URL` header | none |
 
-> **Verify before building**, the way M16 verifies Cursor. From documentation,
-> not use: GitHub, Atlassian (Jira and Confluence), Linear and Sentry have remote
-> HTTP MCP servers with OAuth. Grafana's and Rollbar's are believed to be
-> self-hosted or stdio. ClickUp's and Notion's are unknown. Connect each one for
-> real before it gets a catalogue entry. An unverified vendor is absent, not
-> broken.
+Later wave: GitLab, Linear, ClickUp, Sentry, Rollbar, Notion. Each is probed and
+connected for real before it gets an entry. Self-hosted Grafana
+(`grafana/mcp-grafana`, a service-account token) stays a **custom connection**.
 
-**Test — S1, run twice:** Fede invites three coworkers. He connects GitHub and
-adds `claude-fede`; Alice adds `codex-alice`. Connect Sentry and Grafana (and
-Rollbar, by whichever path its entry gives). The agents find the bug from the
-error, open a PR, link the bug ticket in it, and move the ticket to its next
-status, asking the tracker which transitions exist rather than assuming one.
-They then check Confluence for docs that need updating. **Run the whole story
-once with Jira and once with Linear.** Nothing in Fabrikka changes between the
-two runs except which entry was picked.
+- **Add a connection → a category → a vendor → Connect.** Each catalogue entry
+  (`apps/server/src/connections/catalogue/<vendor>.ts`, plus one registry line)
+  knows its endpoint, how it authenticates, and any field the person must fill
+  in (Grafana's stack URL). You never paste a URL for a listed vendor.
+- **OAuth per the MCP authorization spec:**
+  - protected-resource discovery (RFC 9728) and authorization-server metadata
+    (RFC 8414);
+  - dynamic client registration (RFC 7591) where the vendor supports it, or the
+    entry's pre-registered client otherwise;
+  - PKCE (S256), and a single-use `state` bound to the person who started it;
+  - the callback is on the instance's own origin
+    (`/api/connections/oauth/callback`), so `localhost` works with no domain.
+- **Tokens:**
+  - access and refresh tokens are sealed under `FABRIKKA_ENCRYPTION_KEY`, per
+    user, never returned (ADRs 0004, 0014);
+  - an expired access token is refreshed before the upstream call;
+  - a refresh that fails marks the connection *needs reconnecting*, never
+    silently empty.
+- **One connection, several entries.** Jira and Confluence are one Atlassian
+  connection. Connecting either connects both, and they share one slug
+  (`atlassian`), so grants are per Atlassian tool.
+- **Grant presets per entry,** *Read* and *Read & write*, expand to the per-tool,
+  default-deny grants M8 already enforces. An entry's tool lists come from
+  listing that vendor's tools in a real connection. A tool an entry doesn't
+  classify is in no preset.
+- **Custom connection** stays: any streamable-HTTP MCP server, with a URL and
+  token, as at M8.
+- **Credentials stay per user and sealed.** Every call still runs under the
+  calling participant's own account.
+
+**Test, per vendor as it lands** (clicks counted from *Personal integrations*):
+1. **Add a connection →** category **→** vendor **→ Connect →** the vendor's
+   consent screen **→ Allow**: back in Fabrikka, *connected as <account>*.
+   That's at most 5 clicks in Fabrikka (GitHub, Jira; Grafana adds its stack
+   URL).
+2. In a session, Setup shows it. **Read** preset → an agent lists issues /
+   repos / dashboards through it. A write tool stays absent until **Read &
+   write**.
+3. A day later, or with the access token forcibly expired, the next call
+   refreshes it with no click.
+4. Revoke the app on the vendor's side: the connection shows *needs
+   reconnecting*, and **Reconnect** is one click plus the vendor's consent.
+5. Scripted, against a local fake OAuth+MCP server: discovery, dynamic
+   registration and the pre-registered client both work; PKCE and `state` are
+   enforced (a forged or reused `state` is refused); tokens are sealed and never
+   returned; refresh works; a revoked refresh token gives *needs reconnecting*.
+
+**Story test, S1 (first wave):** Fede connects GitHub, Jira, Confluence and
+Grafana and adds `claude-fede`. The agent finds the failing endpoint on a
+Grafana dashboard, finds the code in GitHub, opens a PR, links the Jira ticket
+in it, and moves the ticket to its next status, asking Jira which transitions
+exist rather than assuming one. Then it checks Confluence for docs that need
+updating. The Linear run of the original S1 waits for the later wave.
 
 ## M19 — Session links: what this session is about, outside it
 

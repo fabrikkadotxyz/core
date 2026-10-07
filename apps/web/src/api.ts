@@ -134,12 +134,39 @@ export const devices = {
   confirm: (code: string) => call<{ deviceName: string }>('/devices/pair/confirm', { method: 'POST', body: { code } }),
 };
 
+export interface CatalogueItem {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  connectionName: string | null;
+  fields: { key: string; label: string; placeholder: string; required: boolean }[];
+  presets: { read: number; write: number } | null;
+  connected: boolean;
+  status: string | null;
+}
+
 export const connections = {
   list: () =>
     call<{
-      connections: { id: string; slug: string; label: string; url: string; hasCredential: boolean; sessions: number }[];
+      connections: {
+        id: string;
+        slug: string;
+        label: string;
+        url: string;
+        hasCredential: boolean;
+        sessions: number;
+        entry: string | null;
+        auth: string;
+        status: string;
+      }[];
       encryptionConfigured: boolean;
     }>('/me/connections'),
+  /** M18: vendors this instance offers, by category. */
+  catalogue: () => call<{ categories: Record<string, string>; entries: CatalogueItem[]; encryptionConfigured: boolean }>('/connections/catalogue'),
+  /** M18: begin signing in to a vendor; the browser then goes to `authorizeUrl`. */
+  startOAuth: (entry: string, fields?: Record<string, string>) =>
+    call<{ authorizeUrl: string }>('/connections/oauth/start', { method: 'POST', body: { entry, fields } }),
   save: (body: { slug: string; url: string; label?: string; credential?: string }) =>
     call<{ id: string }>('/me/connections', { method: 'POST', body }),
   remove: (slug: string) => call<{ ok: true }>(`/me/connections/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
@@ -302,6 +329,9 @@ export const sessions = {
     call<{ name: string; description?: string }[]>(
       `${base(ref)}/integrations/${slug}/tools`,
     ),
+  /** M18: a catalogue connection's preset — none, read, or read & write — over the per-tool grants. */
+  setPreset: (ref: SessionRef, slug: string, preset: 'none' | 'read' | 'write') =>
+    call<{ ok: true }>(`${base(ref)}/integrations/${slug}/preset`, { method: 'PUT', body: { preset } }),
   setToolGrant: (ref: SessionRef, slug: string, tool: string, allowed: boolean) =>
     call<{ ok: true }>(`${base(ref)}/integrations/${slug}/tools/${tool}`, {
       method: 'PUT',

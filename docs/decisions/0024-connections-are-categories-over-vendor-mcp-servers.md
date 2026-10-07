@@ -64,6 +64,32 @@ of outside things: **links** (M19), `{ type, provider, url, title, status }`. Th
 is the part Fabrikka itself has to understand, to show it and export it, and
 it's small enough to stay honest across vendors.
 
+### Probed before building (2026-10-07)
+
+Unauthenticated requests to each first-wave server, and to its OAuth metadata:
+
+- **GitHub** (`api.githubcopilot.com/mcp/`) answers 401 with RFC 9728 resource
+  metadata pointing to `github.com/login/oauth`. That server supports PKCE and
+  the device flow but has **no registration endpoint**, so GitHub needs a
+  pre-registered OAuth App per instance. That's the "pre-registered client"
+  case this ADR already describes.
+- **Atlassian** (`mcp.atlassian.com/v1/mcp`) serves Jira and Confluence from
+  **one** server, with PKCE and **dynamic registration**. Its 401 names no
+  resource metadata, but its authorization-server metadata is at the server's
+  own origin.
+- **Grafana Cloud** (`mcp.grafana.com/mcp`) offers OAuth 2.1 with PKCE and
+  **dynamic registration**. Which stack it talks to is chosen with an
+  `X-Grafana-URL` header.
+
+Two refinements follow:
+
+1. **An entry can share another's connection.** Jira and Confluence are two
+   entries, in two categories, backed by one Atlassian connection with one slug.
+   Connecting either connects both. Grants stay per tool, keyed by that slug.
+2. **An entry can ask for fields.** Grafana needs the person's stack URL, sent
+   as a header on every call. A field is data in the entry, like the endpoint,
+   so it needs no vendor code.
+
 ## Consequences
 
 - Switching from Jira to Linear changes which catalogue entry a team picks, and

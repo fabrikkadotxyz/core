@@ -53,6 +53,48 @@ messages
 
 **Why `participants` exists.** Author and mention never branch on human-vs-agent. `@fede` and `@claude-fede` are the same kind of row, differing by `kind`. This is what makes `@claude-fede` and `@claude-alice` — both Claude Code, different identities — fall out for free, and it means renaming a display name doesn't orphan historical messages.
 
+### M18 — connections over OAuth
+
+```
+mcp_servers  (M8, extended)
+  entry               text                -- the catalogue entry it came from ("github", "jira"); null for a custom connection
+  auth                text not null default 'token'   -- token | oauth
+  sealed_refresh_token text               -- AES-256-GCM, like sealed_credential (which holds the access token)
+  token_expires_at    timestamptz         -- null: the vendor's token doesn't expire (GitHub OAuth Apps)
+  oauth_client_id     uuid -> oauth_clients.id (set null)  -- null for a pre-registered client from the environment
+  token_endpoint      text                -- where refreshes go; from the vendor's metadata
+  headers             jsonb               -- per-connection request headers an entry asks for (Grafana's X-Grafana-URL); never secrets
+  status              text not null default 'ok'      -- ok | needs_reconnect
+
+oauth_clients                             -- what dynamic registration (RFC 7591) gave this instance, per vendor
+  id                 uuid pk
+  issuer             text not null        -- the authorization server
+  redirect_uri       text not null        -- this instance's callback
+  client_id          text not null
+  sealed_client_secret text               -- some vendors issue none (public client + PKCE)
+  created_at         timestamptz not null
+  unique (issuer, redirect_uri)
+
+oauth_flows                               -- a sign-in in progress; single use, ten minutes
+  state_hash       text pk                -- SHA-256 of the `state` sent to the vendor
+  user_id          uuid -> users.id not null (cascade)
+  entry            text not null
+  sealed_verifier  text not null          -- the PKCE code_verifier
+  oauth_client_id  uuid -> oauth_clients.id (cascade)   -- null for a pre-registered client
+  token_endpoint   text not null
+  fields           jsonb                  -- what the person typed (Grafana's stack URL)
+  expires_at       timestamptz not null
+```
+
+**Registration is per instance, not per person.** The first person to connect a
+vendor registers this instance with it; everyone after reuses that client.
+A vendor without dynamic registration (GitHub) uses the client in the
+environment and stores none.
+
+**A flow is single-use and bound to its person.** The callback looks the flow up
+by the hash of `state`, refuses it unless the signed-in user is the one who
+started it, and deletes it before exchanging the code.
+
 ### M32 — password reset by email
 
 ```

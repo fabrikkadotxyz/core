@@ -209,6 +209,23 @@ arguments), and team owners see recent uses on the same page. See
 [ADR 0028](decisions/0028-team-credentials-are-shared-marked-and-lose-to-your-own.md).
 The record has no retention limit yet; it is one small row per call.
 
+### Connections by vendor (M18)
+
+Listed vendors connect with a click: *Personal integrations → Add a connection*.
+Most need no setup on the instance, because their MCP servers let Fabrikka
+register itself (Atlassian, Grafana Cloud). **GitHub doesn't**, so it appears
+only once the instance has a GitHub OAuth App:
+
+1. GitHub → Settings → Developer settings → **OAuth Apps → New OAuth App**.
+2. Homepage URL: your `PUBLIC_URL`. Authorization callback URL:
+   `<PUBLIC_URL>/api/connections/oauth/callback`.
+3. Register, then **Generate a new client secret**.
+4. In `.env`: `GITHUB_OAUTH_CLIENT_ID=…` and `GITHUB_OAUTH_CLIENT_SECRET=…`.
+   Restart the server.
+
+A GitHub OAuth App has one callback URL, so each instance, hosted or
+self-hosted, registers its own.
+
 ### The encryption key
 
 Credentials are sealed with AES-256-GCM under `FABRIKKA_ENCRYPTION_KEY`:

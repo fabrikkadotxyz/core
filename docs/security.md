@@ -72,6 +72,20 @@ an account reaches nobody else's data, and gets further in only by invite.
 In-process extension code is trusted, like the core itself. The kit is a
 contract, not a sandbox.
 
+### Connecting vendors over OAuth (M18)
+
+[ADR 0024](decisions/0024-connections-are-categories-over-vendor-mcp-servers.md). Fabrikka is an OAuth client of each vendor's MCP
+server, signing in **as the person**, never as the instance.
+
+| Risk | Control |
+| --- | --- |
+| A forged callback attaches someone else's account (login CSRF) | A random `state` per flow, stored only as a hash, single use, ten minutes, and **bound to the user who started it**: the callback refuses it for anyone else. |
+| An intercepted code is redeemed by someone else | PKCE (S256) on every flow, with the verifier sealed until the exchange. |
+| Tokens leak from the database | Access and refresh tokens are sealed (AES-256-GCM, `FABRIKKA_ENCRYPTION_KEY`), and refused without the key. No API returns them. |
+| An expired or revoked token silently turns a vendor's tools off | Refreshed before the call. A failed refresh marks the connection *needs reconnecting*, shown in Personal integrations and Setup. |
+| Discovery is steered to an internal address (SSRF) | Catalogue endpoints are fixed in code. Metadata URLs are followed only over `https`, and only to the entry's own host or the authorization server its metadata names. |
+| One person's connection lends access to others | Unchanged: per user, per call, the caller's own token (ADR 0004). Jira and Confluence share one connection per person, not per team. |
+
 ### Password reset by email (M32)
 
 Offered only when an email transport is configured (`FABRIKKA_MAIL`). Without

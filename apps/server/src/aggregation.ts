@@ -14,6 +14,7 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { Database } from '@fabrikka/db';
+import { freshAccessToken } from './connections/oauth.ts';
 import {
   mcpServers,
   open as openSealed,
@@ -191,7 +192,7 @@ export async function attachServer(
 export async function listConnections(
   db: Database,
   userId: string,
-): Promise<(AttachedServer & { sessions: number })[]> {
+): Promise<(AttachedServer & { sessions: number; entry: string | null; auth: string; status: string })[]> {
   const rows = await db
     .select({
       id: mcpServers.id,
@@ -199,6 +200,9 @@ export async function listConnections(
       label: mcpServers.label,
       url: mcpServers.url,
       sealed: mcpServers.sealedCredential,
+      entry: mcpServers.entry,
+      auth: mcpServers.auth,
+      status: mcpServers.status,
       sessions: sql<number>`(select count(*) from ${sessionMcpServers} sms where sms.mcp_server_id = ${mcpServers.id})`,
     })
     .from(mcpServers)
@@ -211,6 +215,10 @@ export async function listConnections(
     url: r.url,
     hasCredential: !!r.sealed,
     sessions: Number(r.sessions),
+    // M18: which catalogue entry, how it signs in, and whether it needs reconnecting.
+    entry: r.entry,
+    auth: r.auth,
+    status: r.status,
   }));
 }
 
@@ -530,11 +538,11 @@ export async function listGrants(
  * in memory between requests, keyed by user, which is a larger thing to get right
  * than it is worth at this scale.
  */
-async function connect(url: string, credential: string | null): Promise<Client> {
+async function connect(url: string, credential: string | null, extraHeaders: Record<string, string> = {}): Promise<Client> {
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (credential) headers.Authorization = `Bearer ${credential}`;
   const transport = new StreamableHTTPClientTransport(new URL(url), {
-    requestInit: credential
-      ? { headers: { Authorization: `Bearer ${credential}` } }
-      : undefined,
+    requestInit: Object.keys(headers).length ? { headers } : undefined,
   });
   const client = new Client({ name: 'fabrikka-aggregator', version: '0.1.0' });
   await client.connect(transport);
@@ -545,15 +553,28 @@ async function connect(url: string, credential: string | null): Promise<Client> 
 async function credentialFor(
   db: Database,
   server: Pick<UsableServer, 'id' | 'team'>,
-): Promise<{ url: string; credential: string | null } | null> {
-  const table = server.team ? teamMcpServers : mcpServers;
+): Promise<{ url: string; credential: string | null; headers: Record<string, string> } | null> {
+  if (server.team) {
+    const [row] = await db
+      .select({ url: teamMcpServers.url, sealed: teamMcpServers.sealedCredential })
+      .from(teamMcpServers)
+      .where(eq(teamMcpServers.id, server.id))
+      .limit(1);
+    return row ? { url: row.url, credential: openSealed(row.sealed), headers: {} } : null;
+  }
   const [row] = await db
-    .select({ url: table.url, sealed: table.sealedCredential })
-    .from(table)
-    .where(eq(table.id, server.id))
+    .select({ url: mcpServers.url, sealed: mcpServers.sealedCredential, auth: mcpServers.auth, headers: mcpServers.headers })
+    .from(mcpServers)
+    .where(eq(mcpServers.id, server.id))
     .limit(1);
   if (!row) return null;
-  return { url: row.url, credential: openSealed(row.sealed) };
+  // M18: an OAuth connection is refreshed first when its token is about to
+  // expire. A failed refresh leaves it needs_reconnect, and its tools absent.
+  if (row.auth === 'oauth') {
+    const token = await freshAccessToken(db, server.id);
+    return token ? { url: row.url, credential: token, headers: row.headers ?? {} } : null;
+  }
+  return { url: row.url, credential: openSealed(row.sealed), headers: row.headers ?? {} };
 }
 
 /**
@@ -585,7 +606,7 @@ export async function toolsForParticipant(
 
     let client: Client | undefined;
     try {
-      client = await connect(conn.url, conn.credential);
+      client = await connect(conn.url, conn.credential, conn.headers);
       const { tools: upstream } = await client.listTools();
 
       for (const t of upstream) {
@@ -622,7 +643,7 @@ export async function discoverTools(
 
   let client: Client | undefined;
   try {
-    client = await connect(conn.url, conn.credential);
+    client = await connect(conn.url, conn.credential, conn.headers);
     const { tools } = await client.listTools();
     return tools.map((t) => ({ name: t.name, description: t.description }));
   } catch (err) {
@@ -694,7 +715,7 @@ export async function callAggregatedTool(
 
   let client: Client | undefined;
   try {
-    client = await connect(conn.url, conn.credential);
+    client = await connect(conn.url, conn.credential, conn.headers);
     const result = await client.callTool({ name: upstreamName, arguments: opts.args });
     await record(!result.isError);
     return { ok: true, content: result.content };

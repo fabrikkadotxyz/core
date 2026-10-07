@@ -531,12 +531,59 @@ export const mcpServers = pgTable(
     slug: text('slug').notNull(),
     label: text('label').notNull(),
     url: text('url').notNull(),
-    /** AES-256-GCM. Never returned by any read API, never logged. */
+    /** AES-256-GCM. Never returned by any read API, never logged. For OAuth, the access token. */
     sealedCredential: text('sealed_credential'),
+    /* M18 (ADR 0024): a catalogue connection over OAuth. */
+    /** The catalogue entry it came from ("github", "jira"); null for a custom connection. */
+    entry: text('entry'),
+    /** token | oauth */
+    auth: text('auth').notNull().default('token'),
+    sealedRefreshToken: text('sealed_refresh_token'),
+    /** Null: the vendor's token doesn't expire. */
+    tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }),
+    oauthClientId: uuid('oauth_client_id').references(() => oauthClients.id, { onDelete: 'set null' }),
+    tokenEndpoint: text('token_endpoint'),
+    /** Per-connection request headers an entry asks for (Grafana's X-Grafana-URL). Never secrets. */
+    headers: jsonb('headers').$type<Record<string, string>>(),
+    /** ok | needs_reconnect */
+    status: text('status').notNull().default('ok'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('mcp_servers_owner_slug').on(t.ownerId, t.slug)],
 );
+
+/**
+ * What dynamic client registration (RFC 7591) gave this instance, per vendor
+ * (M18). Per instance, not per person: the first to connect registers it.
+ */
+export const oauthClients = pgTable(
+  'oauth_clients',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    issuer: text('issuer').notNull(),
+    redirectUri: text('redirect_uri').notNull(),
+    clientId: text('client_id').notNull(),
+    sealedClientSecret: text('sealed_client_secret'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('oauth_clients_issuer_redirect').on(t.issuer, t.redirectUri)],
+);
+
+/** A sign-in in progress (M18): single use, ten minutes, bound to its person. */
+export const oauthFlows = pgTable('oauth_flows', {
+  /** SHA-256 of the `state` sent to the vendor. */
+  stateHash: text('state_hash').primaryKey(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  entry: text('entry').notNull(),
+  /** The PKCE code_verifier, sealed until the exchange. */
+  sealedVerifier: text('sealed_verifier').notNull(),
+  oauthClientId: uuid('oauth_client_id').references(() => oauthClients.id, { onDelete: 'cascade' }),
+  tokenEndpoint: text('token_endpoint').notNull(),
+  fields: jsonb('fields').$type<Record<string, string>>(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
 
 export const sessionMcpServers = pgTable(
   'session_mcp_servers',

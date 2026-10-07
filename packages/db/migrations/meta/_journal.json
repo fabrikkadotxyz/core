@@ -176,6 +176,13 @@
       "when": 1791384496293,
       "tag": "0024_password_resets",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791404955019,
+      "tag": "0025_oauth_connections",
+      "breakpoints": true
     }
   ]
 }

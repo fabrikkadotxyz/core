@@ -1833,3 +1833,23 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 .side-resize:focus-visible { outline: none; }
 body.resizing-sidebar { cursor: col-resize; user-select: none; }
 @media (max-width: 900px) { .side-resize { display: none; } }
+
+/* ---- M18: connecting vendors ---- */
+.catalogue-category { margin-bottom: 14px; }
+.catalogue-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.catalogue-card {
+  display: flex; flex-direction: column; gap: 8px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--panel);
+}
+.catalogue-card p { margin: 0; flex: 1; }
+.catalogue-card button { align-self: flex-start; }
+.catalogue-head { display: flex; align-items: center; gap: 8px; }
+.badge-ok {
+  display: inline-block; padding: 0.05rem 0.4rem; border: 1px solid var(--ok-border); border-radius: 5px;
+  background: var(--ok-soft); color: var(--ok); font-size: 0.68rem; white-space: nowrap;
+}
+.notice { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; }
+.notice.ok { border: 1px solid var(--ok-border); background: var(--ok-soft); color: var(--ok); }
+.custom-connection { margin-top: 18px; }
+.custom-connection > form { margin-top: 10px; }
+.preset-buttons { display: inline-flex; gap: 8px; margin-left: 6px; }

@@ -165,6 +165,9 @@ import {
 } from './sessions.ts';
 
 import { createKit, type Advertised, type Extension } from './kit.ts';
+import { offeredEntries, setExtraEntries } from './connections/catalogue/registry.ts';
+import { CATEGORY_NAMES, type CatalogueEntry } from './connections/catalogue/types.ts';
+import { completeFlow, OAuthError, startFlow } from './connections/oauth.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { mailerFromEnv } from './mail.ts';
 import { APP_ZIP_NAME, appRelease, clientRelease, installCommand, installScript, manifest } from './client.ts';
@@ -174,6 +177,8 @@ import { rateLimit } from './rate-limit.ts';
 export interface CreateAppOptions {
   /** Deployment-specific additions: a sign-up page, for one. */
   extensions?: Extension[];
+  /** M18: catalogue entries beyond the built-in ones (a deployment's own vendors; the tests' fake one). */
+  catalogue?: CatalogueEntry[];
 }
 
 /**
@@ -254,6 +259,7 @@ export function createApp(options: CreateAppOptions = {}) {
    * Extensions (M32, ADR 0029) mount here: before every core route that could
    * shadow theirs, and long before the web app's catch-all.
    */
+  setExtraEntries(options.catalogue ?? []);
   const mailer = mailerFromEnv();
   const advertised: Advertised = { signupUrl: null };
   const kit = createKit({ db, publicUrl: PUBLIC_URL, secureCookies: SECURE_COOKIES, mailer, advertised });
@@ -552,6 +558,59 @@ export function createApp(options: CreateAppOptions = {}) {
   app.delete('/api/me/connections/:slug', requireUser(db), async (c) =>
     (await removeConnection(db, c.get('user').id, c.req.param('slug'))) ? c.json({ ok: true }) : c.notFound(),
   );
+
+  /* ---- connections by vendor (M18, ADR 0024) ---- */
+
+  /** What can be connected here, by category, and whether you already have it. */
+  app.get('/api/connections/catalogue', requireUser(db), async (c) => {
+    const mine = await listConnections(db, c.get('user').id);
+    return c.json({
+      categories: CATEGORY_NAMES,
+      entries: offeredEntries().map((e) => {
+        const have = mine.find((m) => m.slug === e.slug);
+        return {
+          id: e.id,
+          name: e.name,
+          category: e.category,
+          description: e.description,
+          connectionName: e.connectionName ?? null,
+          fields: (e.fields ?? []).map((f) => ({ key: f.key, label: f.label, placeholder: f.placeholder ?? '', required: f.required })),
+          presets: e.presets ? { read: e.presets.read.length, write: e.presets.write.length } : null,
+          connected: !!have,
+          status: have?.status ?? null,
+        };
+      }),
+      encryptionConfigured: isEncryptionConfigured(),
+    });
+  });
+
+  /** Begin signing in to a vendor: the browser goes to the URL returned. */
+  app.post('/api/connections/oauth/start', requireUser(db), async (c) => {
+    if (!isEncryptionConfigured()) return c.json({ error: 'FABRIKKA_ENCRYPTION_KEY is not set, so tokens could not be stored' }, 503);
+    const body = await c.req.json<{ entry?: string; fields?: Record<string, string> }>().catch(() => ({}) as { entry?: string });
+    try {
+      const authorizeUrl = await startFlow(db, { userId: c.get('user').id, entryId: String(body.entry ?? ''), fields: (body as { fields?: Record<string, string> }).fields, publicUrl: PUBLIC_URL });
+      return c.json({ authorizeUrl });
+    } catch (err) {
+      if (err instanceof OAuthError) return c.json({ error: err.message }, 400);
+      throw err;
+    }
+  });
+
+  /** The vendor sends the browser back here; we land it on Personal integrations either way. */
+  app.get('/api/connections/oauth/callback', requireUser(db), async (c) => {
+    const back = (q: string) => c.redirect(`/integrations?${q}`);
+    const { code, state, error, error_description } = c.req.query();
+    if (error) return back(`error=${encodeURIComponent(error_description ?? error)}`);
+    if (!code || !state) return back(`error=${encodeURIComponent('the vendor sent no code back')}`);
+    try {
+      const entry = await completeFlow(db, { userId: c.get('user').id, code, state, publicUrl: PUBLIC_URL });
+      return back(`connected=${encodeURIComponent(entry.id)}`);
+    } catch (err) {
+      if (err instanceof OAuthError) return back(`error=${encodeURIComponent(err.message)}`);
+      throw err;
+    }
+  });
 
   /* ---- team integrations (M30, ADR 0028): credentials the team shares ---- */
 
@@ -1311,6 +1370,27 @@ export function createApp(options: CreateAppOptions = {}) {
     const { allowed } = await c.req.json<{ allowed?: boolean }>();
     await setGrant(db, s.id, c.req.param('slug'), c.req.param('tool'), allowed === true);
     return c.json({ ok: true });
+  });
+
+  /**
+   * M18: a grant preset — Read, Read & write, or None — for a catalogue
+   * connection. A shortcut over the per-tool grants above, never a new permission
+   * model: it sets exactly the entry's classified tools, and a tool no entry
+   * classifies stays as it was (ADR 0024).
+   */
+  sessionRoutes.put('/integrations/:slug/preset', async (c) => {
+    const s = await resolve(c);
+    if (!s || s.role !== 'owner') return c.notFound();
+    const { preset } = await c.req.json<{ preset?: string }>();
+    if (!['none', 'read', 'write'].includes(String(preset))) return c.json({ error: 'preset is none, read or write' }, 400);
+    const slug = c.req.param('slug');
+    const entries = offeredEntries().filter((e) => e.slug === slug && e.presets);
+    if (!entries.length) return c.json({ error: 'no presets for that connection' }, 404);
+    const read = new Set(entries.flatMap((e) => e.presets!.read));
+    const write = new Set(entries.flatMap((e) => e.presets!.write));
+    for (const tool of read) await setGrant(db, s.id, slug, tool, preset !== 'none');
+    for (const tool of write) await setGrant(db, s.id, slug, tool, preset === 'write');
+    return c.json({ ok: true, read: read.size, write: preset === 'write' ? write.size : 0 });
   });
 
   /* ---- artifacts ---- */

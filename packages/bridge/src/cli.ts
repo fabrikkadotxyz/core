@@ -26,7 +26,8 @@ import { summarise } from './redact.ts';
 import { BridgeSocket } from './socket.ts';
 import { Upstream } from './upstream.ts';
 
-const VERSION = '0.0.0';
+import { VERSION } from './version.ts';
+import { update } from './update.ts';
 
 /**
  * stdout is the MCP transport — anything written there corrupts the protocol.
@@ -52,9 +53,23 @@ async function main(): Promise<void> {
         '    Spawn a headless run for each mention, in <project>. Policy\n' +
         '    defaults to edit: files in <project> only, no shell, no web.\n' +
         '\n' +
-        'Both need FABRIKKA_URL and FABRIKKA_TOKEN. Copy the block from your\n' +
-        "session's Agents panel.",
+        'fabrikka update [--server <url>]\n' +
+        "    Install the client the server you're paired with now serves.\n" +
+        '\n' +
+        'fabrikka --version\n' +
+        '\n' +
+        'connect and watch need FABRIKKA_URL and FABRIKKA_TOKEN: copy the\n' +
+        "block from your session's Agents panel.",
     );
+    return;
+  }
+  if (command === 'version' || command === '--version') {
+    console.log(VERSION);
+    return;
+  }
+  if (command === 'update') {
+    // M33 (ADR 0030): from the server this computer is paired with, checksum-verified.
+    process.exitCode = await update(argv.slice(1), (...a) => console.error('[fabrikka update]', ...a));
     return;
   }
   if (command === 'host') {

@@ -804,6 +804,7 @@ Server → host:
 | `{ type: 'bindings', bindings: [{ id, grantId, provider, agent, session, mcpUrl, bridgeUrl, token }] }` | The agents bound to this machine, each with a **fresh token** minted for this connection (the previous one is revoked). Sent on connect and whenever a binding is added or removed. **Carries no path, command line, flag or policy** |
 | `{ type: 'binding', binding }` | One agent was just bound to this machine: the same shape as an entry above, with its own fresh token. The others keep theirs, because re-minting them would revoke tokens that running agents are using |
 | `{ type: 'revoked' }` | The device was revoked on the web. The host stops every run and forgets its token |
+| `{ type: 'client', version }` | *(M33)* The client version this server serves at `/downloads/manifest.json`. Sent once on connect. A host whose own version differs says "update available"; it never updates itself (ADR 0030). Omitted when the server has no client build |
 
 **For each binding, the host opens an ordinary runner connection** (the bridge
 socket above, `hello { kind: 'runner' }`) with that binding's token. So mentions,

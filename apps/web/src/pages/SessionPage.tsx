@@ -1217,8 +1217,8 @@ function AgentsPanel({
             <p className="muted small">
               {myDevices.length === 0 ? (
                 <>
-                  Run your agent on your own computer: once, run <code>npx fabrikka host</code> there and grant a
-                  folder. See <Link to="/devices">Your devices</Link>.
+                  Run your agent on your own computer: connect it once from <Link to="/devices">Your devices</Link>{' '}
+                  (one command to paste), then grant a folder there.
                 </>
               ) : (
                 <>No folder granted yet on {myDevices.map((d) => d.name).join(', ')}. Grant one in the host's window.</>

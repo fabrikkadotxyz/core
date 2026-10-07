@@ -147,10 +147,12 @@ const PAGE = `<!doctype html>
   .warn { color:var(--danger); font-size:13px; } .error { color:var(--danger); }
   .tag { font-size:12px; padding:1px 8px; border-radius:20px; background:var(--tint); color:var(--accent); }
   .tag.run { background:#fde8e2; color:var(--danger); }
+  .update { border-color:var(--accent); background:var(--tint); } [hidden] { display:none !important; }
   table { width:100%; border-collapse:collapse; font-size:13px; } td { padding:5px 6px; border-top:1px solid var(--border); vertical-align:top; }
 </style></head><body>
 <header><span class="dot" id="dot"></span><strong>Fabrikka host</strong><span id="who" class="muted" style="color:#c9dbe6"></span><span class="spacer"></span><button class="stop" id="stop">Stop all runs</button></header>
 <main>
+  <div id="update" class="card update" hidden></div>
   <h2>Folders your agents may work in</h2>
   <p class="muted">Agents only ever run in folders granted here, on this computer. The website can choose among them, never add one.</p>
   <div id="grants"></div>
@@ -184,6 +186,9 @@ async function api(method, path, body) {
 }
 function render(s) {
   $('dot').className = 'dot' + (s.connected ? ' on' : '');
+  // M33: never updates itself; says so, and how (ADR 0030).
+  $('update').hidden = !s.updateAvailable;
+  if (s.updateAvailable) $('update').innerHTML = '<strong>Update available</strong> <span class="muted">' + esc(s.version) + ' → ' + esc(s.latestVersion) + '</span><div class="muted">In a terminal: <code>fabrikka update</code>, then start the host again.</div>';
   $('who').textContent = s.deviceName + ' · ' + (s.connected ? 'connected to ' + s.server : 'reconnecting…') + (s.providers.length ? ' · ' + s.providers.join(', ') : ' · no agent tools found');
   $('grants').innerHTML = s.grants.length ? s.grants.map((g) => '<div class="card row"><div class="grow"><strong>' + esc(g.label) + '</strong><div class="path">' + esc(g.path) + '</div></div>' +
     '<select data-policy="' + g.id + '">' + ['edit','read','full'].map((p) => '<option value="' + p + '"' + (p === g.policy ? ' selected' : '') + '>' + ({edit:'Edit in folder',read:'Read only',full:'Full'})[p] + '</option>').join('') + '</select>' +

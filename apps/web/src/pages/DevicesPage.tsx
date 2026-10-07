@@ -4,8 +4,53 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { DeviceSummary } from '@fabrikka/types';
-import { devices } from '../api.ts';
+import { client, devices } from '../api.ts';
 import { timeAgo } from '../outputs/Outputs.tsx';
+
+/**
+ * M33 (ADR 0030): this instance's own installer. Once per computer, so a paste
+ * here is the one-time setup the five-click rule allows.
+ */
+function ConnectCommand({ first }: { first: boolean }) {
+  const [command, setCommand] = useState<string | null | undefined>(undefined);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    client.get().then((r) => setCommand(r.installCommand)).catch(() => setCommand(null));
+  }, []);
+  if (command === undefined) return null;
+  if (command === null) {
+    return <p className="muted small">This server has no client to install. Whoever runs it can build one with <code>pnpm build</code>.</p>;
+  }
+  return (
+    <div className="card-hint">
+      <p>
+        <strong>{first ? 'Run your agents on your own computer.' : 'Connect another computer.'}</strong> Once, in a terminal on
+        that computer:
+      </p>
+      <div className="row copy-row">
+        <code className="endpoint">{command}</code>
+        <button
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(command);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            } catch {
+              // Clipboard refused: the command is selectable text.
+            }
+          }}
+        >
+          {copied ? 'Copied ✓' : 'Copy'}
+        </button>
+      </div>
+      <p className="muted small">
+        It needs Node.js 22 or newer, installs <code>fabrikka</code> in your home folder (no admin rights), then opens
+        this site to connect: one click. Then grant a folder in the window it opens, and use Setup → Add my agent in
+        any session.
+      </p>
+    </div>
+  );
+}
 
 export function DevicesPage() {
   const [list, setList] = useState<DeviceSummary[] | null>(null);
@@ -26,18 +71,7 @@ export function DevicesPage() {
           Computers that can run your agents. Each runs them only in folders granted on that computer, with the
           policy chosen there.
         </p>
-        {list?.length === 0 && (
-          <div className="card-hint">
-            <p>
-              <strong>Run your agents on your own computer.</strong> Once, in a terminal on that computer:
-            </p>
-            <code className="endpoint">npx fabrikka host</code>
-            <p className="muted small">
-              It opens this site to connect (one click), then its own window where you grant folders. After that,
-              adding your agent to a session is Setup → Add my agent.
-            </p>
-          </div>
-        )}
+        {list !== null && <ConnectCommand first={list.length === 0} />}
         <ul className="session-list">
           {list?.map((d) => (
             <li key={d.id} className="device">

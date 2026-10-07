@@ -1293,6 +1293,70 @@ itself enforces
    - an invite from someone else still brings them into that person's team.
 6. The core's own server, started as before, offers none of the fixture's routes.
 
+## M33 — Install the client with one line, from your own instance
+
+> The local client can't be installed today: it isn't on npm, and building it
+> means cloning the monorepo. [ADR 0030](decisions/0030-every-instance-serves-its-own-client-installer.md):
+> every instance serves its own client and installer, so connecting a computer is
+> one pasted command and one click, and the client always matches its server.
+
+- **One file.** The bridge bundles `ws` too, so `dist/cli.js` runs with nothing
+  installed beside it. It needs Node 22 or newer. The build stamps a version
+  into it (`fabrikka --version`) and writes the same version to
+  `dist/version.json`.
+- **Three public routes:**
+  - **`GET /install.sh`:** the installer, with this instance's `PUBLIC_URL`
+    written in.
+  - **`GET /downloads/manifest.json`:** `{ version, file, url, sha256, size,
+    node }`.
+  - **`GET /downloads/fabrikka.mjs`:** the client file.
+
+  All three answer 404 when the instance has no client build.
+- **The installer** (POSIX `sh`, wrapped in a function called on its last line):
+  - **Refuses** plain `http://` except for localhost.
+  - **Checks for Node 22+**, and stops with directions if it's missing.
+  - **Downloads** the manifest and the file, and refuses the file unless its
+    SHA-256 matches.
+  - **Installs** to `~/.local/share/fabrikka/` plus a `fabrikka` launcher in
+    `~/.local/bin`, without `sudo`.
+  - **Adds** one marked line to `~/.zshrc` or `~/.bashrc` if `~/.local/bin`
+    isn't on the PATH (`--no-modify-path` skips it).
+  - **Reports** whether `claude` and `codex` are installed, and installs neither
+    (ADR 0002).
+  - **Ends by running** `fabrikka host --server <instance>` (`--no-connect`
+    skips it).
+- **`fabrikka update`** fetches the paired server's manifest, verifies the
+  checksum and replaces the installed file. It refuses to overwrite a copy it
+  didn't install.
+- **"Update available":** the server tells the host its client version when the
+  host connects. An out-of-date host says so in its terminal and on its local
+  page. Nothing updates itself.
+- **Your devices** shows the install command for this instance, with **Copy**.
+- **`BRIDGE_COMMAND` now defaults to `fabrikka`**, the installed client, instead
+  of the unpublished `npx -y @fabrikka/bridge`.
+
+**Test.**
+1. Copy the bundle alone into an empty folder: `node cli.js --version` and
+   `--help` work, with no `node_modules` anywhere.
+2. With `HOME` pointed at an empty scratch folder:
+   - *Your devices* → **Copy** the command → paste it into a terminal: **1 click
+     and one paste**.
+   - The browser opens the pairing page. **Connect this computer**: **1 more
+     click**.
+   - The host runs from `~/.local/bin/fabrikka` and lists this instance on its
+     local page.
+3. The launcher, the file and the one PATH line are where they should be.
+   Running the installer again doesn't add a second PATH line.
+4. A manifest whose checksum doesn't match the file is refused, and nothing is
+   installed.
+5. `http://` from a non-local address is refused. Without Node 22+, the installer
+   stops with directions and installs nothing.
+6. Rebuild the client and restart the server: the connected host reports
+   "update available". `fabrikka update` installs the new file. `fabrikka
+   --version` matches the manifest, and the notice is gone.
+7. The installer never runs `sudo`, and never installs Node, Claude Code or
+   Codex.
+
 ## Later — Shared agents on infrastructure the team runs
 
 > Not scheduled. Recorded so that when it comes, it starts from the rule rather

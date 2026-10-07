@@ -436,6 +436,20 @@ there. What holds the line
   working at once. The host shows when it's running, logs every run locally, and
   stops everything on one click.
 
+### Installing the client (M33)
+
+`curl … | bash` runs code from the instance on the user's machine. The installer
+(ADR 0030) is built to make that as narrow as it can be:
+
+| Risk | Control |
+| --- | --- |
+| The script or file is swapped in transit | The script refuses plain `http://` except for localhost. HTTPS is the protection. |
+| A cut-off download runs half an installer | The script is one function, called on its last line. |
+| A corrupted or truncated client is installed | The SHA-256 from the manifest must match, or nothing is installed. |
+| A compromised instance serves a malicious client | **Not prevented:** the script, manifest and file share an origin, so the checksum can't detect this. Signing with a key the server doesn't hold is the stronger step, and the manifest leaves room for it. |
+| The installer reaches beyond Fabrikka | No `sudo`; it writes only under `~/.local` and one marked line in the shell's startup file (skippable). It installs neither Node nor any agent runtime (ADR 0002). |
+| A client updates itself behind the user's back | It doesn't: the host reports "update available", and the user runs `fabrikka update`. |
+
 ## Declined capabilities
 
 **Permission relay** (`claude/channel/permission`). Claude Code can forward tool-approval prompts to a channel so they can be answered remotely. We do **not** declare this capability: anyone able to reply through the channel could approve tool use in the owner's session, which in a multi-participant room is a straightforward privilege escalation. Revisit only with per-participant verdict attribution.

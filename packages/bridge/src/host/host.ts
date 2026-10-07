@@ -16,6 +16,7 @@ import { startRunner, type RunnerHandle } from '../watch.ts';
 import { HOST_HOME, loadHostConfig, saveHostConfig, type HostConfig } from './config.ts';
 import { startControl } from './control.ts';
 import { openBrowser, pair } from './pair.ts';
+import { VERSION } from '../version.ts';
 
 export interface Binding {
   id: string;
@@ -54,6 +55,8 @@ export class Host {
   readonly log: RunLogEntry[] = [];
   connected = false;
   providers = installedProviders();
+  /** The client version the server serves (M33): newer than ours means "update available". */
+  latestVersion: string | null = null;
 
   constructor(
     cfg: HostConfig,
@@ -79,7 +82,7 @@ export class Host {
       this.say(`connected to ${this.cfg.server}`);
     });
     ws.on('message', (data) => {
-      let frame: { type?: string; bindings?: Binding[]; binding?: Binding; code?: string };
+      let frame: { type?: string; bindings?: Binding[]; binding?: Binding; code?: string; version?: string };
       try {
         frame = JSON.parse(String(data));
       } catch {
@@ -87,6 +90,7 @@ export class Host {
       }
       if (frame.type === 'bindings' && frame.bindings) this.reconcile(frame.bindings);
       if (frame.type === 'binding' && frame.binding) this.add(frame.binding);
+      if (frame.type === 'client' && frame.version) this.clientVersion(frame.version);
       if (frame.type === 'revoked' || (frame.type === 'error' && frame.code === 'unauthenticated')) this.forget();
     });
     ws.on('close', () => {
@@ -97,6 +101,20 @@ export class Host {
       this.retry = Math.min(this.retry * 2, 30_000);
     });
     ws.on('error', () => {});
+  }
+
+  /** The server announced the client it serves. Say so if it isn't us; never update ourselves (ADR 0030). */
+  private clientVersion(version: string): void {
+    const was = this.updateAvailable();
+    this.latestVersion = version;
+    if (this.updateAvailable() && !was) {
+      this.say(`update available: ${VERSION} → ${version}. Run \`fabrikka update\`, then start the host again.`);
+    }
+  }
+
+  updateAvailable(): boolean {
+    // A build from source ("dev") is whatever the developer made it; nothing to offer.
+    return VERSION !== 'dev' && this.latestVersion !== null && this.latestVersion !== VERSION;
   }
 
   /** The device was revoked (or its token is no longer valid): stop and unpair. */
@@ -202,6 +220,9 @@ export class Host {
       server: this.cfg.server,
       deviceName: this.cfg.deviceName,
       connected: this.connected,
+      version: VERSION,
+      latestVersion: this.latestVersion,
+      updateAvailable: this.updateAvailable(),
       providers: this.providers,
       grants: this.cfg.grants,
       agents: [...this.bindings.values()].map((b) => ({

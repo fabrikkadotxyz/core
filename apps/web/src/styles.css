@@ -1757,3 +1757,7 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
   font-size: 0.68rem;
   white-space: nowrap;
 }
+
+/* M33: the install command beside its Copy button. */
+.copy-row { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.copy-row code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }

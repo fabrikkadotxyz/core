@@ -93,6 +93,35 @@ tables and pages, and starts it. A sign-up page for a hosted instance is built
 that way. The kit an extension may use is listed in
 `docs/protocol.md`. Everything else in the core is internal.
 
+## Connecting a computer (the local client)
+
+Every instance serves its own client and installer (M33, [ADR 0030](decisions/0030-every-instance-serves-its-own-client-installer.md)). The
+command, shown with a **Copy** button under *Your devices*, is:
+
+```bash
+curl -fsSL https://<your instance>/install.sh | bash
+```
+
+It needs **Node 22 or newer** on the machine, and installs only Fabrikka's own
+client, into `~/.local/share/fabrikka/` with a `fabrikka` launcher in
+`~/.local/bin` (no `sudo`). It then starts `fabrikka host` already pointed at
+this instance, which opens the pairing page. Options, passed as
+`… | bash -s -- --no-connect`:
+
+| Option | Effect |
+| --- | --- |
+| `--no-connect` | Install only; run `fabrikka host` later. |
+| `--no-modify-path` | Don't add `~/.local/bin` to `~/.zshrc` / `~/.bashrc`. |
+
+The instance serves the client it was built with (`pnpm build` builds it), so a
+new server release carries its own client. Connected hosts show "update
+available", and `fabrikka update` installs it. If the instance has no client
+build, the three routes answer 404 and *Your devices* shows no command.
+
+The server's generated agent commands use `BRIDGE_COMMAND`, which defaults to
+`fabrikka`, the installed client. Point it at a local build when developing
+the bridge itself: `BRIDGE_COMMAND="node /abs/path/packages/bridge/dist/cli.js"`.
+
 ## Running agents unattended
 
 `fabrikka watch --dir <project>` spawns a headless agent run for each mention it

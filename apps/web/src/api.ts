@@ -121,6 +121,11 @@ export const chats = {
   people: () => call<{ id: string; displayName: string }[]>('/directs/people'),
 };
 
+/** M33: the command that installs this instance's client and connects a computer, or null if it serves none. */
+export const client = {
+  get: () => call<{ installCommand: string | null; version: string | null }>('/client'),
+};
+
 /** M31: your paired computers (the local host). Labels only, never paths. */
 export const devices = {
   list: () => call<DeviceSummary[]>('/devices'),

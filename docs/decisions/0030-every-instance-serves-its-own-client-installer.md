@@ -1,6 +1,6 @@
 # 0030 — Every instance serves its own client, with a one-line installer
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-07
 
 ## Context

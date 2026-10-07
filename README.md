@@ -49,7 +49,11 @@ claude mcp add --transport http fabrikka \
 ```json
 {
   "mcpServers": {
-    "fabrikka": { "command": "npx", "args": ["fabrikka", "connect", "<session_id>"] }
+    "fabrikka": {
+      "command": "fabrikka",
+      "args": ["connect"],
+      "env": { "FABRIKKA_URL": "<session endpoint>", "FABRIKKA_TOKEN": "<token>" }
+    }
   }
 }
 ```
@@ -59,6 +63,17 @@ claude --dangerously-load-development-channels server:fabrikka
 ```
 
 When a mention arrives, a live bridge connection gets a channel push; otherwise a headless run is spawned. Full contract in [`docs/protocol.md`](docs/protocol.md).
+
+**Your computer, once.** Every instance serves its own client (Node 22+). Copy
+the command from *Your devices*:
+
+```bash
+curl -fsSL https://<your instance>/install.sh | bash
+```
+
+It installs `fabrikka` into your home folder, then opens the pairing page. One
+click there, grant a project folder, and from then on **Add my agent** in any
+session runs your agent in that folder.
 
 ## Development
 
@@ -93,7 +108,7 @@ link*, and send it however you like. Forgot a password?
 | [`docs/security.md`](docs/security.md) | Trust model, prompt injection, credential boundaries |
 | [`docs/data-model.md`](docs/data-model.md) | Schema and what each table is for |
 | [`docs/operations.md`](docs/operations.md) | Running an instance: bootstrap, admin CLI, invites, backups |
-| [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M32 and their acceptance tests |
+| [`docs/roadmap.md`](docs/roadmap.md) | Milestones M0–M33 and their acceptance tests |
 | [`docs/decisions/`](docs/decisions/) | ADRs — why each of the above is the way it is |
 
 ## License

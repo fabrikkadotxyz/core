@@ -167,6 +167,7 @@ import {
 import { createKit, type Advertised, type Extension } from './kit.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { mailerFromEnv } from './mail.ts';
+import { clientRelease, installCommand, installScript, manifest } from './client.ts';
 import { completePasswordReset, requestPasswordReset } from './password-reset.ts';
 import { rateLimit } from './rate-limit.ts';
 
@@ -189,10 +190,11 @@ export function createApp(options: CreateAppOptions = {}) {
   /**
    * How to invoke the bridge, for the generated .mcp.json.
    *
-   * Defaults to the published package. Point it at the local build during
-   * development: BRIDGE_COMMAND="node /path/to/packages/bridge/dist/cli.js"
+   * Defaults to `fabrikka`, the client this instance serves at /install.sh
+   * (M33, ADR 0030). Point it at the local build when developing the bridge:
+   * BRIDGE_COMMAND="node /path/to/packages/bridge/dist/cli.js"
    */
-  const BRIDGE_COMMAND = (process.env.BRIDGE_COMMAND ?? 'npx -y @fabrikka/bridge')
+  const BRIDGE_COMMAND = (process.env.BRIDGE_COMMAND ?? 'fabrikka')
     .split(' ')
     .filter(Boolean);
 
@@ -221,6 +223,35 @@ export function createApp(options: CreateAppOptions = {}) {
   const advertised: Advertised = { signupUrl: null };
   const kit = createKit({ db, publicUrl: PUBLIC_URL, secureCookies: SECURE_COOKIES, mailer, advertised });
   for (const ext of options.extensions ?? []) ext.mount(app, kit);
+
+  /*
+   * The client this instance serves, and its installer (M33, ADR 0030). Public:
+   * a computer needs them before it's connected. 404 when there's no client build.
+   */
+  app.get('/install.sh', async (c) => {
+    if (!(await clientRelease())) return c.notFound();
+    c.header('content-type', 'text/x-shellscript; charset=utf-8');
+    c.header('cache-control', 'no-store');
+    return c.body(installScript(PUBLIC_URL));
+  });
+  app.get('/downloads/manifest.json', async (c) => {
+    const release = await clientRelease();
+    if (!release) return c.notFound();
+    c.header('cache-control', 'no-store');
+    return c.json(manifest(release, PUBLIC_URL));
+  });
+  app.get('/downloads/fabrikka.mjs', async (c) => {
+    const release = await clientRelease();
+    if (!release) return c.notFound();
+    c.header('content-type', 'text/javascript; charset=utf-8');
+    c.header('cache-control', 'no-store');
+    return c.body(new Uint8Array(release.bytes));
+  });
+  /** For "Your devices": the command to copy, or null when this instance has no client to serve. */
+  app.get('/api/client', async (c) => {
+    const release = await clientRelease();
+    return c.json(release ? { installCommand: installCommand(PUBLIC_URL), version: release.version } : { installCommand: null, version: null });
+  });
 
 
   /* -------------------------------------------------------------------------- */
@@ -1897,6 +1928,9 @@ export function createApp(options: CreateAppOptions = {}) {
           me = { send: (d) => ws.send(d), close: () => ws.close() };
           hostHub.attach(device.id, me);
           ws.send(JSON.stringify({ type: 'ready', device: { id: device.id, name: device.name } }));
+          // M33: the client this server serves, so an out-of-date host can say so.
+          const release = await clientRelease();
+          if (release) ws.send(JSON.stringify({ type: 'client', version: release.version }));
         },
         async onMessage(evt, ws) {
           if (!deviceId) return;

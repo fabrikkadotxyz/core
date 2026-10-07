@@ -53,6 +53,9 @@ const api = (path, init = {}) => {
 };
 const me = (await (await api('/auth/me')).json()).user;
 
+// Devices this run adds are the ones that weren't here when it started (by id, not by time).
+const devicesBefore = new Set((await (await api('/devices')).json()).map((d) => d.id));
+
 /* ------------------------------------------------ 1. the flags, as specified */
 
 const args = harness('args');
@@ -118,8 +121,9 @@ check(claude.status === 201 && (await claude.json()).agent?.displayName?.startsW
 /* ------------------------------------------------ 3. said where it's chosen */
 
 const caveat = /Codex can read files anywhere on this computer/;
-check(caveat.test(readFileSync('apps/web/src/pages/SessionPage.tsx', 'utf8')), 'the picker states the read caveat when Codex is chosen');
-check(/disabled=\{needsCodexOk\}/.test(readFileSync('apps/web/src/pages/SessionPage.tsx', 'utf8')), '…and Add waits for the confirming tick');
+// Since M37 the caveat is the registry's (AGENT_TOOLS), shown by the picker for whichever tool carries one.
+check(caveat.test(readFileSync('packages/types/src/index.ts', 'utf8')) && /agentTool\(effectiveTool\)\?\.caveat/.test(readFileSync('apps/web/src/pages/SessionPage.tsx', 'utf8')), 'the picker states the read caveat when Codex is chosen');
+check(/disabled=\{needsCaveatOk\}/.test(readFileSync('apps/web/src/pages/SessionPage.tsx', 'utf8')), '…and Add waits for the confirming tick');
 check(/Codex agents can read files anywhere/.test(readFileSync('apps/desktop/src/folders.html', 'utf8')) && /Codex agents can read files anywhere/.test(readFileSync('packages/bridge/src/host/control.ts', 'utf8')), "the app's Folders window and the host's page say the same");
 
 /* ------------------------------------------------ 4. real Codex runs */
@@ -156,7 +160,7 @@ await sleep(500);
 if (host.exitCode === null) host.kill();
 await api(base, { method: 'DELETE' });
 for (const d of await (await api('/devices')).json()) {
-  if (Date.now() - new Date(d.lastSeenAt ?? 0).getTime() < 10 * 60_000) await api(`/devices/${d.id}`, { method: 'DELETE' });
+  if (!devicesBefore.has(d.id)) await api(`/devices/${d.id}`, { method: 'DELETE' });
 }
 rmSync(hostHome, { recursive: true, force: true });
 rmSync(project, { recursive: true, force: true });

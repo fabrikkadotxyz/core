@@ -7,7 +7,7 @@
  */
 import { createInterface } from 'node:readline';
 import type { Host } from './host.ts';
-import { addGrant, removeGrant, updateGrant } from './ops.ts';
+import { addGrant, removeGrant, setTool, updateGrant } from './ops.ts';
 
 export function send(message: Record<string, unknown>): void {
   process.stdout.write(JSON.stringify(message) + '\n');
@@ -44,6 +44,10 @@ export function startStdioControl(): { attach(host: Host): void } {
       }
       case 'remove': {
         const done = removeGrant(host, String(req.grantId));
+        return done.ok ? reply({ ok: true }) : reply(done);
+      }
+      case 'tool': {
+        const done = setTool(host, String(req.tool), req.enabled === true);
         return done.ok ? reply({ ok: true }) : reply(done);
       }
       case 'stop':

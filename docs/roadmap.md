@@ -1504,6 +1504,49 @@ itself enforces
    Choosing *Full* shows its warning.
 5. Under 900px wide, the sidebar is the drawer as before, with no handle.
 
+## M37 — The computer decides which agent tools it offers
+
+> "Add my agent" asked *Which agent?* with two radio buttons, and each
+> computer's tools were whatever happened to be on its PATH. Fabrikka will
+> support 8, maybe 10 agent tools. Which ones a computer offers is that
+> computer's call, made where its folders are granted.
+
+- **One registry of agent tools**, in `@fabrikka/types` (`AGENT_TOOLS`), shared
+  by the web app, the server and the host. Each entry holds:
+  - `id`, `name`, and the `command` the host looks for;
+  - an optional `caveat` the picker must show, with a confirming tick (Codex's
+    read caveat, ADR 0032).
+
+  Adding a tool the host can run is one entry here plus its policy flags in the
+  runner. Nothing in the picker or the server changes.
+- **Agent tools on this computer**, a section of the desktop app's Folders
+  window and of the terminal host's page:
+  - every registry tool is listed, marked installed or not;
+  - each has a switch to offer it (on by default when installed);
+  - the choice is kept in the host's own config (`~/.fabrikka/host.json`,
+    `tools`), never on the server.
+- **What the server sees:** a grant's `providers` is now the tools that are
+  installed *and* switched on. Switching a tool off stops its agents on this
+  computer, and they show as not running.
+- **The picker:** *Which agent?* is the app's selector, listing the tools that
+  computer offers by name. It's shown only when there's more than one. The
+  chosen tool's caveat, if it has one, needs the tick before **Add**.
+
+**Test.**
+1. Folders window → **Agent tools**: Claude Code and Codex, both installed
+   and on. Switch Codex off: within seconds the picker in a session offers
+   Claude Code only, and asks no *Which agent?*.
+2. Switch Codex back on: *Which agent?* returns as a selector. Choosing Codex
+   shows its caveat, and Add waits for the tick.
+3. A Codex agent already bound to that computer stops (not running) while
+   Codex is off, and runs again when it's switched back on.
+4. A tool in the registry that isn't installed shows as *Not installed*, and
+   its switch can't be turned on.
+5. Scripted: the registry is the only list of tools (no other hard-coded
+   copy in the server, the picker or the host); `tool` over stdio switches a
+   tool and changes the reported providers; turning on a tool that isn't
+   installed is refused.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

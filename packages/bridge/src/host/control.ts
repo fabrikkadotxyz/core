@@ -14,7 +14,7 @@ import { randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Host } from './host.ts';
-import { addGrant, removeGrant, updateGrant } from './ops.ts';
+import { addGrant, removeGrant, setTool, updateGrant } from './ops.ts';
 
 const PREFERRED_PORT = Number(process.env.FABRIKKA_HOST_PORT ?? 17621);
 
@@ -69,6 +69,13 @@ export async function startControl(host: Host, say: (...a: unknown[]) => void): 
             ? updateGrant(host, m[1]!, (await json(req)) as { label?: string; policy?: unknown })
             : null;
       if (done) return done.ok ? send(res, 200, host.state()) : send(res, done.error === 'no such grant' ? 404 : 400, { error: done.error });
+    }
+
+    // M37: offer, or stop offering, an agent tool on this computer.
+    const t = /^\/api\/tools\/([a-z0-9-]+)$/.exec(url.pathname);
+    if (t && req.method === 'POST') {
+      const done = setTool(host, t[1]!, ((await json(req)) as { enabled?: boolean }).enabled === true);
+      return done.ok ? send(res, 200, host.state()) : send(res, 400, { error: done.error });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/stop') {
@@ -140,6 +147,12 @@ const PAGE = `<!doctype html>
   .segmented button:hover { color:var(--text); }
   .segmented button[aria-checked="true"] { background:#fff; color:var(--text); font-weight:600; box-shadow:0 1px 2px rgba(41,50,65,.12), 0 0 0 1px var(--border); }
   .segmented button[aria-checked="true"][data-value="full"] { color:var(--danger); }
+  /* M37: an on/off switch per agent tool. */
+  .switch { position:relative; width:38px; height:22px; border-radius:11px; border:0; background:var(--border); cursor:pointer; flex:0 0 auto; transition:background 140ms ease; }
+  .switch::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.2); transition:transform 140ms ease; }
+  .switch[aria-checked="true"] { background:var(--accent); }
+  .switch[aria-checked="true"]::after { transform:translateX(16px); }
+  .switch:disabled { opacity:.45; cursor:default; }
   table { width:100%; border-collapse:collapse; font-size:13px; } td { padding:5px 6px; border-top:1px solid var(--border); vertical-align:top; }
 </style></head><body>
 <header><span class="dot" id="dot"></span><strong>Fabrikka host</strong><span id="who" class="muted" style="color:#c9dbe6"></span><span class="spacer"></span><button class="stop" id="stop">Stop all runs</button></header>
@@ -158,6 +171,9 @@ const PAGE = `<!doctype html>
     <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code agents read only inside the folder.</p>
     <p class="error" id="adderror"></p>
   </div>
+  <h2>Agent tools on this computer</h2>
+  <p class="muted">Which agent tools this computer offers in "Add my agent". Fabrikka never installs them; install one, then switch it on here.</p>
+  <div id="tools"></div>
   <h2>Agents on this computer</h2><div id="agents"></div>
   <h2>Recent runs</h2><div class="card"><table id="log"></table></div>
 </main>
@@ -186,6 +202,8 @@ function render(s) {
     '<span class="segmented" role="radiogroup" aria-label="What agents may do in ' + esc(g.label) + '">' + segmented(g.id, g.policy) + '</span>' +
     '<button class="link" data-remove="' + g.id + '">Remove</button>' + (g.policy === 'full' ? '<div class="warn" style="flex-basis:100%">Full: agents can run any command on this computer from this folder.</div>' : '') + '</div>').join('')
     : '<p class="muted">No folders yet. Grant one below, then use “Add my agent” in a session.</p>';
+  $('tools').innerHTML = s.tools.map((t) => '<div class="card row"><div class="grow"><strong>' + esc(t.name) + '</strong> <span class="muted">' + (t.installed ? (t.enabled ? 'offered in Add my agent' : 'installed, not offered') : 'not installed') + '</span></div>' +
+    '<button class="switch" role="switch" aria-label="Offer ' + esc(t.name) + '" data-tool="' + esc(t.id) + '" aria-checked="' + t.enabled + '"' + (t.installed ? '' : ' disabled') + '></button></div>').join('');
   $('agents').innerHTML = s.agents.length ? s.agents.map((a) => '<div class="card row"><div class="grow"><strong>@' + esc(a.agent) + '</strong> <span class="muted">in ' + esc(a.session) + '</span></div><span class="tag">' + esc(a.folder ?? 'folder removed') + '</span>' + (a.running ? '<span class="tag run">running</span>' : a.active ? '<span class="tag">ready</span>' : '<span class="tag">not running</span>') + '</div>').join('')
     : '<p class="muted">No agents yet. In a session: Setup → Add my agent.</p>';
   $('log').innerHTML = s.log.length ? s.log.map((e) => '<tr><td class="muted">' + new Date(e.at).toLocaleTimeString() + '</td><td>@' + esc(e.agent) + '</td><td>' + esc(e.folder) + ' · ' + esc(e.policy) + '</td><td>' + esc(e.event) + (e.detail ? ' — ' + esc(e.detail) : '') + '</td></tr>').join('') : '<tr><td class="muted">Nothing has run yet.</td></tr>';
@@ -210,6 +228,8 @@ $('add').onsubmit = async (e) => { e.preventDefault(); $('adderror').textContent
   if (newPolicy === 'full' && !confirm('Full lets agents run any command on this computer from this folder. Grant it anyway?')) return;
   try { render(await api('POST', '/api/grants', { path: $('path').value, policy: newPolicy })); $('path').value = ''; } catch (err) { $('adderror').textContent = err.message; } };
 document.addEventListener('click', async (e) => { const id = e.target.dataset && e.target.dataset.remove; if (id) render(await api('DELETE', '/api/grants/' + id)); });
+document.addEventListener('click', async (e) => { const t = e.target.closest && e.target.closest('[data-tool]'); if (!t || t.disabled) return;
+  try { render(await api('POST', '/api/tools/' + t.dataset.tool, { enabled: t.getAttribute('aria-checked') !== 'true' })); } catch (err) { $('adderror').textContent = err.message; } });
 $('stop').onclick = async () => render(await api('POST', '/api/stop'));
 refresh(); setInterval(refresh, 2000);
 </script></body></html>`;

@@ -50,6 +50,12 @@
       .segmented button:hover { color: var(--text); }
       .segmented button[aria-checked="true"] { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(41,50,65,.12), 0 0 0 1px var(--border); }
       .segmented button[aria-checked="true"][data-value="full"] { color: var(--danger); }
+      /* M37: an on/off switch per agent tool. */
+      .switch { position: relative; width: 38px; height: 22px; border-radius: 11px; border: 0; padding: 0; background: var(--border); cursor: pointer; flex: 0 0 auto; transition: background 140ms ease; }
+      .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform 140ms ease; }
+      .switch[aria-checked="true"] { background: var(--accent); }
+      .switch[aria-checked="true"]::after { transform: translateX(16px); }
+      .switch:disabled { opacity: .45; cursor: default; }
     </style>
   </head>
   <body>
@@ -72,6 +78,12 @@
         </div>
         <p class="muted" id="policyHelp">Edit in folder: read and edit files here only — no shell, no web.</p>
         <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code agents read only inside the folder.</p>
+      </section>
+
+      <section>
+        <h2>Agent tools on this computer</h2>
+        <p class="muted">Which agent tools this computer offers in “Add my agent”. Fabrikka never installs them: install one, then switch it on here.</p>
+        <div class="list" id="tools"></div>
       </section>
 
       <section>
@@ -121,6 +133,11 @@
               (g.policy === 'full' ? '<div class="warn">Full: agents can run any command on this computer from this folder.</div>' : '') +
               '</div>').join('')
           : '<p class="muted">No folders yet. Add one, then use “Add my agent” in a session.</p>';
+        $('tools').innerHTML = s.tools.map((t) =>
+          '<div class="card"><div class="grow"><strong>' + esc(t.name) + '</strong> <span class="muted">' +
+          (t.installed ? (t.enabled ? 'offered in Add my agent' : 'installed, not offered') : 'not installed') + '</span></div>' +
+          '<button class="switch" role="switch" aria-label="Offer ' + esc(t.name) + '" data-tool="' + esc(t.id) + '" aria-checked="' + t.enabled + '"' + (t.installed ? '' : ' disabled') + '></button></div>'
+        ).join('');
         $('agents').innerHTML = s.agents.length
           ? s.agents.map((a) =>
               '<div class="card"><div class="grow"><strong>@' + esc(a.agent) + '</strong> <span class="muted">in ' + esc(a.session) + '</span></div>' +
@@ -185,6 +202,17 @@
         if (!id) return;
         try {
           await invoke('host_remove', { grantId: id });
+        } catch (err) {
+          showError(String(err));
+        }
+        refresh();
+      });
+
+      document.addEventListener('click', async (e) => {
+        const t = e.target.closest && e.target.closest('[data-tool]');
+        if (!t || t.disabled) return;
+        try {
+          await invoke('host_set_tool', { tool: t.dataset.tool, enabled: t.getAttribute('aria-checked') !== 'true' });
         } catch (err) {
           showError(String(err));
         }

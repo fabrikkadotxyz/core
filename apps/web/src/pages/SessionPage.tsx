@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Select, TeamInitial } from '../components/Select.tsx';
 import { inDesktopApp, openFolders } from '../desktop.ts';
+import { AGENT_TOOLS, agentTool } from '@fabrikka/types';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type {
   ActivityEvent,
@@ -1150,8 +1151,8 @@ function AgentsPanel({
   const [myDevices, setMyDevices] = useState<DeviceSummary[] | null>(null);
   const [picking, setPicking] = useState(false);
   const [choice, setChoice] = useState<string>('');
-  const [tool, setTool] = useState<'claude-code' | 'codex'>('claude-code');
-  const [codexOk, setCodexOk] = useState(false);
+  const [tool, setTool] = useState('');
+  const [caveatOk, setCaveatOk] = useState(false);
   const [hosts, setHosts] = useState<Record<string, { deviceName: string; label: string | null; online: boolean }>>({});
 
   const refresh = useCallback(() => {
@@ -1188,19 +1189,21 @@ function AgentsPanel({
       device: d.name,
       label: g.label,
       online: d.online,
-      // M35: the agent tools that computer has and the host can run.
-      tools: g.providers.filter((p) => p === 'claude-code' || p === 'codex'),
+      // M37: the agent tools that computer offers (its own choice), known to the registry.
+      tools: g.providers.filter((p) => agentTool(p)),
     })),
   );
   const chosen = folders.find((x) => x.key === choice) ?? folders[0];
   // The tool: asked only when the computer has both; otherwise whichever it has.
   const toolFor = (f: (typeof folders)[number] | undefined) => (f?.tools.includes(tool) ? tool : f?.tools[0]);
   const effectiveTool = toolFor(chosen);
-  const needsCodexOk = effectiveTool === 'codex' && !codexOk;
+  // A tool's caveat (Codex's, ADR 0032) needs a confirming tick before Add.
+  const caveat = effectiveTool ? agentTool(effectiveTool)?.caveat : undefined;
+  const needsCaveatOk = !!caveat && !caveatOk;
 
   const addMine = async () => {
     const f = chosen;
-    if (!f || needsCodexOk) return;
+    if (!f || needsCaveatOk) return;
     setError(null);
     try {
       await sessions.addHostAgent(ref_, { deviceId: f.deviceId, grantId: f.grantId, provider: effectiveTool });
@@ -1265,28 +1268,30 @@ function AgentsPanel({
                 </label>
               ))}
               {chosen && chosen.tools.length > 1 && (
+                // M37: as many tools as the computer offers, in the app's own selector.
                 <div className="tool-choice">
                   <span className="muted small">Which agent?</span>
-                  {(['claude-code', 'codex'] as const).map((t) => (
-                    <label key={t} className="check">
-                      <input type="radio" name="tool" checked={effectiveTool === t} onChange={() => setTool(t)} />
-                      <span>{t === 'codex' ? 'Codex' : 'Claude Code'}</span>
-                    </label>
-                  ))}
+                  <Select
+                    label="Agent tool"
+                    value={effectiveTool ?? ''}
+                    options={chosen.tools.map((t) => ({ value: t, label: agentTool(t)?.name ?? t }))}
+                    onChange={(t) => {
+                      setTool(t);
+                      setCaveatOk(false);
+                    }}
+                  />
                 </div>
               )}
-              {effectiveTool === 'codex' && (
-                // ADR 0032: Codex's sandbox confines writes, not reads. Said where it's chosen.
+              {caveat && (
+                // Said where the tool is chosen (ADR 0032 for Codex), from the registry.
                 <label className="check codex-caveat">
-                  <input type="checkbox" checked={codexOk} onChange={(e) => setCodexOk(e.target.checked)} />
+                  <input type="checkbox" checked={caveatOk} onChange={(e) => setCaveatOk(e.target.checked)} />
                   <span className="small">
-                    I understand: <strong>Codex can read files anywhere on this computer.</strong> In Read only and
-                    Edit-in-folder folders it changes nothing outside the folder, has no network, and none of my
-                    other Codex tools.
+                    <strong>I understand:</strong> {caveat}
                   </span>
                 </label>
               )}
-              <button onClick={addMine} disabled={needsCodexOk}>
+              <button onClick={addMine} disabled={needsCaveatOk}>
                 Add
               </button>
             </>
@@ -1310,8 +1315,8 @@ function AgentsPanel({
           label="Agent tool"
           value={provider}
           options={[
-            { value: 'claude-code', label: 'Claude Code' },
-            { value: 'codex', label: 'Codex' },
+            // M37: the registry's tools, plus anything else that speaks MCP.
+            ...AGENT_TOOLS.map((t) => ({ value: t.id, label: t.name })),
             { value: 'other', label: 'Other MCP agent', description: 'Anything that speaks MCP' },
           ]}
           onChange={(v) => setProvider(v)}

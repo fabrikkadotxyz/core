@@ -233,6 +233,12 @@ async fn host_remove(app: AppHandle, grant_id: String) -> Result<Value, String> 
     ask(&app, json!({ "op": "remove", "grantId": grant_id })).await
 }
 
+/// M37: offer, or stop offering, an agent tool on this computer.
+#[tauri::command]
+async fn host_set_tool(app: AppHandle, tool: String, enabled: bool) -> Result<Value, String> {
+    ask(&app, json!({ "op": "tool", "tool": tool, "enabled": enabled })).await
+}
+
 #[tauri::command]
 async fn host_stop(app: AppHandle) -> Result<Value, String> {
     ask(&app, json!({ "op": "stop" })).await
@@ -441,6 +447,7 @@ fn main() {
             host_policy,
             host_remove,
             host_stop,
+            host_set_tool,
             open_folders
         ])
         .setup(|app| {

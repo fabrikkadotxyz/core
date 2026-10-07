@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-host-set-tool"
+description = "Enables the host_set_tool command without any pre-configured scope."
+commands.allow = ["host_set_tool"]
+
+[[permission]]
+identifier = "deny-host-set-tool"
+description = "Denies the host_set_tool command without any pre-configured scope."
+commands.deny = ["host_set_tool"]

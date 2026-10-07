@@ -54,6 +54,9 @@ const login = await fetch(`${CORE}/api/auth/login`, { method: 'POST', headers: {
 const cookie = login.headers.getSetCookie().find((c) => c.startsWith('fabrikka_session=')).split(';')[0];
 const api = (path, init = {}) => fetch(`${CORE}/api${path}`, { ...init, headers: { 'content-type': 'application/json', cookie } });
 
+// Devices this run adds are the ones that weren't here when it started (by id, not by time).
+const devicesBefore = new Set((await (await api('/devices')).json()).map((d) => d.id));
+
 /* --------------------------------------------- 1. the host over stdio */
 
 const hostHome = mkdtempSync(join(tmpdir(), 'm34-host-'));
@@ -215,9 +218,8 @@ if (process.platform === 'darwin' && process.arch === 'arm64' && existsSync(APP)
 
 /* ----------------------------------------------------------------- cleanup */
 
-const devices = await (await api('/devices')).json();
-for (const d of devices) {
-  if (Date.now() - new Date(d.lastSeenAt ?? 0).getTime() < 5 * 60_000) await api(`/devices/${d.id}`, { method: 'DELETE' });
+for (const d of await (await api('/devices')).json()) {
+  if (!devicesBefore.has(d.id)) await api(`/devices/${d.id}`, { method: 'DELETE' });
 }
 if (host.exitCode === null) host.kill();
 rmSync(hostHome, { recursive: true, force: true });

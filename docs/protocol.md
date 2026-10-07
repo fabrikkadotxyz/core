@@ -812,7 +812,7 @@ Host → server:
 
 | Frame | Meaning |
 | --- | --- |
-| `{ type: 'grants', grants: [{ id, label, providers }] }` | What this machine may use. Sent on connect and whenever the user changes a grant. Labels only, never paths. `providers` is the agent tools installed on the machine |
+| `{ type: 'grants', grants: [{ id, label, providers }] }` | What this machine may use. Sent on connect and whenever the user changes a grant or a tool. Labels only, never paths. `providers` is the agent tools **installed and switched on** in this computer's *Agent tools* (M37); ids from `AGENT_TOOLS` |
 
 Server → host:
 
@@ -844,6 +844,7 @@ stdout. Logs go to stderr only.
 | `{ id, op: 'policy', grantId, policy }` | `{ id, ok: true }` |
 | `{ id, op: 'remove', grantId }` | `{ id, ok: true }` |
 | `{ id, op: 'stop' }` | `{ id, ok: true }`: every run stopped |
+| `{ id, op: 'tool', tool, enabled }` | *(M37)* `{ id, ok: true }`, or refused for an unknown tool or one that isn't installed. Offers (or stops offering) an agent tool on this computer |
 
 Pushed: `{ event: 'pair', url, code }` when the host needs pairing. The app opens
 `url` where the user is signed in.

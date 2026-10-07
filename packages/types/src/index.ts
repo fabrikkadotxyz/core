@@ -619,3 +619,37 @@ export interface DeviceSummary {
     usable: boolean;
   }[];
 }
+
+/* -------------------------------------------------------------------------- */
+/* M37 — agent tools                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Every agent tool the local host can run, in one place (M37). The web app's
+ * picker, the server and the host all read this list; nothing else names a
+ * tool. Adding one = an entry here + its policy flags in the runner (spawn.ts).
+ * Which of these a given computer OFFERS is decided on that computer.
+ */
+export interface AgentTool {
+  /** Stable id, as stored on bindings and grants: "claude-code", "codex". */
+  id: string;
+  name: string;
+  /** What the host looks for on the PATH to call it installed. */
+  command: string;
+  /** Shown in the picker, with a confirming tick, when this tool is chosen. */
+  caveat?: string;
+}
+
+export const AGENT_TOOLS: readonly AgentTool[] = [
+  { id: 'claude-code', name: 'Claude Code', command: 'claude' },
+  {
+    id: 'codex',
+    name: 'Codex',
+    command: 'codex',
+    // ADR 0032: its sandbox confines writes, network and its other tools — not reads.
+    caveat:
+      'Codex can read files anywhere on this computer. In Read only and Edit-in-folder folders it changes nothing outside the folder, has no network, and none of your other Codex tools.',
+  },
+];
+
+export const agentTool = (id: string): AgentTool | undefined => AGENT_TOOLS.find((t) => t.id === id);

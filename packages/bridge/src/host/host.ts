@@ -19,6 +19,7 @@ import { acquireHostLock } from './lock.ts';
 import { send, startStdioControl } from './stdio.ts';
 import { openBrowser, pair } from './pair.ts';
 import { VERSION } from '../version.ts';
+import { AGENT_TOOLS } from '@fabrikka/types';
 
 export interface Binding {
   id: string;
@@ -41,10 +42,10 @@ export interface RunLogEntry {
   detail?: string;
 }
 
-/** Agent tools installed here — reported to the server so it can offer them. */
-export function installedProviders(): string[] {
+/** Which registry tools are installed here (M37: the registry, not a hard-coded pair). */
+export function installedTools(): Set<string> {
   const has = (cmd: string) => spawnSync(process.platform === 'win32' ? 'where' : 'which', [cmd], { stdio: 'ignore' }).status === 0;
-  return [has('claude') && 'claude-code', has('codex') && 'codex'].filter(Boolean) as string[];
+  return new Set(AGENT_TOOLS.filter((t) => has(t.command)).map((t) => t.id));
 }
 
 export class Host {
@@ -56,7 +57,13 @@ export class Host {
   private closed = false;
   readonly log: RunLogEntry[] = [];
   connected = false;
-  providers = installedProviders();
+  /** Re-checked when the person opens Agent tools or flips a switch. */
+  installed = installedTools();
+
+  /** What this computer offers: installed AND switched on in Agent tools (M37). */
+  get providers(): string[] {
+    return AGENT_TOOLS.filter((t) => this.installed.has(t.id) && this.cfg.tools?.[t.id] !== false).map((t) => t.id);
+  }
   /** The client version the server serves (M33): newer than ours means "update available". */
   latestVersion: string | null = null;
 
@@ -169,7 +176,8 @@ export class Host {
     };
     if (!grant) return refuse('that folder is no longer granted on this computer');
     if (!existsSync(grant.path)) return refuse(`${grant.path} no longer exists`);
-    if (!this.providers.includes(b.provider)) return refuse(`${b.provider} is not installed here`);
+    if (!this.installed.has(b.provider)) return refuse(`${b.provider} is not installed here`);
+    if (!this.providers.includes(b.provider)) return refuse(`${b.provider} is switched off in this computer's Agent tools`);
     if (!policyVerified(b.provider, grant.policy)) return refuse(`${b.provider} has no verified "${grant.policy}" policy`);
 
     const handle = await startRunner({
@@ -188,6 +196,25 @@ export class Host {
   }
 
   /** A grant changed here: tell the server, and restart the runners it affects. */
+  /**
+   * A tool was switched on or off here (M37): tell the server what this computer
+   * now offers, stop the agents of a tool switched off, start those switched on.
+   */
+  toolsChanged(): void {
+    this.installed = installedTools();
+    saveHostConfig(this.cfg);
+    this.ws?.send(JSON.stringify({ type: 'grants', grants: this.reportedGrants() }));
+    for (const [id, r] of this.runners) {
+      if (this.providers.includes(r.binding.provider)) continue;
+      r.handle.stop();
+      this.runners.delete(id);
+      void this.start(r.binding); // records why it isn't running
+    }
+    for (const b of this.bindings.values()) {
+      if (!this.runners.has(b.id) && this.providers.includes(b.provider)) void this.start(b);
+    }
+  }
+
   grantsChanged(): void {
     saveHostConfig(this.cfg);
     this.ws?.send(JSON.stringify({ type: 'grants', grants: this.reportedGrants() }));
@@ -226,6 +253,13 @@ export class Host {
       latestVersion: this.latestVersion,
       updateAvailable: this.updateAvailable(),
       providers: this.providers,
+      // M37: every registry tool, installed or not, and whether it's offered.
+      tools: AGENT_TOOLS.map((t) => ({
+        id: t.id,
+        name: t.name,
+        installed: this.installed.has(t.id),
+        enabled: this.installed.has(t.id) && this.cfg.tools?.[t.id] !== false,
+      })),
       grants: this.cfg.grants,
       agents: [...this.bindings.values()].map((b) => ({
         id: b.id,

@@ -89,6 +89,8 @@ const PORT = 17000 + Math.floor(Math.random() * 900);
 
 /* ------------------------------------------------------------- pairing */
 
+// The device this run pairs is the one that wasn't on the account before (by id).
+const devicesBefore = new Set(((await req('/devices', { jar: me })).json ?? []).map((d) => d.id));
 const lines = [];
 const host = spawn(process.execPath, ['packages/bridge/dist/cli.js', 'host', '--server', ORIGIN], {
   env: { ...process.env, FABRIKKA_HOST_HOME: home, FABRIKKA_HOST_PORT: String(PORT), FABRIKKA_NO_BROWSER: '1' },
@@ -118,11 +120,8 @@ try {
   check((await req('/devices/pair/confirm', { method: 'POST', body: { code }, jar: me })).status === 400, 'a code works once');
 
   let devs = (await req('/devices', { jar: me })).json;
-  // By name, newest first: an earlier run (or a person's own machine) may have
-  // left a device with the same name on this account. The one just paired
-  // hasn't been seen yet, so a missing lastSeenAt sorts first.
-  const lastSeen = (d) => d.lastSeenAt ?? '9999';
-  const dev = devs.filter((d) => d.name === cfg.deviceName).sort((a, b) => String(lastSeen(b)).localeCompare(String(lastSeen(a))))[0];
+  // Not by name or time: other devices can share both. The one this run paired is new.
+  const dev = devs.find((d) => !devicesBefore.has(d.id) && d.name === cfg.deviceName);
   check(!!dev, 'Your devices lists the computer');
   for (let i = 0; i < 50 && !(await req('/devices', { jar: me })).json.find((d) => d.id === dev.id)?.online; i++) await sleep(100);
   check((await req('/devices', { jar: me })).json.find((d) => d.id === dev.id)?.online === true, '…online');

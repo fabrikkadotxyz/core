@@ -6,7 +6,8 @@
 import { POLICIES, type Policy } from '../spawn.ts';
 import type { Grant } from './config.ts';
 import { checkGrantPath, defaultLabel, newGrantId } from './grants.ts';
-import type { Host } from './host.ts';
+import { AGENT_TOOLS } from '@fabrikka/types';
+import { installedTools, type Host } from './host.ts';
 
 export type OpResult<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -36,6 +37,16 @@ export function updateGrant(host: Host, grantId: string, input: { label?: string
   }
   if (input.label?.trim()) grant.label = input.label.trim().slice(0, 80);
   host.grantsChanged();
+  return { ok: true, value: undefined };
+}
+
+/** M37: offer, or stop offering, an agent tool on this computer. */
+export function setTool(host: Host, toolId: string, enabled: boolean): OpResult {
+  host.installed = installedTools();
+  if (!AGENT_TOOLS.some((t) => t.id === toolId)) return { ok: false, error: 'no such agent tool' };
+  if (enabled && !host.installed.has(toolId)) return { ok: false, error: 'that agent tool is not installed on this computer' };
+  host.cfg.tools = { ...host.cfg.tools, [toolId]: enabled };
+  host.toolsChanged();
   return { ok: true, value: undefined };
 }
 

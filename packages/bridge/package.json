@@ -16,6 +16,7 @@
   "dependencies": {
     "@modelcontextprotocol/client": "2.1.0",
     "@modelcontextprotocol/sdk": "1.30.1",
+    "@fabrikka/types": "workspace:*",
     "ws": "^8.18.3"
   },
   "devDependencies": {

@@ -12,6 +12,7 @@ fn main() {
             "host_policy",
             "host_remove",
             "host_stop",
+            "host_set_tool",
             "open_folders",
         ]),
     ))

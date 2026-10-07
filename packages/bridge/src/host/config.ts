@@ -25,6 +25,11 @@ export interface HostConfig {
   deviceName: string;
   deviceToken?: string;
   grants: Grant[];
+  /**
+   * M37: which agent tools this computer offers, by id. Absent means on when
+   * installed. Chosen here, in Agent tools; the server only sees the result.
+   */
+  tools?: Record<string, boolean>;
 }
 
 export const HOST_HOME = process.env.FABRIKKA_HOST_HOME ?? join(homedir(), '.fabrikka');
@@ -61,6 +66,7 @@ export function loadHostConfig(server?: string): HostConfig {
     // server, this machine pairs again. Its folder grants are the machine's and stay.
     deviceToken: cfg.server && cfg.server !== resolved ? undefined : cfg.deviceToken,
     grants: Array.isArray(cfg.grants) ? cfg.grants : [],
+    tools: cfg.tools && typeof cfg.tools === 'object' ? cfg.tools : {},
   };
 }
 

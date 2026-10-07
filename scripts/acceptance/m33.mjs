@@ -148,6 +148,9 @@ const login = await fetch(`${CORE}/api/auth/login`, { method: 'POST', headers: {
 fede.cookie = login.headers.getSetCookie().find((c) => c.startsWith('fabrikka_session=')).split(';')[0];
 const api = (path, init = {}) => fetch(`${CORE}/api${path}`, { ...init, headers: { 'content-type': 'application/json', cookie: fede.cookie, ...(init.headers ?? {}) } });
 
+// Devices this run adds are the ones that weren't here when it started (by id, not by time).
+const devicesBefore = new Set((await (await api('/devices')).json()).map((d) => d.id));
+
 let hostOut = '';
 // Its own process group: the installer ends by exec'ing the host, so stopping
 // the shell alone would leave the host running.
@@ -191,10 +194,8 @@ try {
 } catch {
   // already gone
 }
-const mine = await (await api('/devices')).json();
-for (const d of mine.filter((d) => d.online || d.lastSeenAt)) {
-  // Only the device this run paired: the scratch host's name is this machine's, so match on recency.
-  if (Date.now() - new Date(d.lastSeenAt ?? 0).getTime() < 5 * 60_000) await api(`/devices/${d.id}`, { method: 'DELETE' });
+for (const d of await (await api('/devices')).json()) {
+  if (!devicesBefore.has(d.id)) await api(`/devices/${d.id}`, { method: 'DELETE' });
 }
 instance.kill();
 for (const d of [home, lone, noPath, fakeHome, noNodeHome]) rmSync(d, { recursive: true, force: true });

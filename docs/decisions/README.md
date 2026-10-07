@@ -36,10 +36,10 @@ What we rejected and why.
 | [0001](0001-session-is-an-mcp.md) | The session is itself an MCP | Accepted |
 | [0002](0002-do-not-own-the-agent-runtime.md) | Fabrikka does not own the agent runtime | Accepted |
 | [0003](0003-hybrid-wake-up.md) | Hybrid wake-up: channels when live, spawn when away | Accepted |
-| [0004](0004-per-participant-credentials.md) | MCP credentials are per-participant | Accepted |
+| [0004](0004-per-participant-credentials.md) | MCP credentials are per-participant | Accepted; superseded for team credentials by 0028 |
 | [0005](0005-two-sdk-generations.md) | Two MCP SDK generations in one repo | Accepted |
 | [0006](0006-owner-scoped-endpoint-path.md) | Owner-scoped MCP endpoint path | Accepted |
-| [0007](0007-email-is-a-transport.md) | Email is a transport, not a mechanism | Accepted |
+| [0007](0007-email-is-a-transport.md) | Email is a transport, not a mechanism | Accepted; amended by 0029 |
 | [0008](0008-mentions-as-stable-markers.md) | Mentions are stable markers, and mention rows are derived | Accepted |
 | [0009](0009-participant-scoped-tokens.md) | Session tokens are participant-scoped, and OAuth is deferred | Accepted |
 | [0010](0010-bridge-proxies-and-gates-at-source.md) | The bridge proxies upstream, and delivery is gated at the source | Accepted |
@@ -59,4 +59,7 @@ What we rejected and why.
 | [0024](0024-connections-are-categories-over-vendor-mcp-servers.md) | Connections are categories over vendors' own MCP servers | Proposed |
 | [0025](0025-teams-and-who-can-see-a-session.md) | Teams, and who can see a session | Accepted |
 | [0026](0026-chats-are-a-light-kind-of-session.md) | Chats are a light kind of session | Accepted |
-| [0027](0027-a-paired-local-host-runs-agents-in-folders-granted-on-the-machine.md) | A paired local host runs agents in folders granted on the machine | Proposed |
+| [0027](0027-a-paired-local-host-runs-agents-in-folders-granted-on-the-machine.md) | A paired local host runs agents in folders granted on the machine | Accepted |
+| [0028](0028-team-credentials-are-shared-marked-and-lose-to-your-own.md) | Team credentials: shared, marked as shared, and second to your own | Accepted |
+| [0029](0029-the-core-is-a-library-a-deployment-extends-it.md) | The core is a library; a deployment extends it | Accepted |
+| [0030](0030-every-instance-serves-its-own-client-installer.md) | Every instance serves its own client, with a one-line installer | Proposed |

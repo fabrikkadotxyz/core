@@ -474,8 +474,10 @@ check(
   'A CODEX AGENT GETS CODEX INSTRUCTIONS, never a claude command',
 );
 check(
-  codexSetup.runnerCommand.includes('--provider codex'),
-  "the codex runner command names its provider",
+  codexSetup.runnerCommand.includes('--provider codex') &&
+    // Codex's only verified policy is `full`; without it the runner refuses to start (ADR 0027).
+    codexSetup.runnerCommand.includes('--policy full'),
+  "the codex runner command names its provider and its one verified policy, full",
 );
 
 const otherSetup = (

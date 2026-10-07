@@ -84,7 +84,10 @@ export async function startRunner(
     return null;
   }
   if (!policyVerified(opts.provider, policy)) {
-    log(`${opts.provider} has no verified "${policy}" policy yet (ADR 0027). Use --policy full to run it unsandboxed.`);
+    log(
+      `${opts.provider} has no verified "${policy}" policy yet (ADR 0027). Use --policy full to run it ` +
+        (opts.provider === 'codex' ? "under Codex's own workspace-write sandbox." : 'with no sandbox.'),
+    );
     return null;
   }
 

@@ -584,9 +584,19 @@ claude -p "<prompt>" \
   --append-system-prompt "<session preamble>" \
   --allowedTools <…> \
   --mcp-config <generated>.json \
-  --dangerously-skip-permissions \
+  <policy flags> \
   --resume <thread_id>            # when continuing
 ```
+
+`<policy flags>` come from the folder's policy (M31,
+[ADR 0027](decisions/0027-a-paired-local-host-runs-agents-in-folders-granted-on-the-machine.md)),
+**`edit` by default**, for the local host and `fabrikka watch` alike:
+
+| Policy | Flags |
+| --- | --- |
+| `read` | `--restricted --permission-prompts none --strict-mcp-config --allowedTools mcp__fabrikka --permission-mode dontAsk --tools Read,Glob,Grep` |
+| `edit` (default) | the same, with `--permission-mode acceptEdits --tools Read,Glob,Grep,Edit,Write` |
+| `full` | `--dangerously-skip-permissions --allowedTools <…>`: no sandbox, opt-in per folder or with `watch --policy full` |
 
 ### Codex
 
@@ -597,6 +607,11 @@ codex exec --json --skip-git-repo-check --approve-for-me \
   -o <last-message-file> \
   "<prompt>"
 ```
+
+Codex has one verified policy so far, **`full`**, which is the command above:
+the session UI's runner command passes `--policy full` for a Codex agent, and the
+local host doesn't bind Codex to a folder until its narrower policies are
+verified (ADR 0027).
 
 The server key is **`fabrikka_session`, not `fabrikka`**: `-c` *merges* into the
 user's own `config.toml`, so reusing a name someone may already have configured
@@ -609,7 +624,8 @@ older docs implied, each found by running it rather than reading about it:
 - **There is no `--full-auto`.** `exec` runs shell commands without approval by
   default; `--approve-for-me` auto-approves what does need it, under a
   **workspace-write sandbox**. That is a *stronger* posture than Claude Code's
-  `--dangerously-skip-permissions`, which has no sandbox at all.
+  `full` policy (`--dangerously-skip-permissions`, no sandbox at all), though
+  Claude Code's default `edit` policy runs no commands at all.
 - **MCP servers can be injected per-invocation** with `-c`, so a Codex run does
   reach the session endpoint and posts as itself. The token must arrive via
   `bearer_token_env_var`; `bearer_token` is rejected outright, which conveniently
@@ -676,7 +692,7 @@ that position is a standing liability.
 
 ### Unattended execution
 
-Headless runs cannot stop at permission prompts, so Claude Code runs with `--dangerously-skip-permissions` (no sandbox) and Codex with `--approve-for-me` (workspace-write sandbox). **This is only safe because of mention-gating and trust tiers** — a spawn is triggered only by a participant authorized to drive that agent. See `docs/security.md`. Never relax one without re-reading the other.
+Headless runs cannot stop at permission prompts, so prompts are answered by policy instead: Claude Code runs under the folder's policy, **`edit` by default** (files in the folder only; no shell, no web), or `--dangerously-skip-permissions` (no sandbox) where a folder is granted `full`; Codex runs with `--approve-for-me` (workspace-write sandbox). **This is only safe because of mention-gating and trust tiers** — a spawn is triggered only by a participant authorized to drive that agent. See `docs/security.md`. Never relax one without re-reading the other.
 
 Poll cadence for pending mentions: 5 s, exponential backoff on failure.
 

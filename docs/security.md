@@ -150,14 +150,17 @@ Be honest about the residual risk:
 
 ## Threat 2 — unattended execution
 
-The spawn path runs `claude -p … --dangerously-skip-permissions` or
+The spawn path runs `claude -p …` under a folder **policy** or
 `codex exec … --approve-for-me`. There is no way around unattended execution: a
-headless run cannot stop at a prompt.
+headless run cannot stop at a prompt, so prompts are answered by policy.
 
-The two differ, and it is worth knowing which you are running. Codex's
-`--approve-for-me` auto-approves **inside a workspace-write sandbox**; Claude
-Code's headless mode has **no sandbox at all**. For unattended work on a machine
-you care about, Codex is the more contained of the two.
+Since M31 the default is contained (Threat 9,
+[ADR 0027](decisions/0027-a-paired-local-host-runs-agents-in-folders-granted-on-the-machine.md)):
+Claude Code runs as *Edit in folder* (files in that folder only, no shell, no
+web), enforced by Claude Code's own tool restrictions. *Full*
+(`--dangerously-skip-permissions`, **no sandbox at all**) is opt-in per folder,
+or `watch --policy full`. Codex's `--approve-for-me` auto-approves **inside a
+workspace-write sandbox**, which can still run commands in the folder.
 
 So the containment is entirely upstream, in who can cause a spawn:
 

@@ -2023,7 +2023,10 @@ function agentSetup(mcpUrl: string, token: string, provider: string) {
   FABRIKKA_TOKEN=${token} \\
   ` +
     `${BRIDGE_COMMAND.join(' ')} watch --dir .` +
-    (provider === 'codex' ? ' --provider codex' : '');
+    // Claude Code gets the default policy, `edit` (ADR 0027). Codex has only one
+    // verified policy, `full` (its workspace-write sandbox); without the flag the
+    // runner refuses to start it.
+    (provider === 'codex' ? ' --provider codex --policy full' : '');
 
   // Phrased for the provider's own CLI. Codex takes the token from the
   // environment because it rejects a literal `bearer_token`, which conveniently

@@ -1459,14 +1459,17 @@ function AgentSetup({
           <p className="hint danger-hint">
             {agent.provider === 'codex' ? (
               <>
-                <strong>Runs start without approval prompts</strong>, inside a
-                workspace-write sandbox. Only mentions from you can trigger them.
+                <strong>Runs start without approval prompts</strong>, inside Codex's
+                workspace-write sandbox: they can run commands in that folder. Only
+                mentions from you can trigger them.
               </>
             ) : (
               <>
-                <strong>Runs start without permission prompts, and without a
-                sandbox.</strong>{' '}
-                Only mentions from you can trigger them.
+                <strong>Runs start without permission prompts, in Edit in folder
+                mode</strong>: they read and edit files in that folder only, with no
+                shell and no web. Add <code>--policy full</code> for an agent that
+                needs to run commands, such as tests. Only mentions from you can
+                trigger them.
               </>
             )}{' '}
             The command prints what it will do before it does anything — read it.

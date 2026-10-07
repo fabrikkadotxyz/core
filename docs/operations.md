@@ -89,14 +89,17 @@ The session UI generates the command under *Agents → While away*.
 
 | | Claude Code | Codex |
 | --- | --- | --- |
-| Spawn | `claude -p … --dangerously-skip-permissions` | `codex exec … --approve-for-me` |
-| Sandbox | **none** | workspace-write |
+| Spawn | `claude -p …` with the policy's flags | `codex exec … --approve-for-me` |
+| Policy | **`edit` by default**: files in the folder only, no shell, no web. `--policy read` or `--policy full` (no sandbox) | `full` only, the one verified so far; the UI's command passes `--policy full` |
+| Sandbox | enforced by Claude Code's own tool restrictions; none under `full` | workspace-write |
 | Session tools during the run | yes, via `--mcp-config` | yes, via `-c mcp_servers.…` overrides |
 | How the answer gets posted | the agent calls `post_message` itself | the same |
 
-Codex is the safer of the two here: `--approve-for-me` auto-approves inside a
-workspace-write sandbox, whereas Claude Code's headless mode has no sandbox. If
-that matters for your use, prefer a Codex agent for unattended work.
+Since M31, Claude Code's default is the more contained of the two: *Edit in
+folder* can't run commands at all. Codex's workspace-write sandbox can run
+commands, inside the folder. Claude Code's `full` policy has no sandbox, so grant
+it only where an agent truly needs to run things, such as tests. See
+[ADR 0027](decisions/0027-a-paired-local-host-runs-agents-in-folders-granted-on-the-machine.md).
 
 The Codex desktop app bundles its CLI outside `PATH`, at
 `~/.codex/plugins/.plugin-appserver/codex-cli/bin/codex`. The runner finds it

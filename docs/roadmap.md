@@ -610,10 +610,21 @@ Ranked by adoption × spawn feasibility, not by name recognition:
 
 | # | Agent | Why it earns the slot | Spawn readiness |
 | --- | --- | --- | --- |
-| 1 | **Gemini CLI** | Google distribution and a free tier — most users per unit of work | Streamable-HTTP MCP ✓, headless with model, output format **and resume** ✓ |
+| 1 | **Antigravity CLI** (`agy`) | Google's terminal agent for individuals, and Google's distribution — most users per unit of work | `agy -p` ✓, `--dangerously-skip-permissions` ✓, MCP ✓; remote (streamable-HTTP) MCP, output format and resume — **verify first** |
 | 2 | **OpenCode** | Widely used open-source agent, and the most-starred one | `opencode run -m provider/model` ✓, MCP ✓, `--attach` skips MCP cold-boot |
 | 3 | **Cursor CLI** | Most broadly adopted overall among individuals and small teams | `agent -p` ✓, MCP shares the editor's config — **but verify first** |
 | 4 | **Goose** *or* **Copilot CLI** | Goose is MCP-native, so least work and closest to the architecture. Copilot CLI has the widest distribution. Pick by whether slot 4 is about proving the bet or reach | Unverified |
+
+> **Slot 1 changed on 2026-10-07: Antigravity CLI replaces Gemini CLI.** Since
+> 2026-06-18, Gemini CLI refuses personal Google sign-ins (free, AI Pro and AI
+> Ultra: *"This client is no longer supported for Gemini Code Assist for
+> individuals"*). It keeps working only on a Gemini API key or a paid Code Assist
+> Standard/Enterprise license, so the free tier that earned it the slot is gone.
+> Google sends individuals to the Antigravity CLI instead. **Verify it before
+> building**, as for Cursor: three things the spawn path needs aren't confirmed by
+> its documentation, namely a remote MCP server from a config passed per run, a
+> machine-readable output stream, and resuming a run (M15 steering resumes). A
+> Gemini CLI adapter on an API key stays possible later; it is no longer slot 1.
 
 > **Verify Cursor before committing.** There is an open Cursor request titled *MCP
 > access in headless mode*. If MCP does not work under `-p`, a spawned Cursor run
@@ -622,8 +633,9 @@ Ranked by adoption × spawn feasibility, not by name recognition:
 > which point three documented claims turned out to be wrong. Install it, run it,
 > then decide.
 
-Not on the list, deliberately: **Cursor IDE, Antigravity, Cline, Windsurf.** IDEs
-and extensions with no headless CLI. They get Lane A today and need nothing from us.
+Not on the list, deliberately: **Cursor IDE, the Antigravity IDE, Cline,
+Windsurf.** IDEs and extensions with no headless CLI of their own (the Antigravity
+CLI is slot 1 and ships separately from the IDE). They get Lane A today and need nothing from us.
 
 ### Model pass-through
 
@@ -648,7 +660,7 @@ is that we mostly cannot choose, and the interface says so:
 - On live lanes the UI reports the model rather than offering an inert control.
 
 **Test:**
-1. Add a Gemini CLI agent, run it via the runner, and see its answer in the session.
+1. Add an Antigravity CLI agent, run it via the runner, and see its answer in the session.
 2. Same for OpenCode, with `-m provider/model`.
 3. Set a model on a spawn-enabled agent; the timeline shows which model the run
    actually used.

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { DeviceSummary } from '@fabrikka/types';
 import { client, devices } from '../api.ts';
+import { inDesktopApp, openFolders } from '../desktop.ts';
 import { timeAgo } from '../outputs/Outputs.tsx';
 
 /**
@@ -71,6 +72,24 @@ export function DevicesPage() {
           Computers that can run your agents. Each runs them only in folders granted on that computer, with the
           policy chosen there.
         </p>
+        {/* M34: in the desktop app, its own Folders window — where folders are chosen, on this computer. */}
+        {inDesktopApp() ? (
+          <div className="card-hint">
+            <p>
+              <strong>Folders on this computer.</strong> Choose which folders your agents may work in, and how much
+              they may do there.
+            </p>
+            <button onClick={() => openFolders().catch(() => {})}>Add folders…</button>
+          </div>
+        ) : (
+          list !== null &&
+          list.length > 0 && (
+            <p className="muted small">
+              Folders are chosen on each computer, never from this page: in the Fabrikka app (menu-bar icon →
+              Folders…), or on the page <code>fabrikka host</code> opened.
+            </p>
+          )
+        )}
         {list !== null && <ConnectCommand first={list.length === 0} />}
         <ul className="session-list">
           {list?.map((d) => (
@@ -92,7 +111,7 @@ export function DevicesPage() {
                 </button>
               </div>
               {d.grants.length === 0 ? (
-                <p className="muted small">No folders granted yet — grant one in the host's window.</p>
+                <p className="muted small">No folders granted yet.</p>
               ) : (
                 <ul className="grant-list">
                   {d.grants.map((g) => (

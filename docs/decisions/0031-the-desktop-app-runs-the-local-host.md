@@ -85,8 +85,15 @@ which is exactly what ADR 0027 rules out.
 
 - **The host commands are allowed only to the local Folders window,** through
   Tauri capabilities scoped to that window and the app's own bundled pages.
-- **No capability ever names a remote URL.** The remote main window gets no host
-  command at all, and neither does any page it navigates to.
+- **The remote main window gets exactly one command: `open_folders`.** It opens
+  (or focuses) the local Folders window, and takes no argument: no path, no
+  policy. So the web app's *Add folders…* button, on *Your devices* and in a
+  session's Setup, brings up the app's own window, where the person chooses.
+  The worst a compromised server can do with it is open a window.
+- That one permission is granted **at runtime, for the configured instance's
+  origin only** (`<scheme>://<host>[:port]/*`). It's never granted to any other
+  site the window might navigate to, and no capability file names a remote
+  URL.
 - Choosing a folder happens in the **native folder picker**, opened from the
   Folders window. That's the user's own click on their own machine, as ADR 0027
   requires.

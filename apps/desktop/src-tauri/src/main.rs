@@ -238,6 +238,29 @@ async fn host_stop(app: AppHandle) -> Result<Value, String> {
     ask(&app, json!({ "op": "stop" })).await
 }
 
+/* ------------------------------------- command: the instance's own pages, only */
+
+/// Open the Folders window. The ONE command the remote web app may call (its
+/// "Add folders…" button): no argument, so it can't name a path or a policy —
+/// the person chooses in the app's own window (ADR 0031).
+#[tauri::command]
+fn open_folders(app: AppHandle) -> Result<(), String> {
+    show_folders(&app).map_err(|e| e.to_string())
+}
+
+/// Grant `open_folders`, and nothing else, to pages from the configured instance
+/// — its exact origin, never any other site the window might reach.
+fn let_instance_open_folders(app: &AppHandle, server: &url::Url) {
+    let origin = server.origin().ascii_serialization();
+    let capability = tauri::ipc::CapabilityBuilder::new("instance-opens-folders")
+        .remote(format!("{origin}/*"))
+        .window("main")
+        .permission("allow-open-folders");
+    if let Err(e) = app.add_capability(capability) {
+        eprintln!("[fabrikka app] couldn't let {origin} open the Folders window: {e}");
+    }
+}
+
 /* ---------------------------------------------- commands: first-run page only */
 
 /// Save the server and open it; start the host for it. Called once, from the first-run page.
@@ -248,6 +271,7 @@ fn connect(app: AppHandle, url: String, start_at_login: Option<bool>) -> Result<
         fs::write(dir.join("server-url"), parsed.as_str()).map_err(|e| e.to_string())?;
     }
     settle_autostart(&app, Some(start_at_login.unwrap_or(true)));
+    let_instance_open_folders(&app, &parsed);
     show_main(&app, None).map_err(|e| e.to_string())?;
     start_host(&app);
     Ok(())
@@ -416,10 +440,14 @@ fn main() {
             host_add_folder,
             host_policy,
             host_remove,
-            host_stop
+            host_stop,
+            open_folders
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+            if let Some(server) = stored_url(&handle).and_then(|u| parse_server(&u).ok()) {
+                let_instance_open_folders(&handle, &server);
+            }
             show_main(&handle, None)?;
             if stored_url(&handle).is_some() {
                 // The installer may have chosen the server: settle start-at-login now.

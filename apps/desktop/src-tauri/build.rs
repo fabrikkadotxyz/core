@@ -12,6 +12,7 @@ fn main() {
             "host_policy",
             "host_remove",
             "host_stop",
+            "open_folders",
         ]),
     ))
     .expect("failed to build the Tauri context");

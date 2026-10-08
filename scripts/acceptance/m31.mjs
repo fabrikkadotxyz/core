@@ -19,6 +19,7 @@ import { request as httpRequest } from 'node:http';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import WebSocket from 'ws';
 
 const ORIGIN = 'http://localhost:9090';
 const API = `${ORIGIN}/api`;
@@ -221,6 +222,32 @@ try {
   } else {
     console.log('skip real runs (set FABRIKKA_TEST_SPAWN=1 to spawn claude)');
   }
+
+  /* ------------------------------------ grants sent the instant it opens */
+
+  // A host reports its grants as soon as the socket opens, before the server has
+  // looked up the device. That frame must not be dropped: it's what brings the bindings.
+  const reported = (await req('/devices', { jar: me })).json.find((d) => d.id === dev.id).grants.map((g) => ({ id: g.id, label: g.label, providers: g.providers }));
+  const early = await new Promise((resolve) => {
+    const ws = new WebSocket(`${ORIGIN.replace(/^http/, 'ws')}/host`, { headers: { Authorization: `Bearer ${cfg.deviceToken}` } });
+    const done = (v) => (clearTimeout(t), ws.close(), resolve(v));
+    const t = setTimeout(() => done(null), 5000);
+    ws.on('open', () => ws.send(JSON.stringify({ type: 'grants', grants: reported })));
+    ws.on('message', (d) => {
+      const f = JSON.parse(String(d));
+      if (f.type === 'bindings') done(f.bindings);
+    });
+    ws.on('error', () => done(null));
+  });
+  check(early?.some((b) => b.agent.displayName === agentName), 'grants sent the instant the socket opens still bring back the bindings');
+  // That socket took the host's place; let the host reconnect before going on.
+  let back;
+  for (let i = 0; i < 60; i++) {
+    back = (await req(base, { jar: me })).json.participants.find((p) => p.displayName === agentName)?.status;
+    if ((back === 'connected' || back === 'idle') && (await (await local('/api/state')).json()).connected) break;
+    await sleep(250);
+  }
+  check(back === 'connected' || back === 'idle', '…and the host, reconnecting, gets its agent back');
 
   /* --------------------------------------------------------- revoke */
 

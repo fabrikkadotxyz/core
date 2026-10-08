@@ -812,7 +812,7 @@ Host → server:
 
 | Frame | Meaning |
 | --- | --- |
-| `{ type: 'grants', grants: [{ id, label, providers }] }` | What this machine may use. Sent on connect and whenever the user changes a grant or a tool. Labels only, never paths. `providers` is the agent tools **installed and switched on** in this computer's *Agent tools* (M37); ids from `AGENT_TOOLS` |
+| `{ type: 'grants', grants: [{ id, label, providers }] }` | What this machine may use. Sent on connect and whenever the user changes a grant or a tool. Labels only, never paths. `providers` is the agent tools **installed and switched on** in this computer's *Agent tools* (M37); ids from `AGENT_TOOLS`. A host may send it the moment the socket opens: the server holds frames until it has authenticated the device, and never drops them |
 
 Server → host:
 

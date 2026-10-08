@@ -2049,23 +2049,34 @@ export function createApp(options: CreateAppOptions = {}) {
       let me: { send: (d: string) => void; close: () => void } | null = null;
       /** Bindings (and their fresh tokens) go out once per connection, not per grant change. */
       let bound = false;
+      /**
+       * The host sends its grants the moment the socket opens, which can be before
+       * the device lookup below resolves. Frames wait for it: one dropped here
+       * meant no bindings for the whole connection, and every agent offline.
+       */
+      let opened: Promise<void> = Promise.resolve();
       return {
-        async onOpen(_evt, ws) {
-          const device = await resolveDevice(db, bearer);
-          if (!device) {
-            ws.send(JSON.stringify({ type: 'error', code: 'unauthenticated' }));
-            ws.close();
-            return;
-          }
-          deviceId = device.id;
-          me = { send: (d) => ws.send(d), close: () => ws.close() };
-          hostHub.attach(device.id, me);
-          ws.send(JSON.stringify({ type: 'ready', device: { id: device.id, name: device.name } }));
+        onOpen(_evt, ws) {
+          opened = (async () => {
+            const device = await resolveDevice(db, bearer);
+            if (!device) {
+              ws.send(JSON.stringify({ type: 'error', code: 'unauthenticated' }));
+              ws.close();
+              return;
+            }
+            deviceId = device.id;
+            me = { send: (d) => ws.send(d), close: () => ws.close() };
+            hostHub.attach(device.id, me);
+            ws.send(JSON.stringify({ type: 'ready', device: { id: device.id, name: device.name } }));
+          })();
           // M33: the client this server serves, so an out-of-date host can say so.
-          const release = await clientRelease();
-          if (release) ws.send(JSON.stringify({ type: 'client', version: release.version }));
+          void opened.then(async () => {
+            const release = deviceId ? await clientRelease() : null;
+            if (release) ws.send(JSON.stringify({ type: 'client', version: release.version }));
+          });
         },
         async onMessage(evt, ws) {
+          await opened;
           if (!deviceId) return;
           let frame: { type?: string; grants?: { id: string; label: string; providers: string[] }[] };
           try {
@@ -2081,11 +2092,12 @@ export function createApp(options: CreateAppOptions = {}) {
             }
           }
         },
+        // After the lookup, so a socket that closes mid-lookup isn't left attached.
         onClose() {
-          if (deviceId && me) hostHub.detach(deviceId, me);
+          void opened.then(() => deviceId && me && hostHub.detach(deviceId, me));
         },
         onError() {
-          if (deviceId && me) hostHub.detach(deviceId, me);
+          void opened.then(() => deviceId && me && hostHub.detach(deviceId, me));
         },
       };
     }),

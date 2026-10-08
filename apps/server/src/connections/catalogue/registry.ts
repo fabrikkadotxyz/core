@@ -6,11 +6,12 @@
  * A deployment can add its own entries through createApp({ catalogue }) — the
  * acceptance check uses that for a local fake vendor.
  */
+import { confluence, jira } from './atlassian.ts';
 import { github } from './github.ts';
 import type { CatalogueEntry } from './types.ts';
 
 // One line per vendor, added once it has been connected for real.
-const BUILT_IN: CatalogueEntry[] = [github];
+const BUILT_IN: CatalogueEntry[] = [github, jira, confluence];
 
 let extra: CatalogueEntry[] = [];
 

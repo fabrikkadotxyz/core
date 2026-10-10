@@ -196,6 +196,46 @@ await fetch(`http://localhost:${A}/admin/ttl/3600`, { method: 'POST' });
 check((await connect('fakehub')).includes('connected=fakehub') && (await json('/me/connections')).connections.find((c) => c.slug === 'fakehub')?.status === 'ok', 'Reconnect: one sign-in, and it works again');
 check((await tools()).includes('fakehub__list_issues'), '…with its grants intact');
 
+/* ------------------------------------------------ 6. the desktop app's handoff to the browser (ADR 0033) */
+
+await api('/me/connections/fakehub', { method: 'DELETE' });
+const ho = await json('/connections/oauth/start', { method: 'POST', body: JSON.stringify({ entry: 'fakehub', handoff: true }) });
+const hoUrl = new URL(ho.handoffUrl ?? 'http://x');
+const ticket = hoUrl.searchParams.get('t') ?? '';
+check(hoUrl.origin === INST && hoUrl.pathname === '/api/connections/oauth/handoff' && !!ticket, 'the desktop app gets a handoff link on the instance itself');
+
+const confirm = await fetch(hoUrl, { redirect: 'manual' }); // the default browser: no Fabrikka login
+const confirmHtml = await confirm.text();
+check(confirm.status === 200 && confirmHtml.includes(EMAIL) && confirmHtml.includes('method="post"'), 'THE BROWSER IS SHOWN WHICH ACCOUNT IT CONNECTS, and opening the link starts nothing');
+const edited = `${ticket.slice(0, -4)}${ticket.slice(-4) === 'AAAA' ? 'BBBB' : 'AAAA'}`;
+check((await fetch(`${INST}/api/connections/oauth/handoff?t=${encodeURIComponent(edited)}`)).status === 400, 'AN EDITED OR FORGED TICKET IS REFUSED');
+
+const cont = await fetch(`${INST}/api/connections/oauth/handoff`, {
+  method: 'POST',
+  redirect: 'manual',
+  headers: { 'content-type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({ t: ticket }),
+});
+const bound = cont.headers.getSetCookie().find((c) => c.startsWith('fabrikka_oauth_state=')) ?? '';
+check(
+  cont.status === 302 && (cont.headers.get('location') ?? '').startsWith(`http://localhost:${A}`) &&
+    /HttpOnly/i.test(bound) && /SameSite=Lax/i.test(bound) && /Path=\/api\/connections\/oauth\/callback/i.test(bound),
+  "Continue binds this browser to the sign-in (an HttpOnly cookie for the callback only) and goes to the vendor",
+);
+const hoCallback = (await fetch(cont.headers.get('location') ?? 'http://x', { redirect: 'manual' })).headers.get('location') ?? '';
+check((await fetch(hoCallback, { redirect: 'manual' })).status === 401, "A BROWSER WITH NEITHER THE BINDING NOR A LOGIN CAN'T FINISH IT");
+check(
+  (await fetch(hoCallback, { redirect: 'manual', headers: { cookie: 'fabrikka_oauth_state=another-sign-ins-state' } })).status === 400,
+  'A BINDING FOR ANOTHER SIGN-IN IS REFUSED',
+);
+const finished = await fetch(hoCallback, { redirect: 'manual', headers: { cookie: bound.split(';')[0] } });
+check(
+  finished.status === 200 && /is connected/.test(await finished.text()) && finished.headers.getSetCookie().some((c) => /^fabrikka_oauth_state=;/.test(c)),
+  'the bound browser finishes it, on a page that sends the person back to the app, and the binding is cleared',
+);
+check((await json('/me/connections')).connections.find((c) => c.slug === 'fakehub')?.status === 'ok', '…and the connection belongs to the account that started it');
+check((await fetch(hoCallback, { redirect: 'manual', headers: { cookie: bound.split(';')[0] } })).status === 400, 'THE SAME HANDOFF CALLBACK A SECOND TIME IS REFUSED');
+
 /* ----------------------------------------------------------------- cleanup */
 
 await api(base, { method: 'DELETE' });

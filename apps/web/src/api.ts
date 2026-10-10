@@ -173,6 +173,9 @@ export const connections = {
   /** M18: begin signing in to a vendor; the browser then goes to `authorizeUrl`. */
   startOAuth: (entry: string, fields?: Record<string, string>) =>
     call<{ authorizeUrl: string }>('/connections/oauth/start', { method: 'POST', body: { entry, fields } }),
+  /** The desktop app's variant: a link it opens in the default browser (ADR 0033). */
+  startHandoff: (entry: string, fields?: Record<string, string>) =>
+    call<{ handoffUrl: string }>('/connections/oauth/start', { method: 'POST', body: { entry, fields, handoff: true } }),
   /** `username` set: Basic sign-in (an email and an API token), sent as base64(username:credential). */
   save: (body: { slug: string; url: string; label?: string; credential?: string; username?: string }) =>
     call<{ id: string }>('/me/connections', { method: 'POST', body }),

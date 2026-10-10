@@ -166,6 +166,55 @@ function checkFields(entry: CatalogueEntry, fields: Record<string, string>): Rec
   return headers;
 }
 
+/* ---- the desktop app's handoff to the default browser (ADR 0033) ---- */
+
+export const handoffPath = '/api/connections/oauth/handoff';
+/** Holds the flow's `state` in the browser that pressed Continue; scoped to the callback. */
+export const handoffCookie = 'fabrikka_oauth_state';
+export const HANDOFF_COOKIE_MAX_AGE_S = FLOW_TTL_MS / 1000;
+const HANDOFF_TTL_MS = 5 * 60 * 1000;
+
+export interface Handoff {
+  userId: string;
+  entryId: string;
+  fields: Record<string, string>;
+}
+
+/**
+ * A handoff URL for the signed-in app to open in the browser. The ticket is
+ * sealed (AES-256-GCM: it can't be forged or edited) and expires in 5 minutes.
+ * The vendor and its fields are checked now, so a mistake shows in the app.
+ */
+export function issueHandoff(opts: { userId: string; entryId: string; fields?: Record<string, string>; publicUrl: string }): string {
+  const entry = findEntry(opts.entryId);
+  if (!entry) throw new OAuthError('no such connection');
+  checkFields(entry, opts.fields ?? {});
+  const ticket = seal(JSON.stringify({ u: opts.userId, e: entry.id, f: opts.fields ?? {}, x: Date.now() + HANDOFF_TTL_MS }));
+  const url = new URL(`${opts.publicUrl}${handoffPath}`);
+  url.searchParams.set('t', ticket);
+  return url.href;
+}
+
+/** The handoff a ticket names, or null if it's forged, edited or expired. */
+export function readHandoff(ticket: string | undefined): Handoff | null {
+  if (!ticket) return null;
+  let raw: string | null;
+  try {
+    raw = openSealed(ticket);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  try {
+    const t = JSON.parse(raw) as { u?: unknown; e?: unknown; f?: unknown; x?: unknown };
+    if (typeof t.u !== 'string' || typeof t.e !== 'string' || typeof t.x !== 'number' || t.x < Date.now()) return null;
+    const fields = t.f && typeof t.f === 'object' ? (t.f as Record<string, string>) : {};
+    return { userId: t.u, entryId: t.e, fields };
+  } catch {
+    return null;
+  }
+}
+
 /** Begin connecting: returns the vendor's sign-in URL to send the browser to. */
 export async function startFlow(
   db: Database,
@@ -236,14 +285,24 @@ async function clientById(db: Database, entry: CatalogueEntry, rowId: string | n
 /**
  * The vendor sent the browser back. The flow must exist, be unexpired, and
  * belong to the person now signed in; it's consumed before the code is used.
+ *
+ * `userId: null` is the handoff (ADR 0033): no one is signed in in this browser,
+ * but its handoff cookie held this exact `state`, so it is the browser that
+ * pressed Continue for the flow's own user.
  */
 export async function completeFlow(
   db: Database,
-  opts: { userId: string; code: string; state: string; publicUrl: string },
+  opts: { userId: string | null; code: string; state: string; publicUrl: string },
 ): Promise<CatalogueEntry> {
   const [flow] = await db
     .delete(oauthFlows)
-    .where(and(eq(oauthFlows.stateHash, hashState(opts.state)), eq(oauthFlows.userId, opts.userId), gt(oauthFlows.expiresAt, new Date())))
+    .where(
+      and(
+        eq(oauthFlows.stateHash, hashState(opts.state)),
+        opts.userId === null ? undefined : eq(oauthFlows.userId, opts.userId),
+        gt(oauthFlows.expiresAt, new Date()),
+      ),
+    )
     .returning();
   if (!flow) throw new OAuthError('this sign-in link is invalid, already used, expired, or not yours — start again');
   const entry = findEntry(flow.entry);
@@ -273,7 +332,7 @@ export async function completeFlow(
   };
   await db
     .insert(mcpServers)
-    .values({ ownerId: opts.userId, slug: entry.slug, ...values })
+    .values({ ownerId: flow.userId, slug: entry.slug, ...values })
     .onConflictDoUpdate({ target: [mcpServers.ownerId, mcpServers.slug], set: values });
   return entry;
 }

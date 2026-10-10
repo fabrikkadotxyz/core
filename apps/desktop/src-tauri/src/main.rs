@@ -312,13 +312,51 @@ fn show_main(app: &AppHandle, at: Option<&str>) -> tauri::Result<()> {
         Some(url) => (WebviewUrl::External(url), (1200.0, 800.0), true),
         None => (WebviewUrl::App("index.html".into()), (520.0, 460.0), false),
     };
+    let opener = app.clone();
+    let handoff_opener = app.clone();
     WebviewWindowBuilder::new(app, "main", url)
         .title("Fabrikka")
         .inner_size(size.0, size.1)
         .min_inner_size(480.0, 420.0)
         .resizable(resizable)
+        // A link to another site (the web app makes every such click a
+        // new-window request) opens in the default browser, never in here.
+        .on_new_window(move |url, _features| {
+            if opens_in_browser(&url) {
+                #[allow(deprecated)] // the shell plugin's `open`; no scope applies from Rust
+                if let Err(e) = opener.shell().open(url.as_str(), None) {
+                    eprintln!("[fabrikka app] couldn't open {url} in the browser: {e}");
+                }
+            }
+            tauri::webview::NewWindowResponse::Deny
+        })
+        // Connecting a vendor: the instance's handoff link opens in the default
+        // browser, where the sign-in happens (ADR 0033). One fixed path on the
+        // configured origin, so the remote page gets nothing it could name.
+        .on_navigation(move |url| {
+            let server = stored_url(&handoff_opener).and_then(|u| parse_server(&u).ok());
+            if !server.is_some_and(|s| is_handoff(url, &s)) {
+                return true;
+            }
+            #[allow(deprecated)]
+            if let Err(e) = handoff_opener.shell().open(url.as_str(), None) {
+                eprintln!("[fabrikka app] couldn't open the sign-in in the browser: {e}");
+            }
+            false
+        })
         .build()?;
     Ok(())
+}
+
+/// The instance's handoff page (ADR 0033), and only on the instance itself.
+fn is_handoff(url: &url::Url, server: &url::Url) -> bool {
+    url.origin() == server.origin() && url.path() == "/api/connections/oauth/handoff"
+}
+
+/// Only web pages go to the browser: a page could ask for `file://` or an app's
+/// custom scheme, and the system would happily open those too.
+fn opens_in_browser(url: &url::Url) -> bool {
+    url.scheme() == "http" || url.scheme() == "https"
 }
 
 fn show_folders(app: &AppHandle) -> tauri::Result<()> {
@@ -483,7 +521,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_server;
+    use super::{is_handoff, opens_in_browser, parse_server};
 
     #[test]
     fn rejects_non_http_schemes() {
@@ -491,5 +529,25 @@ mod tests {
             assert!(parse_server(bad).is_err());
         }
         assert!(parse_server("https://app.example.com").is_ok());
+    }
+
+    #[test]
+    fn only_the_instances_own_handoff_leaves_the_window() {
+        let server = url::Url::parse("https://app.example.com").unwrap();
+        let at = |s: &str| is_handoff(&url::Url::parse(s).unwrap(), &server);
+        assert!(at("https://app.example.com/api/connections/oauth/handoff?t=abc"));
+        assert!(!at("https://evil.example/api/connections/oauth/handoff?t=abc"));
+        assert!(!at("http://app.example.com/api/connections/oauth/handoff?t=abc"));
+        assert!(!at("https://app.example.com/integrations"));
+    }
+
+    #[test]
+    fn only_web_pages_open_in_the_browser() {
+        for good in ["https://github.com/x/y/pull/1", "http://localhost:3000/"] {
+            assert!(opens_in_browser(&url::Url::parse(good).unwrap()));
+        }
+        for bad in ["file:///etc/passwd", "vscode://open", "mailto:a@b.c"] {
+            assert!(!opens_in_browser(&url::Url::parse(bad).unwrap()));
+        }
     }
 }

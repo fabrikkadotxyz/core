@@ -8,6 +8,7 @@
  * never a 403. A 403 distinguishes "exists but not yours" from "doesn't exist",
  * which leaks private session ids. See docs/security.md.
  */
+import { timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { relative, resolve as resolvePath } from 'node:path';
@@ -16,6 +17,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createClient, isEncryptionConfigured } from '@fabrikka/db';
 import type {
   LoginBody,
@@ -165,9 +167,20 @@ import {
 } from './sessions.ts';
 
 import { createKit, type Advertised, type Extension } from './kit.ts';
-import { offeredEntries, setExtraEntries, unconfiguredEntries } from './connections/catalogue/registry.ts';
+import { findEntry, offeredEntries, setExtraEntries, unconfiguredEntries } from './connections/catalogue/registry.ts';
 import { CATEGORY_NAMES, type CatalogueEntry } from './connections/catalogue/types.ts';
-import { completeFlow, OAuthError, startFlow } from './connections/oauth.ts';
+import { accountEmail, confirmPage, donePage, failedPage } from './connections/handoff.ts';
+import {
+  callbackPath,
+  completeFlow,
+  HANDOFF_COOKIE_MAX_AGE_S,
+  handoffCookie,
+  handoffPath,
+  issueHandoff,
+  OAuthError,
+  readHandoff,
+  startFlow,
+} from './connections/oauth.ts';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { mailerFromEnv } from './mail.ts';
 import { APP_ZIP_NAME, appRelease, clientRelease, installCommand, installScript, manifest } from './client.ts';
@@ -586,11 +599,21 @@ export function createApp(options: CreateAppOptions = {}) {
     });
   });
 
-  /** Begin signing in to a vendor: the browser goes to the URL returned. */
+  /**
+   * Begin signing in to a vendor: the browser goes to the URL returned. The
+   * desktop app asks for a `handoff` instead, a link it opens in the default
+   * browser (ADR 0033).
+   */
   app.post('/api/connections/oauth/start', requireUser(db), async (c) => {
     if (!isEncryptionConfigured()) return c.json({ error: 'FABRIKKA_ENCRYPTION_KEY is not set, so tokens could not be stored' }, 503);
-    const body = await c.req.json<{ entry?: string; fields?: Record<string, string> }>().catch(() => ({}) as { entry?: string });
+    const body = await c.req
+      .json<{ entry?: string; fields?: Record<string, string>; handoff?: boolean }>()
+      .catch(() => ({}) as { entry?: string; handoff?: boolean });
     try {
+      if (body.handoff === true) {
+        const handoffUrl = issueHandoff({ userId: c.get('user').id, entryId: String(body.entry ?? ''), fields: (body as { fields?: Record<string, string> }).fields, publicUrl: PUBLIC_URL });
+        return c.json({ handoffUrl });
+      }
       const authorizeUrl = await startFlow(db, { userId: c.get('user').id, entryId: String(body.entry ?? ''), fields: (body as { fields?: Record<string, string> }).fields, publicUrl: PUBLIC_URL });
       return c.json({ authorizeUrl });
     } catch (err) {
@@ -599,17 +622,61 @@ export function createApp(options: CreateAppOptions = {}) {
     }
   });
 
-  /** The vendor sends the browser back here; we land it on Personal integrations either way. */
-  app.get('/api/connections/oauth/callback', requireUser(db), async (c) => {
-    const back = (q: string) => c.redirect(`/integrations?${q}`);
-    const { code, state, error, error_description } = c.req.query();
-    if (error) return back(`error=${encodeURIComponent(error_description ?? error)}`);
-    if (!code || !state) return back(`error=${encodeURIComponent('the vendor sent no code back')}`);
+  /**
+   * The desktop app's handoff, in the default browser (ADR 0033). GET only names
+   * the account; the person's Continue (POST) starts the flow and binds this
+   * browser to it with a cookie holding its `state`.
+   */
+  app.get(handoffPath, async (c) => {
+    const handoff = readHandoff(c.req.query('t'));
+    if (!handoff) return c.html(failedPage('This link has expired or is not valid.'), 400);
+    const email = await accountEmail(db, handoff.userId);
+    const entry = findEntry(handoff.entryId);
+    if (!email || !entry) return c.html(failedPage('This link has expired or is not valid.'), 400);
+    return c.html(confirmPage({ vendor: entry.name, email, ticket: c.req.query('t') ?? '' }));
+  });
+
+  app.post(handoffPath, async (c) => {
+    const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
+    const handoff = readHandoff(typeof form.t === 'string' ? form.t : undefined);
+    if (!handoff) return c.html(failedPage('This link has expired or is not valid.'), 400);
     try {
-      const entry = await completeFlow(db, { userId: c.get('user').id, code, state, publicUrl: PUBLIC_URL });
-      return back(`connected=${encodeURIComponent(entry.id)}`);
+      const authorizeUrl = await startFlow(db, { ...handoff, publicUrl: PUBLIC_URL });
+      const state = new URL(authorizeUrl).searchParams.get('state') ?? '';
+      setCookie(c, handoffCookie, state, { httpOnly: true, sameSite: 'Lax', secure: SECURE_COOKIES, path: callbackPath, maxAge: HANDOFF_COOKIE_MAX_AGE_S });
+      return c.redirect(authorizeUrl);
     } catch (err) {
-      if (err instanceof OAuthError) return back(`error=${encodeURIComponent(err.message)}`);
+      if (err instanceof OAuthError) return c.html(failedPage(err.message), 400);
+      throw err;
+    }
+  });
+
+  /**
+   * The vendor sends the browser back here. Signed in: land on Personal
+   * integrations either way. Through the handoff: the browser's cookie must hold
+   * this exact `state`, and it ends on a page that sends the person back to the app.
+   */
+  app.get(callbackPath, async (c) => {
+    const { code, state, error, error_description } = c.req.query();
+    const bound = getCookie(c, handoffCookie);
+    if (bound !== undefined) deleteCookie(c, handoffCookie, { path: callbackPath, secure: SECURE_COOKIES });
+    const viaHandoff = !!bound && !!state && bound.length === state.length && timingSafeEqual(Buffer.from(bound), Buffer.from(state));
+
+    const user = viaHandoff ? null : await resolveToken(db, readCookie(c));
+    if (!viaHandoff && !user) {
+      if (bound !== undefined) return c.html(failedPage('This sign-in was started for a different link. Start again from the app.'), 400);
+      return c.json({ error: 'not authenticated' }, 401);
+    }
+    const fail = (message: string) =>
+      viaHandoff ? c.html(failedPage(message), 400) : c.redirect(`/integrations?error=${encodeURIComponent(message)}`);
+
+    if (error) return fail(error_description ?? error);
+    if (!code || !state) return fail('the vendor sent no code back');
+    try {
+      const entry = await completeFlow(db, { userId: user?.id ?? null, code, state, publicUrl: PUBLIC_URL });
+      return viaHandoff ? c.html(donePage(entry.name)) : c.redirect(`/integrations?connected=${encodeURIComponent(entry.id)}`);
+    } catch (err) {
+      if (err instanceof OAuthError) return fail(err.message);
       throw err;
     }
   });

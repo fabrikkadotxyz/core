@@ -337,6 +337,14 @@ pnpm --filter @fabrikka/web build     # the server serves this
 pnpm --filter @fabrikka/desktop build
 ```
 
+**Links to other sites open in your default browser,** in a new tab, as they
+would from any desktop app. Pages of your own instance stay in the app window.
+Connecting an integration happens there too: its sign-in opens in the browser, asks
+you to confirm which Fabrikka account it connects, and Personal integrations
+picks the connection up when you switch back to the app
+([ADR 0033](decisions/0033-desktop-sign-ins-finish-in-the-default-browser.md)).
+See [security.md](security.md#the-desktop-app-m34).
+
 The bundle lands in `apps/desktop/src-tauri/target/release/bundle/`. On first run
 it asks for the server URL and remembers it; `FABRIKKA_URL` overrides, so a
 managed deployment can pin it.

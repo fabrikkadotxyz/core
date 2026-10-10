@@ -7,10 +7,11 @@
  * a token. Attaching one to a session, and granting its tools there, stays in
  * that session's Setup.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { connections, type CatalogueItem } from '../api.ts';
 import { Select } from '../components/Select.tsx';
+import { inDesktopApp } from '../desktop.ts';
 
 type Conn = Awaited<ReturnType<typeof connections.list>>['connections'][number];
 
@@ -20,6 +21,9 @@ export function IntegrationsPage() {
   const [encryption, setEncryption] = useState(true);
   const [params, setParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  /** The vendor being signed in to in the default browser (desktop app), and whether it was already connected. */
+  const [inBrowser, setInBrowser] = useState<string | null>(null);
+  const wasConnected = useRef(false);
 
   const load = useCallback(() => {
     connections
@@ -33,6 +37,20 @@ export function IntegrationsPage() {
   }, []);
   useEffect(load, [load]);
 
+  // Signing in in the default browser (ADR 0033): pick the result up on the way back.
+  useEffect(() => {
+    if (!inBrowser) return;
+    const done = catalogue?.entries.find((e) => e.id === inBrowser);
+    if (done?.connected && done.status === 'ok' && !wasConnected.current) {
+      setInBrowser(null);
+      setParams({ connected: inBrowser }, { replace: true });
+      return;
+    }
+    const back = () => load();
+    window.addEventListener('focus', back);
+    return () => window.removeEventListener('focus', back);
+  }, [inBrowser, load, catalogue, setParams]);
+
   // Back from a vendor's sign-in: say how it went, then tidy the address bar.
   const connected = params.get('connected');
   const failed = params.get('error');
@@ -41,6 +59,15 @@ export function IntegrationsPage() {
   const connect = async (entry: string, fields?: Record<string, string>) => {
     setError(null);
     try {
+      if (inDesktopApp()) {
+        // The app opens this one link in the default browser and stays here.
+        const { handoffUrl } = await connections.startHandoff(entry, fields);
+        const before = catalogue?.entries.find((e) => e.id === entry);
+        wasConnected.current = !!before?.connected && before.status === 'ok';
+        setInBrowser(entry);
+        window.location.href = handoffUrl;
+        return;
+      }
       const { authorizeUrl } = await connections.startOAuth(entry, fields);
       window.location.href = authorizeUrl;
     } catch (err) {
@@ -70,6 +97,16 @@ export function IntegrationsPage() {
           <p className={connected ? 'notice ok' : 'notice danger-hint'} role="status">
             {connected ? `Connected to ${connectedName}.` : `Couldn't connect: ${failed}`}{' '}
             <button className="link small" onClick={() => setParams({}, { replace: true })}>
+              Dismiss
+            </button>
+          </p>
+        )}
+
+        {inBrowser && (
+          <p className="notice" role="status">
+            Finish signing in to {catalogue?.entries.find((e) => e.id === inBrowser)?.name ?? inBrowser} in your browser, then
+            come back here.{' '}
+            <button className="link small" onClick={() => setInBrowser(null)}>
               Dismiss
             </button>
           </p>

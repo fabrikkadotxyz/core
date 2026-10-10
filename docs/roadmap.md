@@ -1720,7 +1720,15 @@ itself enforces
   messages or an agent's activity while it works.
 - **A notification** reads *"Alice mentioned you in Checkout 500s"*, then the
   message's first line, unless **Show message text in notifications** is off on
-  that device. Clicking it opens the room.
+  that device (Appearance → *Notifications on this device*). Clicking it opens
+  the room.
+  - **In the desktop app,** the system's notification centre doesn't report
+    clicks to the app, only that the app came forward. So the app opens the
+    last notified room when it comes forward within 30 seconds of that
+    notification.
+- **Turning browser notifications on:** a small offer at the top of the
+  sidebar, the first time something needs you. *Turn on*, then the browser's
+  *Allow*. *Not now* hides it on that device.
 
 **Test** (two accounts, three rooms: *Mine*, *With Alice*, *With Bob*):
 1. Fede is in *Mine*. Alice writes in *With Alice* without mentioning him: it

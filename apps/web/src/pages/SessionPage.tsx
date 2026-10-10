@@ -41,6 +41,39 @@ import { MentionComposer, MentionText } from '../mentions.tsx';
 import { OutputsPanel, timeAgo, type OutputTab } from '../outputs/Outputs.tsx';
 import { webKind } from '../outputs/kinds/registry.ts';
 import { CatchUpCard, hasNews } from './CatchUpCard.tsx';
+import { useWorkspace } from '../shell/workspace.tsx';
+import type { NotifySetting } from '@fabrikka/types';
+
+const NOTIFY_OPTIONS: { value: NotifySetting; label: string; description: string }[] = [
+  { value: 'everything', label: '🔔 Everything', description: 'Every message from someone else' },
+  { value: 'needs_you', label: '🔔 What needs me', description: 'Mentions, your agents finishing, a pause' },
+  { value: 'nothing', label: '🔕 Nothing', description: 'Muted. Mentions still wait on Home' },
+];
+
+/** M42 (ADR 0037): how much of this room reaches you. Two clicks: open, choose. */
+function RoomNotify({ ref_ }: { ref_: SessionRef }) {
+  const { sessions: list, refresh } = useWorkspace();
+  const here = list.find((s) => s.ownerSlug === ref_.owner && s.publicId === ref_.session);
+  const [value, setValue] = useState<NotifySetting | null>(null);
+  const current = value ?? here?.notify ?? 'needs_you';
+  return (
+    <Select
+      className="room-notify"
+      label="Notifications for this room"
+      value={current}
+      options={NOTIFY_OPTIONS}
+      onChange={async (v) => {
+        setValue(v);
+        try {
+          await sessions.setNotify(ref_, v);
+          refresh();
+        } catch {
+          setValue(null);
+        }
+      }}
+    />
+  );
+}
 
 /** The editor is most of the bundle; load it when a document is first opened. */
 const OutputView = lazy(() => import('../outputs/OutputView.tsx'));
@@ -678,6 +711,7 @@ export function SessionPage() {
               {connected ? 'live' : 'reconnecting…'}
             </span>
             <span className="spacer" />
+            {!isViewer && <RoomNotify ref_={ref} />}
             {/* Any member can pull it: waiting for the owner is the wrong
                 failure mode when an agent is misbehaving. */}
             {!view.agents.paused && view.participants.some((p) => p.kind === 'agent') && (

@@ -5,6 +5,37 @@
 import { useState } from 'react';
 import type { ThemeInfo } from '../api.ts';
 import { chooseTheme, useThemes } from '../themes.ts';
+import { askPermission, permission, setShowsText, showsText } from '../notify.ts';
+
+/** M42: per device, because a shared screen and a laptop want different answers. */
+function DeviceNotifications() {
+  const [perm, setPerm] = useState(permission);
+  const [text, setText] = useState(showsText);
+  return (
+    <section aria-label="Notifications on this device">
+      <h2>Notifications on this device</h2>
+      {perm === 'granted' && <p className="muted small">On. A room that needs you notifies here, unless you're looking at it.</p>}
+      {perm === 'default' && (
+        <p className="muted small">
+          Off. <button className="link small" onClick={async () => setPerm(await askPermission())}>Turn on</button>
+        </p>
+      )}
+      {perm === 'denied' && <p className="muted small">Blocked in this browser's site settings. Allow notifications there to get them.</p>}
+      {perm === 'unsupported' && <p className="muted small">This browser can't show notifications.</p>}
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={text}
+          onChange={(e) => {
+            setShowsText(e.target.checked);
+            setText(e.target.checked);
+          }}
+        />{' '}
+        Show message text in notifications
+      </label>
+    </section>
+  );
+}
 
 /** A small picture of the theme, drawn from its swatches: page, panel, accent, then the rest. */
 function Preview({ swatches }: { swatches: string[] }) {
@@ -81,6 +112,7 @@ export function AppearancePage() {
           ))}
         </div>
       )}
+      <DeviceNotifications />
     </main>
   );
 }

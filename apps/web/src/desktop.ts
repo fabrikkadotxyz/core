@@ -1,7 +1,8 @@
 /**
  * When this web app runs inside the Fabrikka desktop app (M34, ADR 0031), it
- * may ask the app for exactly one thing: open its Folders window. No path, no
- * policy — the person chooses there. In a browser there is no app to ask.
+ * may ask the app for three things: open its Folders window (no path, no
+ * policy — the person chooses there), and, for M42 (ADR 0037), show a
+ * notification and set the dock badge. In a browser there is no app to ask.
  */
 type TauriBridge = { invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown> };
 
@@ -14,6 +15,20 @@ export async function openFolders(): Promise<void> {
   const b = bridge();
   if (!b) throw new Error('only the Fabrikka desktop app can open its Folders window');
   await b.invoke('open_folders');
+}
+
+/** M42: a system notification. The app caps text and rate, and opens only paths on the instance. */
+export async function notify(n: { title: string; body: string; path: string }): Promise<void> {
+  const b = bridge();
+  if (!b) return;
+  await b.invoke('notify', n);
+}
+
+/** M42: the total that needs you, as the dock badge and the tray dot. */
+export async function attention(total: number): Promise<void> {
+  const b = bridge();
+  if (!b) return;
+  await b.invoke('set_attention', { total });
 }
 
 /**

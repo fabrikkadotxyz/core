@@ -17,6 +17,8 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
+# M42 (ADR 0037): system notifications when a room needs you.
+tauri-plugin-notification = "2"
 serde_json = "1"
 tokio = { version = "1", features = ["sync", "time"] }
 url = "2"

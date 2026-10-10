@@ -2218,3 +2218,21 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
 
 /* ---- M43: how long call records are kept ---- */
 .call-records { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+
+/* ---- M42: needs you — a number on the room, a dot on another team ---- */
+.side-count {
+  flex: 0 0 auto; min-width: 1.35rem; padding: 0 6px; border-radius: var(--radius-pill);
+  font-size: 0.7rem; font-weight: 700; line-height: 1.35rem; text-align: center;
+  color: #ffffff; background: var(--grad-attention);
+}
+.side-item.needs::after { display: none; }
+.side-top { position: relative; }
+.side-team-dot {
+  position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--grad-attention); box-shadow: 0 0 0 2px var(--side-bg); pointer-events: none;
+}
+.notify-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; padding: 10px 14px; }
+.notify-banner p { margin: 0; flex: 1 1 14rem; }
+.room-notify { display: inline-flex; }
+.side-offer { margin: 8px 2px 4px; padding: 8px 10px; border-radius: var(--radius-control); background: var(--side-hover); color: var(--side-text); font-size: 0.8rem; }
+.side-offer p { margin: 0 0 6px; }

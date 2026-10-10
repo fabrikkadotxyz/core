@@ -197,6 +197,13 @@
       "when": 1791650654640,
       "tag": "0027_team_call_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1791652092457,
+      "tag": "0028_session_notify",
+      "breakpoints": true
     }
   ]
 }

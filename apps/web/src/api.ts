@@ -35,6 +35,7 @@ import type {
   SessionSummary,
   SessionView,
   SignupBody,
+  NotifySetting,
 } from '@fabrikka/types';
 
 /** Mirrors the server's token listing; kept here so the UI has a name for it. */
@@ -441,6 +442,9 @@ export const sessions = {
   /** M24: what changed since you last looked, and marking that you've looked. */
   catchUp: (ref: SessionRef) => call<CatchUp>(`${base(ref)}/catch-up`),
   seen: (ref: SessionRef) => call<{ ok: true }>(`${base(ref)}/seen`, { method: 'POST' }),
+  /** M42: how much of this room reaches you; null is the room kind's default. */
+  setNotify: (ref: SessionRef, notify: NotifySetting | null) =>
+    call<{ notify: NotifySetting }>(`${base(ref)}/notify`, { method: 'PUT', body: { notify } }),
   /** Leaving: must survive the page going away, so it can't wait for a response. */
   seenOnLeave: (ref: SessionRef) => {
     void fetch(`/api${base(ref)}/seen`, { method: 'POST', credentials: 'same-origin', keepalive: true }).catch(() => {});

@@ -261,9 +261,122 @@ fn let_instance_open_folders(app: &AppHandle, server: &url::Url) {
     let capability = tauri::ipc::CapabilityBuilder::new("instance-opens-folders")
         .remote(format!("{origin}/*"))
         .window("main")
-        .permission("allow-open-folders");
+        .permission("allow-open-folders")
+        // M42 (ADR 0037): notifications and the badge, each limited in Rust.
+        .permission("allow-notify")
+        .permission("allow-set-attention");
     if let Err(e) = app.add_capability(capability) {
         eprintln!("[fabrikka app] couldn't let {origin} open the Folders window: {e}");
+    }
+}
+
+/* ------------------------------ commands: the instance's pages — needs you (M42) */
+
+/// What the remote page may say in a notification, and how often (ADR 0037).
+const NOTE_TITLE_MAX: usize = 120;
+const NOTE_BODY_MAX: usize = 200;
+const NOTE_PER_ROOM: Duration = Duration::from_secs(10);
+const NOTE_PER_MINUTE: usize = 30;
+/// A notification clicked within this long brings the app forward on its room.
+const NOTE_CLICK_WINDOW: Duration = Duration::from_secs(30);
+
+#[derive(Default)]
+struct Notices {
+    last_per_room: HashMap<String, std::time::Instant>,
+    recent: std::collections::VecDeque<std::time::Instant>,
+    /// The last room notified, so focusing the app from its notification opens it.
+    pending: Option<(String, std::time::Instant)>,
+}
+
+#[derive(Default)]
+struct Attention(Mutex<Notices>);
+
+/// Only a path on the instance: starts with one `/`, no scheme, no host, no `..`.
+fn instance_path(path: &str) -> Option<&str> {
+    let ok = path.starts_with('/')
+        && !path.starts_with("//")
+        && !path.contains('\\')
+        && !path.contains("://")
+        && !path.split('/').any(|seg| seg == "..")
+        && path.len() <= 300;
+    ok.then_some(path)
+}
+
+fn clip(text: &str, max: usize) -> String {
+    let flat: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+    if flat.chars().count() <= max {
+        flat
+    } else {
+        flat.chars().take(max - 1).collect::<String>() + "…"
+    }
+}
+
+/// Whether one more notification for `room` is allowed now; records it if so.
+fn allow_notice(n: &mut Notices, room: &str, now: std::time::Instant) -> bool {
+    while n.recent.front().is_some_and(|t| now.duration_since(*t) > Duration::from_secs(60)) {
+        n.recent.pop_front();
+    }
+    if n.recent.len() >= NOTE_PER_MINUTE {
+        return false;
+    }
+    if n.last_per_room.get(room).is_some_and(|t| now.duration_since(*t) < NOTE_PER_ROOM) {
+        return false;
+    }
+    n.recent.push_back(now);
+    n.last_per_room.insert(room.to_string(), now);
+    true
+}
+
+/// A system notification for something that needs you. Text is capped, the
+/// rate is limited, and its room must be a path on the instance (ADR 0037).
+#[tauri::command]
+fn notify(app: AppHandle, title: String, body: String, path: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    let path = instance_path(&path).ok_or("a notification can only open a page on the instance")?.to_string();
+    let state = app.state::<Attention>();
+    let mut n = state.0.lock().unwrap();
+    let now = std::time::Instant::now();
+    if !allow_notice(&mut n, &path, now) {
+        return Ok(()); // quietly dropped: too many, too fast
+    }
+    n.pending = Some((path, now));
+    drop(n);
+    app.notification()
+        .builder()
+        .title(clip(&title, NOTE_TITLE_MAX))
+        .body(clip(&body, NOTE_BODY_MAX))
+        .show()
+        .map_err(|e| e.to_string())
+}
+
+/// The total that needs you: the dock badge, and a dot beside the tray icon.
+#[tauri::command]
+fn set_attention(app: AppHandle, total: i64) -> Result<(), String> {
+    let total = total.clamp(0, 999);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_badge_count(if total > 0 { Some(total) } else { None });
+    }
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_title(if total > 0 { Some("●") } else { None::<&str> });
+    }
+    Ok(())
+}
+
+/// Clicking a notification activates the app. If one was shown moments ago,
+/// open its room in the main window: the click's destination.
+fn open_pending_room(app: &AppHandle) {
+    let pending = app.state::<Attention>().0.lock().unwrap().pending.take();
+    let Some((path, at)) = pending else { return };
+    if at.elapsed() > NOTE_CLICK_WINDOW {
+        return;
+    }
+    let server = stored_url(app).and_then(|u| parse_server(&u).ok());
+    if let (Some(server), Some(window)) = (server, app.get_webview_window("main")) {
+        if let Ok(url) = server.join(&path) {
+            if url.origin() == server.origin() {
+                let _ = window.navigate(url);
+            }
+        }
     }
 }
 
@@ -476,7 +589,15 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_notification::init())
         .manage(Host::default())
+        .manage(Attention::default())
+        // M42: the app coming forward right after a notification opens its room.
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Focused(true)) {
+                open_pending_room(window.app_handle());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             connect,
             forget,
@@ -486,7 +607,9 @@ fn main() {
             host_remove,
             host_stop,
             host_set_tool,
-            open_folders
+            open_folders,
+            notify,
+            set_attention
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -521,7 +644,36 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_handoff, opens_in_browser, parse_server};
+    use super::{allow_notice, clip, instance_path, is_handoff, opens_in_browser, parse_server, Notices};
+
+    #[test]
+    fn a_notification_opens_only_the_instance() {
+        assert_eq!(instance_path("/o/fede/s/abc"), Some("/o/fede/s/abc"));
+        for bad in ["https://evil.example/x", "//evil.example/x", "o/fede", "/o/../../etc", "/a\\b", "javascript:alert(1)"] {
+            assert_eq!(instance_path(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn notifications_are_rate_limited() {
+        let mut n = Notices::default();
+        let t = std::time::Instant::now();
+        assert!(allow_notice(&mut n, "/o/a/s/1", t));
+        assert!(!allow_notice(&mut n, "/o/a/s/1", t), "same room within 10 s");
+        let mut allowed = 1;
+        for i in 0..40 {
+            if allow_notice(&mut n, &format!("/o/a/s/r{i}"), t) {
+                allowed += 1;
+            }
+        }
+        assert_eq!(allowed, 30, "30 a minute in all");
+    }
+
+    #[test]
+    fn notification_text_is_capped_and_flat() {
+        assert_eq!(clip("a\nb", 10), "a b");
+        assert_eq!(clip(&"x".repeat(300), 120).chars().count(), 120);
+    }
 
     #[test]
     fn rejects_non_http_schemes() {

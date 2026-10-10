@@ -1,0 +1,1 @@
+ALTER TABLE "session_reads" ADD COLUMN "notify" text;

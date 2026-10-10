@@ -21,6 +21,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createClient, isEncryptionConfigured, runMigrations } from '@fabrikka/db';
 import type {
   LoginBody,
+  NotifySetting,
   PostMessageBody,
   RenameParticipantBody,
   SetupLane,
@@ -113,6 +114,7 @@ import {
   renameOutput,
 } from './outputs/core.ts';
 import { createUser, getUserTheme, setUserTheme } from './users.ts';
+import { addStream, refreshRoom, startAttention } from './attention.ts';
 import { DEFAULT_THEME, SYSTEM_THEMES, loadThemes, publicTheme, themeDirs, themeFile } from './themes.ts';
 import {
   addFromRoster,
@@ -158,6 +160,7 @@ import {
   listParticipants,
   getSessionContext,
   listSessionsForUser,
+  setNotify,
   removeMember,
   renameParticipant,
   renameSession,
@@ -1079,7 +1082,24 @@ export function createApp(options: CreateAppOptions = {}) {
     const s = await resolveViewer(c);
     if (!s) return c.notFound();
     await markSeen(db, s.id, c.get('user').id);
+    // M42: your other open pages drop this room's number too.
+    void refreshRoom(db, c.get('user').id, s.id).catch(() => {});
     return c.json({ ok: true });
+  });
+
+  /** M42 (ADR 0037): how much of this room reaches you. null = the kind's default. */
+  sessionRoutes.put('/notify', async (c) => {
+    const s = await resolveViewer(c);
+    if (!s) return c.notFound();
+    const body = await c.req.json<{ notify?: unknown }>().catch(() => ({}) as { notify?: unknown });
+    const notify = body.notify ?? null;
+    if (notify !== null && notify !== 'everything' && notify !== 'needs_you' && notify !== 'nothing') {
+      return c.json({ error: 'notify is everything, needs_you, nothing or null' }, 400);
+    }
+    await setNotify(db, s.id, c.get('user').id, notify as NotifySetting | null);
+    void refreshRoom(db, c.get('user').id, s.id).catch(() => {});
+    const [room] = await listSessionsForUser(db, c.get('user').id, s.id);
+    return c.json({ notify: room?.notify ?? notify });
   });
 
   /* ---- this session's template (M25) ---- */
@@ -2268,6 +2288,37 @@ export function createApp(options: CreateAppOptions = {}) {
         },
         onError() {
           void opened.then(() => deviceId && me && hostHub.detach(deviceId, me));
+        },
+      };
+    }),
+  );
+
+  /**
+   * M42 (ADR 0037): one stream per person. Counts for every room they can see,
+   * as they change, and a `notify` per new item. Login cookie only; it sends,
+   * and never reads anything from the socket.
+   */
+  startAttention(db);
+  app.get(
+    '/api/me/stream',
+    upgradeWebSocket((c) => {
+      const token = readCookie(c);
+      let stop: (() => void) | undefined;
+      return {
+        async onOpen(_evt, ws) {
+          const user = await resolveToken(db, token);
+          if (!user) {
+            ws.send(JSON.stringify({ type: 'stream.error', code: 'unauthenticated' }));
+            ws.close();
+            return;
+          }
+          stop = addStream(user.id, (event) => ws.send(JSON.stringify(event)));
+        },
+        onClose() {
+          stop?.();
+        },
+        onError() {
+          stop?.();
         },
       };
     }),

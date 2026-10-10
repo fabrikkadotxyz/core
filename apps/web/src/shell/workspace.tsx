@@ -4,8 +4,10 @@
  * page next to it.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { SessionSummary, TeamSummary } from '@fabrikka/types';
+import { useLocation, useNavigate } from 'react-router-dom';
+import type { PersonEvent, SessionSummary, TeamSummary } from '@fabrikka/types';
 import { sessions as sessionsApi, teams as teamsApi } from '../api.ts';
+import { showNotification, showTotal } from '../notify.ts';
 
 const TEAM_KEY = 'fabrikka.team';
 
@@ -18,7 +20,11 @@ interface Workspace {
   selectTeam: (id: string | null) => void;
   refresh: () => void;
   loaded: boolean;
+  /** M42: what needs you in a room, as shown: 0 for the room in front of you. */
+  needsYou: (s: SessionSummary) => number;
 }
+
+const pathOf = (s: Pick<SessionSummary, 'ownerSlug' | 'publicId'>) => `/o/${s.ownerSlug}/s/${s.publicId}`;
 
 const Ctx = createContext<Workspace | null>(null);
 
@@ -49,6 +55,58 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(refresh, [refresh]);
+
+  /*
+   * M42 (ADR 0037): one stream per person. Counts change in place; a room we
+   * don't have yet (someone just added you) reloads the list. Reconnects after
+   * a drop, with a pause so a dead server isn't hammered.
+   */
+  const navigate = useNavigate();
+  useEffect(() => {
+    let ws: WebSocket | undefined;
+    let closed = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const connect = () => {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/api/me/stream`);
+      ws.onmessage = (msg) => {
+        const event = JSON.parse(String(msg.data)) as PersonEvent;
+        if (event.type === 'attention') {
+          setSessions((list) => {
+            const i = list.findIndex((s) => s.publicId === event.publicId && s.ownerSlug === event.ownerSlug);
+            if (i === -1) {
+              refresh();
+              return list;
+            }
+            const was = list[i]!;
+            const next = [...list];
+            next[i] = { ...was, unread: event.unread, needsYou: event.needsYou, lastActivityAt: event.unread && !was.unread ? new Date().toISOString() : was.lastActivityAt };
+            return next;
+          });
+        } else if (event.type === 'notify') {
+          showNotification(event, (path) => navigate(path));
+        } else if (event.type === 'stream.error') {
+          closed = true;
+        }
+      };
+      ws.onclose = () => {
+        if (!closed) retry = setTimeout(connect, 3000);
+      };
+    };
+    connect();
+    return () => {
+      closed = true;
+      clearTimeout(retry);
+      ws?.close();
+    };
+  }, [navigate, refresh]);
+
+  // The room in front of you never counts: you're looking at it.
+  const location_ = useLocation();
+  const here = location_.pathname.match(/^\/o\/[^/]+\/s\/[^/]+/)?.[0] ?? null;
+  const needsYou = useCallback((s: SessionSummary) => (pathOf(s) === here ? 0 : (s.needsYou ?? 0)), [here]);
+  const total = sessions.reduce((n, s) => n + needsYou(s), 0);
+  useEffect(() => showTotal(total), [total]);
   // Come back to the tab: someone may have written while you were away.
   useEffect(() => {
     const onFocus = () => refresh();
@@ -70,8 +128,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const team = teams.find((t) => t.id === teamId) ?? teams[0] ?? null;
 
   const value = useMemo<Workspace>(
-    () => ({ sessions, teams, teamId: team?.id ?? null, team, selectTeam, refresh, loaded }),
-    [sessions, teams, team, selectTeam, refresh, loaded],
+    () => ({ sessions, teams, teamId: team?.id ?? null, team, selectTeam, refresh, loaded, needsYou }),
+    [sessions, teams, team, selectTeam, refresh, loaded, needsYou],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -445,7 +445,23 @@ export interface SessionSummary {
   peer?: string | null;
   /** Messages from someone else since your last visit (M24's read position). */
   unread?: boolean;
+  /**
+   * M42 (ADR 0037): items addressed to you since your last visit — mentions,
+   * a direct message, your agent finishing or stopping, a pause you can resume.
+   */
+  needsYou?: number;
+  /** M42: this room's setting for you, with its kind's default applied. */
+  notify?: NotifySetting;
 }
+
+/** M42: how much of a room reaches you. */
+export type NotifySetting = 'everything' | 'needs_you' | 'nothing';
+
+/** M42: what /api/me/stream sends. */
+export type PersonEvent =
+  | { type: 'attention'; ownerSlug: string; publicId: string; unread: boolean; needsYou: number }
+  | { type: 'notify'; ownerSlug: string; publicId: string; title: string; body: string; path: string }
+  | { type: 'stream.error'; code: 'unauthenticated' };
 
 /**
  * An invite as shown to a session owner. Deliberately carries no token — the

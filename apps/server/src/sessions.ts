@@ -19,6 +19,7 @@ import {
   sessionContext,
   sessionGuests,
   sessionMembers,
+  sessionReads,
   sessions,
   teamMembers,
   teams,
@@ -33,6 +34,7 @@ import type {
   SessionVisibility,
   SessionKind,
   SessionSummary,
+  NotifySetting,
 } from '@fabrikka/types';
 import { resolveMentions } from './mentions.ts';
 
@@ -195,9 +197,40 @@ export async function resolveSessionForViewer(
   };
 }
 
+/**
+ * M42 (ADR 0037): the room's setting for this person, with the kind's default.
+ * Raw SQL over the outer query's `sessions` row, so it composes into the list.
+ */
+const notifyFor = (userId: string) => sql<NotifySetting>`coalesce(
+  (select sr.notify from session_reads sr where sr.session_id = ${sessions.id} and sr.user_id = ${userId}),
+  case when ${sessions.kind} = 'direct' then 'everything' else 'needs_you' end)`;
+const seenFor = (userId: string) =>
+  sql`coalesce((select sr.last_seen_at from session_reads sr where sr.session_id = ${sessions.id} and sr.user_id = ${userId}), 'epoch'::timestamptz)`;
+
+/**
+ * M42: what needs this person in this room, since they last looked. Derived,
+ * never stored: mentions of them (or, with "everything", any message from
+ * someone else), their agents' runs that ended, and a pause they can resume.
+ */
+const needsYouFor = (userId: string) => sql<number>`case when ${notifyFor(userId)} = 'nothing' then 0 else (
+  (select count(*) from ${messages} m join ${participants} a on a.id = m.author_participant_id
+    where m.session_id = ${sessions.id} and m.created_at > ${seenFor(userId)}
+      and (a.user_id is null or a.user_id <> ${userId})
+      and (${notifyFor(userId)} = 'everything' or exists (
+        select 1 from ${messageMentions} mm join ${participants} p on p.id = mm.participant_id
+        where mm.message_id = m.id and p.user_id = ${userId})))
+  + (select count(*) from runs r join ${participants} p on p.id = r.participant_id
+      join session_agents sa on sa.id = p.session_agent_id join agents ag on ag.id = sa.agent_id
+    where r.session_id = ${sessions.id} and ag.owner_id = ${userId}
+      and r.status in ('done', 'failed', 'stopped') and r.ended_at > ${seenFor(userId)})
+  + (case when ${sessions.agentsPausedAt} > ${seenFor(userId)} then 1 else 0 end)
+) end`;
+
 export async function listSessionsForUser(
   db: Database,
   userId: string,
+  /** M42: just this session, when the per-person stream recomputes one room. */
+  onlySessionId?: string,
 ): Promise<SessionSummary[]> {
   const rows = await db
     .select({
@@ -216,13 +249,15 @@ export async function listSessionsForUser(
       lastActivityAt: sql<Date>`coalesce((select max(m.created_at) from ${messages} m where m.session_id = ${sessions.id}), ${sessions.createdAt})`,
       kind: sessions.kind,
       peer: sql<string | null>`(select p.display_name from ${participants} p where p.session_id = ${sessions.id} and p.kind = 'human' and p.user_id <> ${userId} limit 1)`,
-      unread: sql<boolean>`exists (select 1 from ${messages} m join ${participants} a on a.id = m.author_participant_id where m.session_id = ${sessions.id} and (a.user_id is null or a.user_id <> ${userId}) and m.created_at > coalesce((select sr.last_seen_at from session_reads sr where sr.session_id = ${sessions.id} and sr.user_id = ${userId}), 'epoch'::timestamptz))`,
+      unread: sql<boolean>`${notifyFor(userId)} <> 'nothing' and exists (select 1 from ${messages} m join ${participants} a on a.id = m.author_participant_id where m.session_id = ${sessions.id} and (a.user_id is null or a.user_id <> ${userId}) and m.created_at > ${seenFor(userId)})`,
+      needsYou: needsYouFor(userId),
+      notify: notifyFor(userId),
     })
     .from(sessionMembers)
     .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
     .innerJoin(users, eq(users.id, sessions.ownerId))
     .leftJoin(teams, eq(teams.id, sessions.teamId))
-    .where(eq(sessionMembers.userId, userId))
+    .where(onlySessionId ? and(eq(sessionMembers.userId, userId), eq(sessions.id, onlySessionId)) : eq(sessionMembers.userId, userId))
     .orderBy(desc(sessions.createdAt));
 
   const mine: SessionSummary[] = rows.map((r) => ({
@@ -238,6 +273,8 @@ export async function listSessionsForUser(
     kind: r.kind as SessionKind,
     peer: r.peer,
     unread: !!r.unread,
+    needsYou: Number(r.needsYou),
+    notify: r.notify,
   }));
 
   // M22: sessions you can read without being in them — as a guest, or because
@@ -267,6 +304,7 @@ export async function listSessionsForUser(
       and(
         notInArray(sessions.id, memberOf),
         or(inArray(sessions.id, guestOf), and(eq(sessions.visibility, 'team'), inArray(sessions.teamId, myTeams))),
+        onlySessionId ? eq(sessions.id, onlySessionId) : undefined,
       ),
     );
 
@@ -285,6 +323,8 @@ export async function listSessionsForUser(
       kind: r.kind as SessionKind,
       peer: r.peer,
       unread: !!r.unread,
+      // Viewers aren't participants: nothing in the room is addressed to them.
+      needsYou: 0,
     })),
     // Most recently active first (M28): the latest message, or creation.
   ].sort((a, b) => (a.lastActivityAt! < b.lastActivityAt! ? 1 : -1));
@@ -1072,4 +1112,29 @@ export async function removeGuest(db: Database, sessionId: string, userId: strin
     .where(and(eq(sessionGuests.sessionId, sessionId), eq(sessionGuests.userId, userId)))
     .returning({ userId: sessionGuests.userId });
   return done.length > 0;
+}
+
+/**
+ * M42: this person's setting for a room. Writes a read position when there's
+ * none yet, with the context as it is now: choosing a setting means you're in
+ * the room, which opening it records anyway.
+ */
+export async function setNotify(db: Database, sessionId: string, userId: string, notify: NotifySetting | null): Promise<void> {
+  const updated = await db
+    .update(sessionReads)
+    .set({ notify })
+    .where(and(eq(sessionReads.sessionId, sessionId), eq(sessionReads.userId, userId)))
+    .returning({ sessionId: sessionReads.sessionId });
+  if (updated.length) return;
+  const ctx = await getSessionContext(db, sessionId);
+  await db
+    .insert(sessionReads)
+    .values({
+      sessionId,
+      userId,
+      lastSeenAt: new Date(),
+      contextSeen: { facts: ctx.facts, decisions: ctx.decisions, questions: ctx.questions, constraints: ctx.constraints },
+      notify,
+    })
+    .onConflictDoUpdate({ target: [sessionReads.sessionId, sessionReads.userId], set: { notify } });
 }

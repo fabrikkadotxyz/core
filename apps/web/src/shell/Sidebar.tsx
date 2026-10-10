@@ -13,6 +13,36 @@ import type { SessionSummary } from '@fabrikka/types';
 import { chats, sessions as sessionsApi } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { byActivity, useWorkspace } from './workspace.tsx';
+import { askPermission, bannerDismissed, dismissBanner, permission } from '../notify.ts';
+
+/**
+ * M42: the first time something needs you, offer browser notifications. One
+ * click here, then the browser's own Allow. Never in the desktop app, which
+ * asks through the operating system.
+ */
+function NotifyOffer({ total }: { total: number }) {
+  const [state, setState] = useState(() => (bannerDismissed() ? 'dismissed' : permission()));
+  if (total === 0 || state !== 'default') return null;
+  return (
+    <div className="side-offer" role="status">
+      <p>Get a notification when a room needs you?</p>
+      <div className="side-form-row">
+        <button className="small" onClick={async () => setState(await askPermission())}>
+          Turn on
+        </button>
+        <button
+          className="link small"
+          onClick={() => {
+            dismissBanner();
+            setState('dismissed');
+          }}
+        >
+          Not now
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Where this build's source lives (ADR 0034, AGPL-3.0 section 13). A modified
@@ -24,20 +54,28 @@ const SOURCE_URL = import.meta.env.VITE_SOURCE_URL || 'https://github.com/fabrik
 const RECENT = 5;
 
 function SessionLink({ s, onNavigate }: { s: SessionSummary; onNavigate: () => void }) {
+  const { needsYou } = useWorkspace();
+  // M42: bold when unread; bold and a number when something in it needs you.
+  const count = needsYou(s);
   const label = s.kind === 'direct' ? (s.peer ?? 'Direct chat') : s.title;
   const icon = s.kind === 'chat' ? '#' : s.kind === 'direct' ? '●' : s.role === 'viewer' ? '👥' : '▤';
   return (
     <NavLink
       to={`/o/${s.ownerSlug}/s/${s.publicId}`}
-      className={({ isActive }) => `side-item${isActive ? ' on' : ''}${s.unread ? ' unread' : ''}`}
+      className={({ isActive }) => `side-item${isActive ? ' on' : ''}${s.unread || count ? ' unread' : ''}${count ? ' needs' : ''}`}
       onClick={onNavigate}
-      title={label}
+      title={count ? `${label} — ${count} need${count === 1 ? 's' : ''} you` : label}
     >
       <span className="side-icon" aria-hidden>
         {icon}
       </span>
       <span className="side-label">{label}</span>
       {s.role === 'viewer' && <span className="side-meta">view</span>}
+      {count > 0 && (
+        <span className="side-count" aria-label={`${count} need${count === 1 ? 's' : ''} you`}>
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
     </NavLink>
   );
 }
@@ -174,8 +212,11 @@ function NewDirect({ onOpened }: { onOpened: (s: SessionSummary) => void }) {
 
 export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const { user, signOut } = useAuth();
-  const { sessions, teams, team, selectTeam } = useWorkspace();
+  const { sessions, teams, team, selectTeam, needsYou } = useWorkspace();
   const navigate = useNavigate();
+  // M42: another team has a room that needs you.
+  const elsewhere = (teamId: string) => sessions.reduce((n, s) => n + (s.team?.id === teamId ? needsYou(s) : 0), 0);
+  const otherTeamsNeedYou = teams.some((t) => t.id !== team?.id && elsewhere(t.id) > 0);
 
   const { refresh } = useWorkspace();
   const active = sessions.filter((s) => s.status === 'active');
@@ -206,7 +247,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             options={teams.map((t) => ({
               value: t.id,
               label: t.name,
-              description: `${t.memberCount} ${t.memberCount === 1 ? 'member' : 'members'}`,
+              description: `${t.memberCount} ${t.memberCount === 1 ? 'member' : 'members'}${elsewhere(t.id) ? ` · ${elsewhere(t.id)} need${elsewhere(t.id) === 1 ? 's' : ''} you` : ''}`,
               leading: <TeamInitial name={t.name} />,
             }))}
             onChange={(id) => {
@@ -215,9 +256,12 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
               onNavigate();
             }}
           />
-        ) : (
+        ) : null}
+        {teams.length > 0 && otherTeamsNeedYou ? <span className="side-team-dot" role="status" aria-label="Another team needs you" title="Another team needs you" /> : null}
+        {teams.length > 0 ? null : (
           <strong className="side-brand">Fabrikka</strong>
         )}
+        <NotifyOffer total={sessions.reduce((n, s) => n + needsYou(s), 0)} />
         <NavLink to="/" end className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
           <span className="side-icon" aria-hidden>⌂</span>
           <span className="side-label">Home</span>

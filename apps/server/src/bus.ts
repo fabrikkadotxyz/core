@@ -29,7 +29,25 @@ export function subscribe(sessionId: string, fn: Subscriber): () => void {
   };
 }
 
+/**
+ * M42: listeners for every session's events, so a person's stream can hear the
+ * rooms they aren't looking at. Returns an unsubscribe function.
+ */
+type AnySubscriber = (sessionId: string, event: ServerEvent) => void;
+const anySubscribers = new Set<AnySubscriber>();
+export function subscribeAll(fn: AnySubscriber): () => void {
+  anySubscribers.add(fn);
+  return () => void anySubscribers.delete(fn);
+}
+
 export function publish(sessionId: string, event: ServerEvent): void {
+  for (const fn of anySubscribers) {
+    try {
+      fn(sessionId, event);
+    } catch (err) {
+      console.error('[bus] subscriber threw', err);
+    }
+  }
   const set = subscribers.get(sessionId);
   if (!set) return;
   for (const fn of set) {

@@ -896,6 +896,11 @@ export const sessionReads = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
     contextSeen: jsonb('context_seen').notNull(),
+    /**
+     * M42 (ADR 0037): everything | needs_you | nothing. Null is the default for
+     * the session's kind: everything for a direct chat, needs_you otherwise.
+     */
+    notify: text('notify'),
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
 );

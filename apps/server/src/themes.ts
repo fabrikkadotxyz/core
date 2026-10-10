@@ -90,11 +90,11 @@ export function checkCss(css: string, packFiles: Set<string>): void {
   // Comments can't hide a url() from the browser, but they can hide one from us: strip them first.
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
   for (const match of bare.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gi)) {
-    const target = match[2].trim();
+    const target = (match[2] ?? '').trim();
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('//') || target.startsWith('/') || target.includes('\\')) {
       throw new ThemeError(`url(${target}) points outside the theme; only relative paths inside its folder are allowed`);
     }
-    const path = target.replace(/^\.\//, '').split(/[?#]/)[0];
+    const path = target.replace(/^\.\//, '').split(/[?#]/)[0] ?? '';
     if (path.split('/').includes('..') || !packFiles.has(path)) throw new ThemeError(`url(${target}) isn't a file in the theme`);
   }
 }
@@ -166,8 +166,9 @@ function builtInOrder(a: string, b: string): number {
 /** A file of a theme, if the check accepted it: its path and content type. */
 export function themeFile(themes: Map<string, Theme>, id: string, path: string): { abs: string; type: string } | null {
   const abs = themes.get(id)?.files.get(path);
-  if (!abs) return null;
-  return { abs, type: TYPES[extname(abs).toLowerCase()] };
+  const type = abs && TYPES[extname(abs).toLowerCase()];
+  if (!abs || !type) return null;
+  return { abs, type };
 }
 
 /** Where themes come from: the repository's `themes/`, then FABRIKKA_THEMES_DIR. */

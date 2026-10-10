@@ -46,7 +46,8 @@ export function AppearancePage() {
     setError(null);
     chooseTheme(id).catch((err) => setError((err as Error).message));
   };
-  const system = offered?.filter((t) => t.id === 'dusk' || t.id === 'dusk-night') ?? [];
+  const light = offered?.find((t) => t.id === 'dusk');
+  const dark = offered?.find((t) => t.id === 'dusk-night');
 
   return (
     <main className="column">
@@ -63,11 +64,11 @@ export function AppearancePage() {
         <p className="muted">Loading themes…</p>
       ) : (
         <div className="theme-grid" role="group" aria-label="Themes">
-          {system.length === 2 && (
+          {light && dark && (
             <button type="button" className={`theme-card${choice === 'system' ? ' on' : ''}`} aria-pressed={choice === 'system'} onClick={() => pick('system')}>
               <span className="theme-preview theme-preview-split" aria-hidden>
-                <Preview swatches={system[0].swatches} />
-                <Preview swatches={system[1].swatches} />
+                <Preview swatches={light.swatches} />
+                <Preview swatches={dark.swatches} />
               </span>
               <span className="theme-card-text">
                 <strong>Match my system</strong>

@@ -3,6 +3,7 @@ name = "fabrikka-desktop"
 version = "0.0.0"
 edition = "2021"
 description = "Fabrikka desktop shell"
+license = "AGPL-3.0-only"
 publish = false
 
 [build-dependencies]

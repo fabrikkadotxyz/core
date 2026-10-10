@@ -14,6 +14,13 @@ import { chats, sessions as sessionsApi } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { byActivity, useWorkspace } from './workspace.tsx';
 
+/**
+ * Where this build's source lives (ADR 0034, AGPL-3.0 section 13). A modified
+ * Fabrikka served to others must offer its own source, and a modification means
+ * a rebuild, so it's a build setting: VITE_SOURCE_URL.
+ */
+const SOURCE_URL = import.meta.env.VITE_SOURCE_URL || 'https://github.com/fabrikkadotxyz/core';
+
 const RECENT = 5;
 
 function SessionLink({ s, onNavigate }: { s: SessionSummary; onNavigate: () => void }) {
@@ -303,6 +310,9 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             Sign out
           </button>
         </div>
+        <a className="side-source" href={SOURCE_URL} target="_blank" rel="noreferrer noopener">
+          Source code · AGPL-3.0
+        </a>
       </div>
     </nav>
   );

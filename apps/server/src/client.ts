@@ -82,7 +82,9 @@ export function installScript(publicUrl: string): string {
   return `#!/bin/sh
 # Fabrikka client installer for ${publicUrl}
 # (ADR 0030). It installs only Fabrikka's own client, into your home folder,
-# without sudo: never Node, never an agent runtime. Options, after "| bash -s --":
+# without sudo: never Node, never an agent runtime. Fabrikka is free software
+# under the GNU AGPL v3 (https://www.gnu.org/licenses/agpl-3.0.html).
+# Options, after "| bash -s --":
 #   --app              install the desktop app instead (macOS, Apple Silicon); no Node needed
 #   --no-connect       install only; don't start the host (or open the app)
 #   --no-modify-path   don't add ~/.local/bin to your shell's startup file

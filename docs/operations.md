@@ -93,6 +93,21 @@ tables and pages, and starts it. A sign-up page for a hosted instance is built
 that way. The kit an extension may use is listed in
 `docs/protocol.md`. Everything else in the core is internal.
 
+## The license, and your source
+
+Fabrikka is licensed **AGPL-3.0-only** ([ADR 0034](decisions/0034-license-agpl-3.0.md)).
+
+- **Running it unmodified,** for yourself, your team or your company, asks
+  nothing of you.
+- **Running a modified version for other people over a network** (changed code,
+  or an extension built on `createApp`) means offering those people your
+  source, under the AGPL.
+  - Build the web app with `VITE_SOURCE_URL=<your repository>`.
+  - The sidebar's *Source code · AGPL-3.0* link then points at your source, not
+    upstream's.
+- **What people make in a room** (messages, outputs, files) and **the agents
+  that connect over MCP** are not covered by the AGPL. They're yours.
+
 ## Connecting a computer (the local client)
 
 Every instance serves its own client and installer (M33, [ADR 0030](decisions/0030-every-instance-serves-its-own-client-installer.md)). The

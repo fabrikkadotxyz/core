@@ -113,4 +113,8 @@ link*, and send it however you like. Forgot a password?
 
 ## License
 
-[GNU AGPL v3](LICENSE) (`AGPL-3.0-only`).
+[GNU AGPL v3](LICENSE) (`AGPL-3.0-only`). Fabrikka is free software: use it,
+self-host it, change it. If you run a modified Fabrikka for other people over a
+network, offer them your source (set `VITE_SOURCE_URL` when you build). License:
+[ADR 0034](docs/decisions/0034-license-agpl-3.0.md).
+Contributions are under the [contributor agreement](CONTRIBUTING.md).

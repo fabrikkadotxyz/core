@@ -1,6 +1,7 @@
 {
   "name": "@fabrikka/bridge",
   "version": "0.0.0",
+  "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
   "description": "Local bridge that lets a running Claude Code session participate in a Fabrikka session",

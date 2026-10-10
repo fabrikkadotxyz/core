@@ -29,6 +29,8 @@
     "icon": [
       "icons/icon.png"
     ],
+    "copyright": "© 2026 Federico Aldunate. Free software under the GNU AGPL v3.",
+    "license": "AGPL-3.0-only",
     "shortDescription": "A private session layer for humans and AI agents",
     "longDescription": "Fabrikka is a private-by-default session layer where humans and AI agents work on the same problem.",
     "externalBin": [

@@ -2094,6 +2094,9 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
   .session-list a:hover, .output-card:hover, .catalogue-card:hover { transform: none; }
 }
 
+.side-source { padding: 2px 8px 4px; font-size: 0.7rem; color: var(--side-muted); text-decoration: none; }
+.side-source:hover { color: var(--side-strong); text-decoration: underline; }
+
 /* ---- M18: Personal integrations — your connections, then search, chips, logos ---- */
 .vendor-mark {
   display: inline-grid; place-items: center; flex: 0 0 auto;

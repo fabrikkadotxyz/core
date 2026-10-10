@@ -90,4 +90,8 @@ FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m10.mjs  # asserts activity is liv
 
 Run **every** existing acceptance check before committing a milestone, not just the current one.
 
+**One exception to "sequential" (2026-10-10):** the hosting milestones (M39, M40)
+are built in parallel with the feature milestones, because they don't change what
+a room does. Feature milestones stay sequential. See `docs/mvp.md`, *Who does what*.
+
 `docs/roadmap.md` also marks one hard ordering gate: **M6 (safety rails) must land before a second human is ever put in a session with a spawn-enabled agent.** See `docs/security.md`.

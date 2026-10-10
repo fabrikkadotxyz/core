@@ -23,6 +23,7 @@ Why this project in particular: Fabrikka's value is a *protocol surface* that ex
 | `docs/security.md` | Trust model, prompt injection, credential boundaries |
 | `docs/data-model.md` | Schema and what each table is for |
 | `docs/operations.md` | Running an instance: bootstrap, admin CLI, invites, backups |
+| `docs/mvp.md` | The road to MVP: what's missing, in what order, and the acceptance stories |
 | `docs/roadmap.md` | Milestones M0–M37 and their acceptance tests |
 | `docs/decisions/` | ADRs — one per architectural decision, immutable once accepted |
 

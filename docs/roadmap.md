@@ -1631,6 +1631,12 @@ extends it.
 
 ## MVP acceptance
 
+> **Superseded 2026-10-10 by [`docs/mvp.md`](mvp.md)**: the road to MVP, its
+> phases (close what's open, the verbs, anyone can bring their agent, anyone can
+> host it, open it and launch) and its new acceptance stories for developers,
+> students and office workers. The original M8 version is kept below for the
+> record.
+
 Run after M8:
 
 1. Create a private session, invite a friend.

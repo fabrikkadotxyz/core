@@ -66,3 +66,4 @@ What we rejected and why.
 | [0031](0031-the-desktop-app-runs-the-local-host.md) | The desktop app runs the local host; signing waits for launch | Proposed |
 | [0032](0032-codex-on-the-host-confines-writes-not-reads.md) | Codex on the local host confines writes, not reads, and says so | Proposed |
 | [0033](0033-desktop-sign-ins-finish-in-the-default-browser.md) | In the desktop app, a vendor sign-in runs in the default browser, through a one-time handoff | Proposed |
+| [0034](0034-license-agpl-3.0.md) | License: AGPL-3.0, with a contributor agreement | Accepted |

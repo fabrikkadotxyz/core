@@ -1,36 +1,45 @@
 # Fabrikka
 
-A private-by-default session layer where humans and AI agents work on the same problem.
+**Multiplayer AI.** A room where your team and the AI agents you already use work
+one problem together, live: debug the webhook, write the paper, draft the
+proposal. Anyone in the room can **watch** an agent work, **redirect** it, and
+**hand it off**, and nobody copies context between them by hand.
 
-A **session** is a bounded collaborative problem — *debug the Stripe webhook*, *review PR #182*, *plan the migration*. It holds a shared conversation, shared context, shared artifacts, shared tools, and a mix of people and agents as participants.
+Chat with an AI today is single-player: a box only you can see, and a transcript
+you can send a link to. Fabrikka is what Google Docs did for documents and Figma
+did for design, done for agents. Think *Slack for problems, not conversations*:
+a room exists to produce something, and leaves a record behind.
 
-The architectural bet:
+- **Bring your own agent.** Claude Code, Codex, or anything that speaks MCP joins
+  with no plugin. Your agent, your credentials, your machine: Fabrikka never
+  runs a model for you.
+- **Private by default.** A room is invisible to anyone not in it.
+- **Your tools, as you.** GitHub, Jira, Confluence and others connect through the
+  vendor's own MCP server, signed in as you.
+- **Host it yourself, free.** One click on Render, or `docker compose up` on any
+  server. Licensed [AGPL-3.0](LICENSE).
 
-> **The session is itself an MCP.**
-
-Claude Code, Codex, Cursor, OpenCode and anything else that speaks MCP joins a session without a Fabrikka-specific integration. We write zero agent plugins.
-
-The rule that follows from it:
-
-> **Fabrikka does not own the agent. Fabrikka owns the session.**
+What we promise the people who use it, and the rules that settle an argument:
+[`PRINCIPLES.md`](PRINCIPLES.md).
 
 ## Status
 
-Pre-MVP. **M0–M13 built**: auth and private sessions, participants and mentions,
-the remote session MCP endpoint, the bridge channel, spawn-on-mention with Claude
-Code and Codex, safety rails, session context and artifacts, per-participant MCP
-aggregation, a Tauri shell, live activity, the three-pane session screen, live shared documents, and LaTeX papers compiled in
-the browser. Output kinds are plug-in modules (ADR 0023). Built ahead of order
-because they need no outside accounts: **M19** session links and **M20** agents
-reading uploaded PDFs (their stories wait on M18's connections), **M21** teams and
-**M22** team-visible sessions and guests, **M23** comments on outputs, and **M24**
-catch-up and handoffs (its stories' vendor half waits on M18), **M25** session
-templates, **M27** export, **M28** a Slack-like home with a team switcher, and
-**M29** team chats and direct chats, **M30** team integrations (credentials a team
-shares), **M31** the local host (your agents in folders you grant, safely), and
-**M32** the server as a library, with password reset by email when an email
-transport is configured. M14 (Google Docs) and M18 (connections) wait on real
-vendor accounts — see [`docs/roadmap.md`](docs/roadmap.md).
+**Pre-MVP, pre-1.0.** The road to MVP, phase by phase, is
+[`docs/mvp.md`](docs/mvp.md). Built so far:
+- rooms, mentions and live agent activity;
+- agents joining live or on a mention;
+- safety rails, shared documents and LaTeX papers;
+- teams, guests, comments, catch-up and handoffs, templates, export;
+- per-person connections to vendors;
+- a desktop app that runs your agents in folders you choose;
+- self-hosting (Docker, Render, Railway).
+
+Every milestone, with its acceptance test, is in
+[`docs/roadmap.md`](docs/roadmap.md).
+
+How it works: **the session is itself an MCP** (an MCP server agents connect
+to), and **Fabrikka owns the session, never the agent**
+([`ARCHITECTURE.md`](ARCHITECTURE.md)).
 
 ## How agents join
 

@@ -803,7 +803,7 @@ metadata):
 
 | Vendor | Category | MCP server | Sign-in | Operator setup | Entry |
 | --- | --- | --- | --- | --- | --- |
-| Linear | Issue tracker | `https://mcp.linear.app/mcp` | OAuth: PKCE (S256), dynamic registration, scopes `read write` (probed 2026-10-10) | none | `catalogue/linear.ts`. Listed once the owner connects it; presets come from that connection's tools. Needed for M20's second run. |
+| Linear | Issue tracker | `https://mcp.linear.app/mcp` | OAuth: PKCE (S256), dynamic registration, scopes `read write` (probed 2026-10-10) | none | `catalogue/linear.ts`. Offered on an instance with `FABRIKKA_PREPARED_VENDORS=linear`, marked *Preview* (`docs/operations.md`). Listed once the owner connects it; presets come from that connection's tools. M20 runs with both Jira and Linear (owner, 2026-10-10). |
 
 Later wave: GitLab, Linear, ClickUp, Sentry, Rollbar, Notion. Each is probed and
 connected for real before it gets an entry. Self-hosted Grafana
@@ -1686,6 +1686,91 @@ itself enforces
    the service: the room and the file are still there.
 4. `PUBLIC_URL` was never typed: the invite links and `/install.sh` name the
    service's own `onrender.com` address.
+
+## M42 — Needs you: know when a room wants you, wherever you are
+
+> You work in three rooms at once: your own, one with some colleagues, one with
+> others. An agent hands you work in one you aren't looking at, and today it
+> waits until you happen to look. [ADR 0037](decisions/0037-needs-you-is-derived-and-reaches-you-where-you-are.md):
+> "needs you" is derived from the record, shown as a number, pushed live, and
+> becomes a system notification when you aren't in that room.
+
+- **What needs you,** since your read position in a room:
+  - a message mentioning you, from a person or an agent (a handoff is one);
+  - in a direct chat, any message from the other person;
+  - an agent you own finished, failed or was stopped there;
+  - the room paused on its turn budget, for whoever can resume it.
+- **Two levels in the sidebar:** unread is **bold** (M29, unchanged); needs you
+  is bold **and a number** in the attention colour.
+- **Per room:** *Everything* / *What needs me* (default) / *Nothing* (muted),
+  from the room's header. Direct chats default to *Everything*. A muted room is
+  never bold or numbered, and mentions still reach *Waiting for you*.
+- **Live:** `/api/me/stream`, one WebSocket per person, carries count changes
+  and a `notify` event per new item. The sidebar, the team switcher and the tab
+  title follow it instead of waiting for focus.
+- **Where it shows:**
+  - the sidebar, with the number;
+  - a dot on another team in the team switcher;
+  - the tab title `(3) Fabrikka`, plus a dot on the tab icon;
+  - browser notifications, once turned on (a banner, then the browser's
+    *Allow*);
+  - in the desktop app: the system notification, a dock badge and a tray dot,
+    through `set_attention` and `notify` (ADR 0037's limits).
+- **No notification for the room in front of you,** and none for your own
+  messages or an agent's activity while it works.
+- **A notification** reads *"Alice mentioned you in Checkout 500s"*, then the
+  message's first line, unless **Show message text in notifications** is off on
+  that device. Clicking it opens the room.
+
+**Test** (two accounts, three rooms: *Mine*, *With Alice*, *With Bob*):
+1. Fede is in *Mine*. Alice writes in *With Alice* without mentioning him: it
+   turns bold in his sidebar at once, with no number and no notification.
+2. Alice writes `@fede can you check this?`: *With Alice* shows **1**, the tab
+   reads `(1) Fabrikka`, and a system notification appears. Clicking it opens
+   the room (**1 click**), and the number clears.
+3. In *Mine*, Fede mentions his agent and switches to *With Bob*. When the run
+   finishes, *Mine* shows **1** and he's notified. The same with the kill
+   switch: stopped counts too.
+4. In *With Bob*, the agents loop until the budget pauses the room: Fede, who
+   can resume it, sees the number. Bob's teammate who can't resume it doesn't.
+5. Fede sets *With Alice* to *Nothing* (**2 clicks**: the room's bell, then
+   *Nothing*). Alice mentions him again: no bold, no number, no notification,
+   and the mention is in *Waiting for you*.
+6. A direct chat from Bob notifies on every message, without a mention.
+7. In the desktop app, with the window in the background, steps 2 and 3 notify
+   through the system and the dock badge shows the total. Quitting the window
+   to the tray keeps the tray dot.
+8. Turn off **Show message text in notifications**: the next notification says
+   who and where, not what.
+9. A room Fede can't see never appears on his stream, even when someone types
+   his name in it.
+
+**Clicks:** from any room, reaching the room that needs you takes **1** (the
+notification, or the sidebar). Muting a room takes **2**. Turning notifications
+on is one-time.
+
+## M43 — Team call records expire
+
+> M30 records who used a team's shared connection, and when, for the team's
+> owners. It's useful for a while, and nobody needs it forever. A record kept
+> forever is the hardest line in a privacy policy to defend.
+
+- **A team setting, *Keep call records for*:** 30, 60, **90** (the default),
+  180 or 365 days. Only a team owner changes it, from **Team → Integrations**.
+- **Records older than the setting are deleted,** by a job that runs at start
+  and then once a day. Shortening the setting deletes the older records on the
+  next run, and the selector says so before it's saved.
+- **The setting is shown where the records are,** above the list: *"Kept for
+  90 days."*
+- **Only the call records expire.** Nothing else of the team's changes.
+
+**Test:**
+1. A new team keeps call records for 90 days.
+2. A team owner opens Team → Integrations → *Keep call records for* → 30 days
+   (**3 clicks**). A member sees the value and can't change it.
+3. With records 29 and 31 days old, the next run deletes the 31-day one and
+   keeps the 29-day one.
+4. Another team at 90 days loses nothing.
 
 ## Later — Resuming offline agents
 

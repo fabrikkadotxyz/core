@@ -331,6 +331,14 @@ one registry line. Besides its endpoint and sign-in, the file carries
 brand colour, copied from Simple Icons (CC0) at a pinned version. The server
 refuses a logo that is anything but path data and a hex colour.
 
+**A prepared vendor** is a file written from a real probe but not yet in the
+registry, because nobody has connected it for real (ADR 0024, *verified, not
+documented*). To connect one on your own instance and verify it, set
+`FABRIKKA_PREPARED_VENDORS` to its id (comma-separated for several), restart,
+and it appears in Personal integrations marked **Preview**. Once it has worked,
+it moves into the registry for everyone, and the variable comes out. Unknown ids
+are ignored, with a warning in the log.
+
 ### Custom connections that sign in with an email and an API token
 
 Some vendors take a personal API token only as HTTP Basic, with your email as the

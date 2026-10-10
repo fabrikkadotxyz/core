@@ -100,6 +100,8 @@ const cat = await json('/connections/catalogue');
 const offered = cat.entries.map((e) => e.id);
 check(['fakehub', 'fakepre', 'faketracker', 'fakewiki', 'fakegraf'].every((id) => offered.includes(id)), 'the catalogue lists its vendors by category');
 check(!offered.includes('fakeunset'), 'A VENDOR NEEDING A PRE-REGISTERED CLIENT IS ABSENT UNTIL THE INSTANCE HAS ONE');
+check(cat.entries.filter((e) => e.id.startsWith('fake')).every((e) => e.preview === false), 'verified vendors are not marked preview');
+check(cat.entries.filter((e) => e.id === 'linear').every((e) => e.preview === true), 'A PREPARED VENDOR (Linear) IS OFFERED ONLY AS A PREVIEW, and only where FABRIKKA_PREPARED_VENDORS names it');
 
 /* ------------------------------------------------ 2. sign in: discovery, registration, PKCE */
 

@@ -281,6 +281,7 @@ function CatalogueCard({ entry, onConnect }: { entry: CatalogueItem; onConnect: 
       <div className="catalogue-head">
         <VendorMark logo={entry.logo} name={entry.name} />
         <strong>{entry.name}</strong>
+        {entry.preview && <span className="badge-shared" title="Not verified yet: connect it to check it works">preview</span>}
         {entry.connected && entry.status === 'ok' && <span className="badge-ok">connected</span>}
         {entry.status === 'needs_reconnect' && <span className="badge-shared">needs reconnecting</span>}
       </div>

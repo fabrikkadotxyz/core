@@ -69,3 +69,4 @@ What we rejected and why.
 | [0034](0034-license-agpl-3.0.md) | License: AGPL-3.0, with a contributor agreement | Accepted |
 | [0035](0035-the-first-owner-is-created-in-the-browser-with-a-setup-code.md) | The first owner is created in the browser, with a setup code | Proposed |
 | [0036](0036-chat-apps-connect-through-oauth-to-a-per-person-endpoint.md) | Chat apps connect through OAuth to a per-person endpoint | Proposed |
+| [0037](0037-needs-you-is-derived-and-reaches-you-where-you-are.md) | "Needs you" is derived from the record, and reaches you where you are | Proposed |

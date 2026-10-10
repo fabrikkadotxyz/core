@@ -168,7 +168,7 @@ import {
 } from './sessions.ts';
 
 import { createKit, type Advertised, type Extension } from './kit.ts';
-import { findEntry, offeredEntries, setExtraEntries, unconfiguredEntries } from './connections/catalogue/registry.ts';
+import { findEntry, isPreview, offeredEntries, setExtraEntries, unconfiguredEntries } from './connections/catalogue/registry.ts';
 import { safeLogo } from './connections/catalogue/types.ts';
 import { CATEGORY_NAMES, type CatalogueEntry } from './connections/catalogue/types.ts';
 import { accountEmail, confirmPage, donePage, failedPage } from './connections/handoff.ts';
@@ -621,6 +621,7 @@ export function createApp(options: CreateAppOptions = {}) {
           presets: e.presets ? { read: e.presets.read.length, write: e.presets.write.length } : null,
           keywords: e.keywords ?? [],
           logo: safeLogo(e.logo),
+          preview: isPreview(e),
           connected: !!have,
           status: have?.status ?? null,
         };

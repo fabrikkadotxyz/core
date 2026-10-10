@@ -487,6 +487,7 @@ website to reach. The terminal host keeps its defended `127.0.0.1` page.
 | Risk | Control |
 | --- | --- |
 | The remote web app, in the app's main window, drives the host (grants itself a folder) | Host commands are permitted only to the bundled local `folders` window. The instance's own origin gets one command, `open_folders`, which opens that window and takes no argument: the person still picks the folder and its policy there. Granted at runtime for the configured origin only. No capability file names a remote URL. Checked by the M34 acceptance script. |
+| The instance's page uses the app's notifications to mislead (M42) | [ADR 0037](decisions/0037-needs-you-is-derived-and-reaches-you-where-you-are.md). The instance's origin also gets `set_attention(total)` (a number, clamped to 0–999) and `notify({ title, body, path })`. Rust caps the text, rate-limits (one per room per 10 seconds, 30 a minute), and accepts only a relative path starting with `/`, so a click opens the instance itself and nothing else. Neither command reads anything or reaches the host. |
 | A page names an arbitrary path to grant | Grant takes no path from any page: Rust opens the native folder picker and passes the chosen folder to the host. The host's own refusals (home, root, ancestors of home) still apply. |
 | A link in a message or document takes the app's own window to another site (a look-alike sign-in page in a window that reads as Fabrikka) | A link to any origin other than the instance opens in a new tab of the person's default browser, never in the app window: the web app turns such a click into a new-window request, and the app answers every new-window request by handing an `http(s)` URL to the system and refusing the window; other schemes are dropped. Connecting a vendor (M18) opens in the browser too, through a one-time handoff (next row). |
 | A vendor sign-in finished in the default browser, which has no Fabrikka login, attaches someone's vendor account to the wrong Fabrikka account | [ADR 0033](decisions/0033-desktop-sign-ins-finish-in-the-default-browser.md). The app gets a handoff link on the instance's origin: a ticket sealed with the encryption key (AES-256-GCM, unforgeable), naming the user and vendor, expiring in 5 minutes. The desktop app opens that one path in the browser through a Rust rule, not an IPC command. The handoff page names the account it connects to, and only its `POST` starts the flow. That sets an HttpOnly, `SameSite=Lax` cookie holding the flow's `state`, scoped to the callback path, so only the browser that pressed Continue can finish. Residual: a handoff link forwarded within its 5 minutes. The ticket is in a URL on purpose: it can only start a sign-in, never read anything. |
@@ -507,6 +508,22 @@ website to reach. The terminal host keeps its defended `127.0.0.1` page.
 | A compromised instance serves a malicious client | **Not prevented:** the script, manifest and file share an origin, so the checksum can't detect this. Signing with a key the server doesn't hold is the stronger step, and the manifest leaves room for it. |
 | The installer reaches beyond Fabrikka | No `sudo`; it writes only under `~/.local` and one marked line in the shell's startup file (skippable). It installs neither Node nor any agent runtime (ADR 0002). |
 | A client updates itself behind the user's back | It doesn't: the host reports "update available", and the user runs `fabrikka update`. |
+
+## Needs you: the per-person stream and notifications (M42)
+
+[ADR 0037](decisions/0037-needs-you-is-derived-and-reaches-you-where-you-are.md).
+
+- **`/api/me/stream` is behind the login cookie** and answers only for the
+  signed-in person. It names only rooms the room list would show them,
+  checked on every event, so a person removed from a room or a team stops
+  hearing about it on the next event, not the next reload.
+- **A mention isn't a membership check.** Typing someone's name in a room they
+  can't see creates no item for them: items come only from rooms they can see.
+- **Notification text leaves the page** for the operating system's notification
+  centre, and may show on a locked screen. It's at most the author, the room's
+  title and the message's first line. **Show message text in notifications**,
+  per device, removes the line.
+- **The desktop app's two commands** are in the desktop table above.
 
 ## Declined capabilities
 

@@ -363,6 +363,30 @@ read.
 position of "now". Without it, every mention ever made would arrive at once as
 "waiting for you".
 
+### M42 — needs you
+
+```
+session_reads  (additions)
+  notify          text                    -- everything | needs_you | nothing;
+                                          -- null = the default for the kind
+                                          -- (direct chats: everything; otherwise needs_you)
+```
+
+**"Needs you" is derived, never stored** ([ADR 0037](decisions/0037-needs-you-is-derived-and-reaches-you-where-you-are.md)),
+like unread. For one person and one session, since `last_seen_at`: messages
+mentioning them, in a direct chat any message from the other person, runs of
+agents they own whose `status` became `done`, `failed` or `stopped`
+(`runs.ended_at`), and the session pausing on its budget when they can resume
+it. The count is how many there are.
+
+**The setting rides on the read position** because both are "this person, this
+room". Choosing a setting in a room you've never opened writes a read position of
+"now", which is what opening it does anyway.
+
+**The device setting *Show message text in notifications* isn't here.** It's
+per device, kept in that device's browser storage, because a work laptop and a
+shared screen want different answers.
+
 ### M25 — templates
 
 ```
@@ -523,6 +547,18 @@ clean up.
 the session wins over the team's row with the same slug. Grants
 (`session_mcp_tool_grants`) are keyed by slug, so one grant covers whichever
 credential a participant ends up using.
+
+**Call records expire (M43).** `teams` gains:
+
+```
+teams  (additions)
+  call_record_days integer not null default 90
+    check (call_record_days in (30, 60, 90, 180, 365))
+```
+
+A job at start, then daily, deletes `team_mcp_calls` rows older than their
+team's setting. A fixed list, not any number: the privacy policy can name every
+possible answer.
 
 **`team_mcp_calls` stores no arguments and no results.** It answers *who* acted
 through a shared account, which the vendor's log can't. What they sent is the

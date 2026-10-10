@@ -8,10 +8,38 @@
  */
 import { confluence, jira } from './atlassian.ts';
 import { github } from './github.ts';
+import { linear } from './linear.ts';
 import type { CatalogueEntry } from './types.ts';
 
 // One line per vendor, added once it has been connected for real.
 const BUILT_IN: CatalogueEntry[] = [github, jira, confluence];
+
+/**
+ * Written from a real probe, not yet connected for real. Offered only where
+ * FABRIKKA_PREPARED_VENDORS names them, so the owner can connect one and
+ * verify it before it joins BUILT_IN (docs/operations.md, "A prepared vendor").
+ */
+const PREPARED: CatalogueEntry[] = [linear];
+
+function preparedOffered(): CatalogueEntry[] {
+  const ids = (process.env.FABRIKKA_PREPARED_VENDORS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const id of ids) {
+    if (!PREPARED.some((e) => e.id === id) && !warned.has(id)) {
+      warned.add(id);
+      console.warn(`[catalogue] FABRIKKA_PREPARED_VENDORS names "${id}", which isn't a prepared vendor; ignored`);
+    }
+  }
+  return PREPARED.filter((e) => ids.includes(e.id));
+}
+const warned = new Set<string>();
+
+/** Whether an entry is offered here only as a preview, not yet verified. */
+export function isPreview(entry: CatalogueEntry): boolean {
+  return PREPARED.includes(entry);
+}
 
 let extra: CatalogueEntry[] = [];
 
@@ -22,7 +50,7 @@ export function setExtraEntries(entries: CatalogueEntry[]): void {
 
 /** Every entry this instance could offer, configured or not. */
 export function allEntries(): CatalogueEntry[] {
-  return [...BUILT_IN, ...extra];
+  return [...BUILT_IN, ...preparedOffered(), ...extra];
 }
 
 /** An entry needing a pre-registered client is offered only once the instance has one. */

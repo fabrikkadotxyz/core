@@ -154,6 +154,8 @@ export interface CatalogueItem {
   presets: { read: number; write: number } | null;
   keywords: string[];
   logo: VendorLogo | null;
+  /** Prepared but not yet verified: offered only where the instance asks for it. */
+  preview: boolean;
   connected: boolean;
   status: string | null;
 }

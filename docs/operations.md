@@ -36,6 +36,33 @@ After that, `/setup` is gone, and everyone else joins by invite.
     them, the image generates a key into `/data` and prints a setup code in its
     log.
 
+## Deploy on Render (M40)
+
+`render.yaml` at the repository root is a Render **Blueprint**. It sets up the
+Fabrikka service (built from `docker/Dockerfile`, with a 1 GB disk at
+`/data`), a managed Postgres 17 reachable only from inside Render, and a
+generated setup code. There's nothing to fill in.
+
+1. Render → **New → Blueprint** → connect GitHub and pick the repository →
+   **Apply**. A fork works the same way.
+2. When the deploy finishes, open the service's URL. It lands on **Set up
+   Fabrikka**. The setup code is the service's `FABRIKKA_SETUP_CODE` (its
+   *Environment* tab).
+3. **Create owner**, then **New room**.
+
+- **Cost:** a disk needs a paid instance (Starter), plus the database's plan.
+  Render's free tier can't keep a disk, and without one, uploads and the
+  generated key wouldn't survive a deploy.
+- `PUBLIC_URL` is taken from Render (`RENDER_EXTERNAL_URL`). Set it yourself
+  when you add a custom domain.
+- GitHub needs its OAuth App's two keys added to the service's environment,
+  as on any instance.
+- The image starts as root only to take over the disk Render mounts, then runs
+  the server as its unprivileged user.
+
+**Railway** comes next (`docs/roadmap.md`, M40): the same image, Postgres, and a
+volume at `/data`. The image already reads `RAILWAY_PUBLIC_DOMAIN`.
+
 ## First run from a checkout
 
 ```bash

@@ -87,6 +87,7 @@ FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m5.mjs   # spawns an actual claude
 FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m6.mjs   # kills a real run mid-flight
 FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m10.mjs  # asserts activity is live, not replayed
 FABRIKKA_TEST_DOCKER=1 node scripts/acceptance/m39.mjs # builds the image, runs the self-hosted stack
+FABRIKKA_TEST_DOCKER=1 node scripts/acceptance/m40.mjs # runs the image the way Render does
 ```
 
 Run **every** existing acceptance check before committing a milestone, not just the current one.

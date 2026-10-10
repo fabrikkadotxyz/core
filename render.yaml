@@ -1,0 +1,38 @@
+# Deploy Fabrikka on Render (M40, docs/roadmap.md): a Blueprint.
+# Render → New → Blueprint → this repository → Apply. Nothing to fill in.
+# A disk needs a paid instance (Starter); Render's free tier can't keep one.
+# Then open the service's URL and create the owner with FABRIKKA_SETUP_CODE,
+# from the service's Environment tab.
+
+services:
+  - type: web
+    name: fabrikka
+    runtime: docker
+    dockerfilePath: ./docker/Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: fabrikka-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fabrikka-db
+          property: connectionString
+      # The first owner's setup code (ADR 0035). Any value works; Render makes one.
+      - key: FABRIKKA_SETUP_CODE
+        generateValue: true
+      # PUBLIC_URL is left out on purpose: the image uses RENDER_EXTERNAL_URL.
+      # FABRIKKA_ENCRYPTION_KEY too: the image generates one onto the disk.
+      # GitHub needs an OAuth App per instance (docs/operations.md); add
+      # GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET here when you have one.
+
+databases:
+  - name: fabrikka-db
+    databaseName: fabrikka
+    user: fabrikka
+    plan: basic-256mb
+    postgresMajorVersion: "17"
+    ipAllowList: []

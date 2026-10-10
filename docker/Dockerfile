@@ -20,7 +20,8 @@ ENV NODE_ENV=production \
 COPY --from=build --chown=node:node /app /app
 COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/fabrikka-entrypoint
 RUN mkdir -p /data && chown node:node /data
-USER node
+# No USER here: platforms mount /data as root (Render, Railway), so the
+# entrypoint starts as root only to hand /data to `node`, then runs as `node`.
 VOLUME /data
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \

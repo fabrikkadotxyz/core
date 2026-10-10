@@ -77,6 +77,10 @@ session runs your agent in that folder.
 
 ## Host it yourself
 
+On Render: **New → Blueprint →** this repository **→ Apply**, then open the URL
+and create the owner (`render.yaml`, details in
+[`docs/operations.md`](docs/operations.md#deploy-on-render-m40)).
+
 On any server with Docker and a domain: `cd docker/selfhost && ./init.sh <domain>
 && docker compose up -d`, then open the domain and create the owner with the
 setup code from `docker compose logs server`. Details, backups and upgrades:

@@ -1,0 +1,14 @@
+# Build context for docker/Dockerfile (M39): the source, never what a checkout
+# builds or keeps locally.
+**/node_modules
+**/dist
+**/.vite
+apps/desktop/src-tauri/target
+apps/desktop/src-tauri/binaries
+apps/desktop/dist-app
+.tex-assets
+.artifacts
+.git
+.env
+docker/selfhost/.env
+**/.DS_Store

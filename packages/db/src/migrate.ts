@@ -1,9 +1,9 @@
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { createClient } from './index.ts';
+import { runMigrations } from './migrations.ts';
 
 const { sql, db } = createClient();
 
-await migrate(db, { migrationsFolder: new URL('../migrations', import.meta.url).pathname });
+await runMigrations(db);
 console.log('migrations applied');
 
 await sql.end();

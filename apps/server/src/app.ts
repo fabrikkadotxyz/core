@@ -18,7 +18,7 @@ import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { createClient, isEncryptionConfigured } from '@fabrikka/db';
+import { createClient, isEncryptionConfigured, runMigrations } from '@fabrikka/db';
 import type {
   LoginBody,
   PostMessageBody,
@@ -39,6 +39,7 @@ import {
   resolveToken,
 } from './auth.ts';
 import { publish, subscribe } from './bus.ts';
+import { createSetup, SetupError } from './setup.ts';
 import { createMcpApp } from './mcp.ts';
 import { broadcastAbort, onAbort, pauseState, setPaused } from './rails.ts';
 import { catchUp, endRun, recordActivity, startRun } from './activity.ts';
@@ -326,6 +327,34 @@ export function createApp(options: CreateAppOptions = {}) {
   /* -------------------------------------------------------------------------- */
   /* Auth                                                                       */
   /* -------------------------------------------------------------------------- */
+
+  /* ---- the first owner, in the browser (M39, ADR 0035) ---- */
+
+  const setup = createSetup(db);
+
+  /** Public: whether this instance still needs its owner. Says nothing else. */
+  app.get('/api/setup', async (c) => c.json({ needed: await setup.needed() }));
+
+  app.post('/api/setup', async (c) => {
+    const body = await c.req
+      .json<{ code?: string; email?: string; displayName?: string; password?: string }>()
+      .catch(() => ({}) as Record<string, string | undefined>);
+    try {
+      const { email } = await setup.createOwner({
+        code: String(body.code ?? ''),
+        email: String(body.email ?? ''),
+        displayName: String(body.displayName ?? ''),
+        password: String(body.password ?? ''),
+      });
+      const token = await login(db, email, String(body.password ?? ''));
+      if (!token) return c.json({ error: 'the owner was created, but signing in failed; sign in normally' }, 500);
+      issueCookie(c, token, SECURE_COOKIES);
+      return c.json({ user: await resolveToken(db, token) }, 201);
+    } catch (err) {
+      if (err instanceof SetupError) return err.status === 404 ? c.notFound() : c.json({ error: err.message }, err.status);
+      throw err;
+    }
+  });
 
   app.post('/api/auth/login', async (c) => {
     const { email, password } = await c.req.json<LoginBody>();
@@ -2463,8 +2492,13 @@ export function createApp(options: CreateAppOptions = {}) {
 
   return {
     app,
-    /** Listen on PORT, with the sockets attached. */
-    start(port = PORT) {
+    /**
+     * Bring the database up to date, say how to set up a fresh instance, then
+     * listen on PORT with the sockets attached (M39: nobody migrates by hand).
+     */
+    async start(port = PORT) {
+      await runMigrations(db);
+      await setup.prepare();
       return new Promise<ReturnType<typeof serve>>((resolveStart) => {
         const server = serve({ fetch: app.fetch, port }, (info) => {
           console.log(`fabrikka server on http://localhost:${info.port}`);

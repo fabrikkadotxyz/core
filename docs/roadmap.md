@@ -1592,6 +1592,55 @@ itself enforces
    tool and changes the reported providers; turning on a tool that isn't
    installed is refused.
 
+## M39 — One image, one compose file: host it yourself
+
+> Self-hosting is the promise (PRINCIPLES.md, *Their tools, in their place*), and
+> today it means a checkout, pnpm, a hand-made `.env`, a migration command and the
+> admin CLI. Part of the road to MVP (`docs/mvp.md`, Phase 3). Built in parallel
+> with the feature milestones, by the owner's decision (`CLAUDE.md`).
+
+- **One container image** (`docker/Dockerfile`):
+  - The server, the built web app, and the built local client, so the
+    instance's own `/install.sh` works.
+  - It runs as an unprivileged user and stores everything it keeps in **`/data`**
+    (uploads, and a generated encryption key).
+- **Migrations run when the server starts,** on every path: the image, `pnpm dev`
+  and a deployment built on `createApp`. They're idempotent, and nobody runs
+  them by hand any more.
+- **`docker/selfhost/`, for any server with Docker:**
+  - `compose.yaml`: the server, Postgres 17 and Caddy, which gets and renews a
+    certificate for `FABRIKKA_DOMAIN`. Postgres isn't published outside the
+    compose network.
+  - `init.sh`: writes `.env` with every secret generated (the database
+    password, `FABRIKKA_ENCRYPTION_KEY`) and asks for one thing, the domain.
+    Nothing to invent.
+  - Upgrading is `docker compose pull && docker compose up -d`. Backups: a
+    `pg_dump` and the `/data` volume, documented in operations.md.
+- **No encryption key configured?** The image generates one into `/data` on
+  first start and reuses it, instead of refusing every credentialed
+  integration.
+- **The first owner is created in the browser** (ADR 0035): `/setup`, with a
+  setup code from `FABRIKKA_SETUP_CODE` or the server log.
+- **Not in M39:**
+  - **S3-compatible storage for uploads.** Both one-click targets (M40) have
+    disks; it comes when a target doesn't.
+  - **The TeX engine,** about 360 MB. It stays optional, as in operations.md.
+  - **The macOS app zip.** It's built on a Mac, and an instance without it
+    simply doesn't offer `--app`.
+
+**Test** (a fresh Linux server with Docker, and a domain pointed at it):
+1. `git clone`, `./docker/selfhost/init.sh` (type the domain),
+   `docker compose up -d`. That's the one-time setup, in a terminal on the
+   operator's own server.
+2. Open `https://<domain>`. It lands on **Set up Fabrikka**. The setup code is
+   in `docker compose logs server`. Enter it with an email and password →
+   **Create owner** (click 1). You're signed in.
+3. **New room** (click 2) → a session opens. Invite someone, upload a file.
+4. `docker compose down && docker compose up -d`: the room, the file and the
+   sign-in survive. `/setup` is gone (404).
+5. `curl -fsSL https://<domain>/install.sh | sh` installs the client from this
+   instance.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

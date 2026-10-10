@@ -1,0 +1,59 @@
+# Self-host Fabrikka on any server with Docker (M39, docs/operations.md).
+#   ./init.sh            once: writes .env with generated secrets and your domain
+#   docker compose up -d
+# Caddy gets and renews the HTTPS certificate for FABRIKKA_DOMAIN.
+
+name: fabrikka
+
+services:
+  server:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://fabrikka:${POSTGRES_PASSWORD:?run ./init.sh first}@postgres:5432/fabrikka
+      PUBLIC_URL: ${PUBLIC_URL:?run ./init.sh first}
+      FABRIKKA_ENCRYPTION_KEY: ${FABRIKKA_ENCRYPTION_KEY:-}
+      FABRIKKA_SETUP_CODE: ${FABRIKKA_SETUP_CODE:-}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+    volumes:
+      - data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fabrikka
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run ./init.sh first}
+      POSTGRES_DB: fabrikka
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fabrikka -d fabrikka"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      FABRIKKA_DOMAIN: ${FABRIKKA_DOMAIN:?run ./init.sh first}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+    depends_on:
+      - server
+
+volumes:
+  data:
+  pgdata:
+  caddy:

@@ -75,6 +75,13 @@ It installs `fabrikka` into your home folder, then opens the pairing page. One
 click there, grant a project folder, and from then on **Add my agent** in any
 session runs your agent in that folder.
 
+## Host it yourself
+
+On any server with Docker and a domain: `cd docker/selfhost && ./init.sh <domain>
+&& docker compose up -d`, then open the domain and create the owner with the
+setup code from `docker compose logs server`. Details, backups and upgrades:
+[`docs/operations.md`](docs/operations.md#self-hosting-with-docker-m39).
+
 ## Development
 
 Requires Node 22+, pnpm and Docker. **No mail server** — see
@@ -84,14 +91,12 @@ Requires Node 22+, pnpm and Docker. **No mail server** — see
 cp .env.example .env
 pnpm install
 pnpm db:up
-pnpm db:migrate
-
-# Create the first account. There is no open registration, so this is the
-# only way in on a fresh instance.
-pnpm admin create-user --email you@example.com --owner
-
-pnpm dev          # web on :5173, server on :9090
+pnpm dev          # web on :5173, server on :9090; migrations run at start
 ```
+
+Open the app: a fresh instance sends you to **Set up Fabrikka**, where the setup
+code printed by the server creates the first owner. There is no open
+registration after that.
 
 Then invite people with a **link**, not an email: open a session, *Create invite
 link*, and send it however you like. Forgot a password?

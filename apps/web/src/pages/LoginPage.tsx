@@ -13,11 +13,15 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [offers, setOffers] = useState<{ passwordReset: boolean; signupUrl: string | null } | null>(null);
 
+  // A fresh instance has nobody to sign in as: send whoever just deployed it to setup (ADR 0035).
+  const [needsSetup, setNeedsSetup] = useState(false);
   useEffect(() => {
     auth.options().then(setOffers).catch(() => setOffers({ passwordReset: false, signupUrl: null }));
+    auth.setupNeeded().then((r) => setNeedsSetup(r.needed)).catch(() => {});
   }, []);
 
   if (loading) return <main className="centered">Loading…</main>;
+  if (needsSetup && !user) return <Navigate to="/setup" replace />;
   if (user) {
     const from = (location.state as { from?: string } | null)?.from;
     return <Navigate to={from ?? '/'} replace />;

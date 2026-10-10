@@ -1,0 +1,6 @@
+# HTTPS in front of Fabrikka (M39). Caddy fetches and renews the certificate
+# for the domain on its own. WebSockets (live rooms, the local client) pass through.
+{$FABRIKKA_DOMAIN} {
+	encode gzip
+	reverse_proxy server:8080
+}

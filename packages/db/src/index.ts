@@ -39,3 +39,4 @@ export type Database = ReturnType<typeof createClient>['db'];
 export * from './auth.ts';
 
 export * from './crypto.ts';
+export * from './migrations.ts';

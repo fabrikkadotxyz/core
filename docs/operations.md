@@ -3,19 +3,54 @@
 Running a Fabrikka instance. **No outbound email is required** — see
 [ADR 0007](decisions/0007-email-is-a-transport.md).
 
-## First run
+## Self-hosting with Docker (M39)
+
+On any server with Docker, and a domain whose DNS points at it:
+
+```bash
+git clone <this repository> fabrikka && cd fabrikka/docker/selfhost
+./init.sh fabrikka.example.com   # once: writes .env, every secret generated
+docker compose up -d              # the server, Postgres 17, and Caddy for HTTPS
+docker compose logs server        # the setup code
+```
+
+Open `https://fabrikka.example.com`. It lands on **Set up Fabrikka**: enter
+the setup code, your name, email and a password, then **Create owner**
+([ADR 0035](decisions/0035-the-first-owner-is-created-in-the-browser-with-a-setup-code.md)).
+After that, `/setup` is gone, and everyone else joins by invite.
+
+- **Migrations run when the server starts.** There's no step for them.
+- **What to back up:**
+  - the `pgdata` volume, or a `pg_dump`;
+  - the `data` volume (uploads, and `encryption.key` if you didn't set one);
+  - `.env`.
+- **Upgrading:** `git pull && docker compose up -d --build`. A published image
+  comes later.
+- **Ports:** Caddy takes 80 and 443. `HTTP_PORT` and `HTTPS_PORT` in `.env` move
+  them, and then `PUBLIC_URL` has to include the port.
+- **The image alone** (`docker build -f docker/Dockerfile -t fabrikka .`) runs
+  anywhere with Postgres:
+  - It needs `DATABASE_URL` and `PUBLIC_URL`, and keeps everything else in
+    `/data`.
+  - `FABRIKKA_ENCRYPTION_KEY` and `FABRIKKA_SETUP_CODE` are optional. Without
+    them, the image generates a key into `/data` and prints a setup code in its
+    log.
+
+## First run from a checkout
 
 ```bash
 cp .env.example .env
 pnpm install
 pnpm db:up
-pnpm db:migrate
+pnpm dev        # migrations run when the server starts
+```
 
-# Create the first account. There is no open registration, so this is the
-# only way in on a fresh instance.
+The first owner is created in the browser: open the app, and it sends you to
+**Set up Fabrikka**, with the setup code printed in the server's output. Or,
+from the CLI (the only way before M39, and it still works):
+
+```bash
 pnpm admin create-user --email you@example.com --owner
-
-pnpm dev
 ```
 
 `create-user` prompts for a password on a TTY. To script it, pipe the password

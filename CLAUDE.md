@@ -86,6 +86,7 @@ Run them before tagging a milestone that touches their area:
 FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m5.mjs   # spawns an actual claude -p
 FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m6.mjs   # kills a real run mid-flight
 FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m10.mjs  # asserts activity is live, not replayed
+FABRIKKA_TEST_DOCKER=1 node scripts/acceptance/m39.mjs # builds the image, runs the self-hosted stack
 ```
 
 Run **every** existing acceptance check before committing a milestone, not just the current one.

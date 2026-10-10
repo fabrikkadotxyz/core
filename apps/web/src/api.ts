@@ -86,6 +86,10 @@ export const auth = {
   login: (body: LoginBody) =>
     call<{ user: AuthUser }>('/auth/login', { method: 'POST', body }),
   logout: () => call<{ ok: true }>('/auth/logout', { method: 'POST' }),
+  /** M39, ADR 0035: whether this instance still needs its owner, and creating them. */
+  setupNeeded: () => call<{ needed: boolean }>('/setup'),
+  setup: (body: { code: string; email: string; displayName: string; password: string }) =>
+    call<{ user: AuthUser }>('/setup', { method: 'POST', body }),
   /** A session invite returns `session`; a team invite (M21) returns `team`. */
   signup: (body: SignupBody) =>
     call<{ user: AuthUser } & InviteDestination>('/auth/signup', { method: 'POST', body }),

@@ -798,6 +798,13 @@ metadata):
 | Confluence | Docs | the same Atlassian server | the same: **one Atlassian connection serves both entries** | none |
 | Grafana | Observability | `https://mcp.grafana.com/mcp` (Grafana Cloud) | OAuth 2.1: PKCE, dynamic registration; the stack is chosen with an `X-Grafana-URL` header | none |
 
+**Prepared, not listed.** An entry written from a real probe, but kept out of
+`registry.ts` until it has been connected for real:
+
+| Vendor | Category | MCP server | Sign-in | Operator setup | Entry |
+| --- | --- | --- | --- | --- | --- |
+| Linear | Issue tracker | `https://mcp.linear.app/mcp` | OAuth: PKCE (S256), dynamic registration, scopes `read write` (probed 2026-10-10) | none | `catalogue/linear.ts`. Listed once the owner connects it; presets come from that connection's tools. Needed for M20's second run. |
+
 Later wave: GitLab, Linear, ClickUp, Sentry, Rollbar, Notion. Each is probed and
 connected for real before it gets an entry. Self-hosted Grafana
 (`grafana/mcp-grafana`, a service-account token) stays a **custom connection**.

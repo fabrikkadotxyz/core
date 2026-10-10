@@ -1,0 +1,13 @@
+# Railway reads this for the Fabrikka service (M40, docs/operations.md,
+# "Deploy on Railway"). The database, the volume at /data and the template
+# itself are made in Railway's dashboard; this keeps the build and health
+# check in the repository, next to render.yaml.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "docker/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"

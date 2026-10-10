@@ -60,8 +60,30 @@ generated setup code. There's nothing to fill in.
 - The image starts as root only to take over the disk Render mounts, then runs
   the server as its unprivileged user.
 
-**Railway** comes next (`docs/roadmap.md`, M40): the same image, Postgres, and a
-volume at `/data`. The image already reads `RAILWAY_PUBLIC_DOMAIN`.
+## Deploy on Railway (M40)
+
+`railway.toml` keeps the build (`docker/Dockerfile`) and the health check
+(`/health`) in the repository. The rest is made once in Railway's dashboard.
+
+1. **New Project → Deploy from GitHub repo →** the repository. Railway builds
+   the image from `railway.toml`.
+2. In the project: **+ Create → Database → PostgreSQL**.
+3. On the Fabrikka service:
+   - **Variables:**
+     - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}` (a reference, so nothing
+       is pasted);
+     - `FABRIKKA_SETUP_CODE` = a long random value; Railway's *Generate*
+       button makes one.
+   - **Settings → Networking → Generate Domain.** The image takes
+     `PUBLIC_URL` from `RAILWAY_PUBLIC_DOMAIN`.
+   - **Attach a volume** at `/data`, for uploads and the generated encryption
+     key. Without one, both are lost on every deploy.
+4. Open the domain, then **Create owner** with the setup code.
+
+**To make it one click,** turn that project into a template: the project's
+⋯ menu → **Create template**. Railway keeps the services, variables and volume.
+The template's *Deploy on Railway* link goes in the README once the repository
+is public.
 
 ## First run from a checkout
 

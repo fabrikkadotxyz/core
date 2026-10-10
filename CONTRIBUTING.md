@@ -26,5 +26,4 @@ pull request.
 
 ## Reporting a security problem
 
-Please don't open a public issue. A `SECURITY.md` with a private reporting
-address comes with the public launch (`docs/mvp.md`, Phase 4).
+Please don't open a public issue. See [`SECURITY.md`](SECURITY.md).

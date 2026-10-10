@@ -2094,3 +2094,61 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
   .session-list a:hover, .output-card:hover, .catalogue-card:hover { transform: none; }
 }
 
+/* ---- M18: Personal integrations — your connections, then search, chips, logos ---- */
+.vendor-mark {
+  display: inline-grid; place-items: center; flex: 0 0 auto;
+  width: 36px; height: 36px; border-radius: 10px;
+  background: #ffffff; border: 1px solid rgba(201, 221, 232, 0.9);
+  box-shadow: 0 4px 10px -6px rgba(41, 50, 65, 0.35);
+}
+.vendor-mark.monogram {
+  border-color: transparent; color: #ffffff; font-weight: 700; font-size: 0.95rem;
+  background: linear-gradient(135deg, var(--powder-blue) 0%, var(--dusk-blue) 70%, #2f4a6e 100%);
+}
+
+.connection-list { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.connection-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: var(--radius, 14px);
+  background: var(--grad-panel, var(--panel)); border: 1px solid rgba(201, 221, 232, 0.8);
+  box-shadow: var(--shadow-soft, none);
+}
+.connection-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 12rem; min-width: 0; }
+.connection-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.catalogue-tools { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.catalogue-search {
+  flex-direction: row; align-items: center; gap: 8px; padding: 0 12px; min-height: 44px;
+  border-radius: 12px; border: 1px solid var(--border); color: var(--muted);
+  background: linear-gradient(180deg, #ffffff 0%, #f5fafc 100%);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.catalogue-search:focus-within { border-color: var(--dusk-blue); box-shadow: 0 0 0 3px rgba(152, 193, 217, 0.45); }
+.catalogue-search input {
+  flex: 1; min-width: 0; border: 0; padding: 0.55rem 0; background: transparent; box-shadow: none; font-size: 0.95rem; color: var(--text);
+}
+.catalogue-search input:focus-visible { outline: none; box-shadow: none; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px;
+  border-radius: 999px; border: 1px solid var(--border); font-size: 0.8rem; font-weight: 600;
+  color: var(--muted); background: var(--panel); box-shadow: none;
+}
+.chip:hover:not(:disabled) { color: var(--text); background: var(--grad-tint, var(--hover)); border-color: var(--powder-blue); }
+.chip.on, .chip.on:hover:not(:disabled) {
+  color: var(--on-accent); border-color: transparent; background: var(--grad-accent, var(--accent));
+  box-shadow: var(--shadow-accent, none);
+}
+.chip-count {
+  min-width: 1.4em; padding: 0 5px; border-radius: 999px; font-size: 0.7rem; line-height: 1.5; text-align: center;
+  background: var(--bg-sunken); color: var(--muted);
+}
+.chip.on .chip-count { background: rgba(255, 255, 255, 0.22); color: var(--on-accent); }
+
+.catalogue-head { gap: 10px; }
+.catalogue-empty {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 16px;
+  border: 1px dashed var(--border); border-radius: var(--radius, 14px); background: var(--bg-sunken);
+}
+.catalogue-empty p { margin: 0; }

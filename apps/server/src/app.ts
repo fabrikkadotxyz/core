@@ -168,6 +168,7 @@ import {
 
 import { createKit, type Advertised, type Extension } from './kit.ts';
 import { findEntry, offeredEntries, setExtraEntries, unconfiguredEntries } from './connections/catalogue/registry.ts';
+import { safeLogo } from './connections/catalogue/types.ts';
 import { CATEGORY_NAMES, type CatalogueEntry } from './connections/catalogue/types.ts';
 import { accountEmail, confirmPage, donePage, failedPage } from './connections/handoff.ts';
 import {
@@ -589,12 +590,21 @@ export function createApp(options: CreateAppOptions = {}) {
           connectionName: e.connectionName ?? null,
           fields: (e.fields ?? []).map((f) => ({ key: f.key, label: f.label, placeholder: f.placeholder ?? '', required: f.required })),
           presets: e.presets ? { read: e.presets.read.length, write: e.presets.write.length } : null,
+          keywords: e.keywords ?? [],
+          logo: safeLogo(e.logo),
           connected: !!have,
           status: have?.status ?? null,
         };
       }),
       // Vendors this server can't offer yet, so the page can say why instead of hiding them.
-      unavailable: unconfiguredEntries().map(({ entry, missing }) => ({ id: entry.id, name: entry.name, category: entry.category, missing })),
+      unavailable: unconfiguredEntries().map(({ entry, missing }) => ({
+        id: entry.id,
+        name: entry.name,
+        category: entry.category,
+        keywords: entry.keywords ?? [],
+        logo: safeLogo(entry.logo),
+        missing,
+      })),
       encryptionConfigured: isEncryptionConfigured(),
     });
   });

@@ -134,6 +134,12 @@ export const devices = {
   confirm: (code: string) => call<{ deviceName: string }>('/devices/pair/confirm', { method: 'POST', body: { code } }),
 };
 
+/** A vendor's mark: one SVG path in a 24×24 box, and its brand colour (checked by the server). */
+export interface VendorLogo {
+  path: string;
+  color: string;
+}
+
 export interface CatalogueItem {
   id: string;
   name: string;
@@ -142,6 +148,8 @@ export interface CatalogueItem {
   connectionName: string | null;
   fields: { key: string; label: string; placeholder: string; required: boolean }[];
   presets: { read: number; write: number } | null;
+  keywords: string[];
+  logo: VendorLogo | null;
   connected: boolean;
   status: string | null;
 }
@@ -167,7 +175,7 @@ export const connections = {
     call<{
       categories: Record<string, string>;
       entries: CatalogueItem[];
-      unavailable: { id: string; name: string; category: string; missing: string[] }[];
+      unavailable: { id: string; name: string; category: string; keywords: string[]; logo: VendorLogo | null; missing: string[] }[];
       encryptionConfigured: boolean;
     }>('/connections/catalogue'),
   /** M18: begin signing in to a vendor; the browser then goes to `authorizeUrl`. */

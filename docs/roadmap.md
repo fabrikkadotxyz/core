@@ -829,12 +829,27 @@ connected for real before it gets an entry. Self-hosted Grafana
   classify is in no preset.
 - **Custom connection** stays: any streamable-HTTP MCP server, with a URL and
   token, as at M8.
+- **Personal integrations stays tidy as the catalogue grows (2026-10-10):**
+  - **Your connections** come first, as a compact list with each vendor's logo,
+    its status, how many sessions use it, *Reconnect* and *Remove*.
+  - **Add a connection** below it:
+    - a **search** box matching name, category, description and the entry's
+      keywords ("tickets" finds Jira, "atlassian" finds both);
+    - **category chips** (*All*, then each category with its count);
+    - a grid of vendor cards, **each with its logo**.
+  - A search with no match offers a custom connection instead.
+  - A logo is data in the vendor's own file: one SVG path and a brand colour,
+    from [Simple Icons](https://simpleicons.org) (CC0), pinned to a version.
+    No image files, no new dependency. A custom connection, or an entry without
+    one, gets a monogram tile.
 - **Credentials stay per user and sealed.** Every call still runs under the
   calling participant's own account.
 
 **Test, per vendor as it lands** (clicks counted from *Personal integrations*):
 1. **Add a connection →** category **→** vendor **→ Connect →** the vendor's
    consent screen **→ Allow**: back in Fabrikka, *connected as <account>*.
+   Typing the vendor's name in the search box finds the same card; every card
+   shows the vendor's logo.
    That's at most 5 clicks in Fabrikka (GitHub, Jira; Grafana adds its stack
    URL).
 2. In a session, Setup shows it. **Read** preset → an agent lists issues /

@@ -226,6 +226,12 @@ only once the instance has a GitHub OAuth App:
 A GitHub OAuth App has one callback URL, so each instance, hosted or
 self-hosted, registers its own.
 
+**Adding a vendor** is one file in `apps/server/src/connections/catalogue/` and
+one registry line. Besides its endpoint and sign-in, the file carries
+`keywords` for the search box and a `logo`: the vendor's single SVG path and
+brand colour, copied from Simple Icons (CC0) at a pinned version. The server
+refuses a logo that is anything but path data and a hex colour.
+
 ### Custom connections that sign in with an email and an API token
 
 Some vendors take a personal API token only as HTTP Basic, with your email as the

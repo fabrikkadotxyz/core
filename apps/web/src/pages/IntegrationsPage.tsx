@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { connections, type CatalogueItem } from '../api.ts';
+import { connections, type CatalogueItem, type VendorLogo } from '../api.ts';
 import { Select } from '../components/Select.tsx';
 import { inDesktopApp } from '../desktop.ts';
 
@@ -75,14 +75,39 @@ export function IntegrationsPage() {
     }
   };
 
-  const byCategory = Object.entries(catalogue?.categories ?? {})
+  // Search and category chips: everything is filtered on the page; the catalogue is small enough to send whole.
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<string | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const categories = catalogue?.categories ?? {};
+  const matches = (e: { name: string; category: string; keywords: string[]; description?: string; connectionName?: string | null }) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return [e.name, categories[e.category] ?? e.category, e.description ?? '', e.connectionName ?? '', ...e.keywords]
+      .some((field) => field.toLowerCase().includes(q));
+  };
+  const found = {
+    entries: (catalogue?.entries ?? []).filter(matches),
+    unavailable: (catalogue?.unavailable ?? []).filter(matches),
+  };
+  const chips = Object.entries(categories)
     .map(([key, name]) => ({
       key,
       name,
-      entries: (catalogue?.entries ?? []).filter((e) => e.category === key),
-      unavailable: (catalogue?.unavailable ?? []).filter((e) => e.category === key),
+      count: found.entries.filter((e) => e.category === key).length + found.unavailable.filter((e) => e.category === key).length,
+    }))
+    .filter((c) => c.count > 0 || c.key === category);
+  const byCategory = Object.entries(categories)
+    .filter(([key]) => !category || key === category)
+    .map(([key, name]) => ({
+      key,
+      name,
+      entries: found.entries.filter((e) => e.category === key),
+      unavailable: found.unavailable.filter((e) => e.category === key),
     }))
     .filter((c) => c.entries.length + c.unavailable.length > 0);
+  const logoOf = (entry: string | null) =>
+    [...(catalogue?.entries ?? []), ...(catalogue?.unavailable ?? [])].find((e) => e.id === entry)?.logo ?? null;
 
   return (
     <div className="page">
@@ -119,14 +144,21 @@ export function IntegrationsPage() {
           </p>
         )}
 
-        {list && list.length === 0 && <p className="muted small">No connections yet.</p>}
-        <ul className="session-list">
+        <h2>Your connections</h2>
+        {list && list.length === 0 && <p className="muted small">No connections yet. Add one below.</p>}
+        <ul className="connection-list">
           {list?.map((c) => (
-            <li key={c.id} className="team-member">
-              <span>
-                <strong>{c.label}</strong>{' '}
-                {c.status === 'needs_reconnect' && <span className="badge-shared">needs reconnecting</span>}
-                <br />
+            <li key={c.id} className="connection-row">
+              <VendorMark logo={logoOf(c.entry)} name={c.label} />
+              <span className="connection-text">
+                <span className="connection-name">
+                  <strong>{c.label}</strong>
+                  {c.status === 'needs_reconnect' ? (
+                    <span className="badge-shared">needs reconnecting</span>
+                  ) : (
+                    <span className="badge-ok">connected</span>
+                  )}
+                </span>
                 <span className="muted small">
                   {c.auth === 'oauth'
                     ? 'signed in with the vendor'
@@ -135,11 +167,9 @@ export function IntegrationsPage() {
                       : c.hasCredential
                         ? 'token stored'
                         : 'no token'}{' '}
-                  · in{' '}
-                  {c.sessions} session{c.sessions === 1 ? '' : 's'}
+                  · in {c.sessions} session{c.sessions === 1 ? '' : 's'}
                 </span>
               </span>
-              <span className="spacer" />
               {c.status === 'needs_reconnect' && c.entry && (
                 <button className="small" onClick={() => connect(c.entry!)}>
                   Reconnect
@@ -153,15 +183,56 @@ export function IntegrationsPage() {
                   load();
                 }}
               >
-                remove{c.sessions ? ` (from ${c.sessions} session${c.sessions === 1 ? '' : 's'})` : ''}
+                Remove{c.sessions ? ` (from ${c.sessions} session${c.sessions === 1 ? '' : 's'})` : ''}
               </button>
             </li>
           ))}
         </ul>
 
         <h2>Add a connection</h2>
-        {byCategory.length === 0 && catalogue && (
+        <div className="catalogue-tools">
+          <label className="catalogue-search">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </svg>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search integrations"
+              aria-label="Search integrations"
+            />
+          </label>
+          <div className="chips" role="group" aria-label="Category">
+            <button className={`chip${category === null ? ' on' : ''}`} aria-pressed={category === null} onClick={() => setCategory(null)}>
+              All
+            </button>
+            {chips.map((c) => (
+              <button
+                key={c.key}
+                className={`chip${category === c.key ? ' on' : ''}`}
+                aria-pressed={category === c.key}
+                onClick={() => setCategory(category === c.key ? null : c.key)}
+              >
+                {c.name} <span className="chip-count">{c.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {catalogue && (catalogue.entries.length + catalogue.unavailable.length === 0) && (
           <p className="muted small">No vendors are listed on this server yet. Use a custom connection below.</p>
+        )}
+        {catalogue && catalogue.entries.length + catalogue.unavailable.length > 0 && byCategory.length === 0 && (
+          <div className="catalogue-empty">
+            <p className="muted">
+              Nothing matches{query.trim() ? <> “{query.trim()}”</> : ' this category'}.
+            </p>
+            <button className="small" onClick={() => setCustomOpen(true)}>
+              Add it as a custom connection
+            </button>
+          </div>
         )}
         {byCategory.map((cat) => (
           <section key={cat.key} className="catalogue-category">
@@ -174,6 +245,7 @@ export function IntegrationsPage() {
                 // Not hidden: say what this server is missing, so whoever runs it knows what to set.
                 <div key={u.id} className="catalogue-card unavailable">
                   <div className="catalogue-head">
+                    <VendorMark logo={u.logo} name={u.name} />
                     <strong>{u.name}</strong>
                     <span className="badge">not set up on this server</span>
                   </div>
@@ -188,7 +260,7 @@ export function IntegrationsPage() {
         ))}
         {error && <p className="error">{error}</p>}
 
-        <details className="custom-connection">
+        <details className="custom-connection" open={customOpen} onToggle={(e) => setCustomOpen(e.currentTarget.open)}>
           <summary className="muted small">Custom connection (any MCP server, by URL and token)</summary>
           <CustomConnection onSaved={load} />
         </details>
@@ -207,6 +279,7 @@ function CatalogueCard({ entry, onConnect }: { entry: CatalogueItem; onConnect: 
   return (
     <div className="catalogue-card">
       <div className="catalogue-head">
+        <VendorMark logo={entry.logo} name={entry.name} />
         <strong>{entry.name}</strong>
         {entry.connected && entry.status === 'ok' && <span className="badge-ok">connected</span>}
         {entry.status === 'needs_reconnect' && <span className="badge-shared">needs reconnecting</span>}
@@ -234,6 +307,21 @@ function CatalogueCard({ entry, onConnect }: { entry: CatalogueItem; onConnect: 
         {entry.connected ? 'Reconnect' : asking ? `Connect ${entry.name}` : 'Connect'}
       </button>
     </div>
+  );
+}
+
+/** A vendor's logo on a white tile, or its initial when there's none (custom connections). */
+function VendorMark({ logo, name }: { logo: VendorLogo | null; name: string }) {
+  return (
+    <span className={logo ? 'vendor-mark' : 'vendor-mark monogram'} aria-hidden="true">
+      {logo ? (
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path d={logo.path} fill={logo.color} />
+        </svg>
+      ) : (
+        (name.trim()[0] ?? '?').toUpperCase()
+      )}
+    </span>
   );
 }
 

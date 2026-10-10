@@ -49,4 +49,25 @@ export interface CatalogueEntry {
   fields?: CatalogueField[];
   /** Grant presets: upstream tool names, from a real connection's tool list. */
   presets?: { read: string[]; write: string[] };
+  /** Extra words the search box matches: "tickets" finds Jira. */
+  keywords?: string[];
+  /**
+   * The vendor's mark: one SVG path in a 24×24 box and its brand colour, from
+   * Simple Icons (CC0) at the version named beside it. Data, never markup: the
+   * server refuses anything but path commands and a hex colour (`safeLogo`).
+   */
+  logo?: VendorLogo;
+}
+
+export interface VendorLogo {
+  path: string;
+  color: string;
+}
+
+/** A logo the page can draw, or null: path commands and numbers only, and a hex colour. */
+export function safeLogo(logo: VendorLogo | undefined): VendorLogo | null {
+  if (!logo) return null;
+  if (!/^[MmLlHhVvCcSsQqTtAaZz0-9.,\s-]{1,8000}$/.test(logo.path)) return null;
+  if (!/^#[0-9a-fA-F]{6}$/.test(logo.color)) return null;
+  return logo;
 }

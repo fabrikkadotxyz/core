@@ -416,6 +416,36 @@ export async function removeTeamConnection(db: Database, teamId: string, slug: s
   return done.length > 0;
 }
 
+/** M43: how long a team keeps its call records. The only answers the privacy policy names. */
+export const CALL_RECORD_DAYS = [30, 60, 90, 180, 365] as const;
+
+export async function callRecordDays(db: Database, teamId: string): Promise<number> {
+  const [row] = await db.select({ days: teams.callRecordDays }).from(teams).where(eq(teams.id, teamId)).limit(1);
+  return row?.days ?? 90;
+}
+
+/** Team owners only (checked by the caller). Shortening it deletes the older records at once. */
+export async function setCallRecordDays(db: Database, teamId: string, days: number): Promise<void> {
+  await db.update(teams).set({ callRecordDays: days }).where(eq(teams.id, teamId));
+  await pruneTeamCalls(db, teamId);
+}
+
+/**
+ * Delete call records older than their team's setting: one team, or every team.
+ * Runs at start, daily after that, and when a team shortens its setting.
+ */
+export async function pruneTeamCalls(db: Database, teamId?: string): Promise<number> {
+  const rows = await db.execute<{ id: string }>(sql`
+    delete from team_mcp_calls c
+    using team_mcp_servers s, teams t
+    where c.team_mcp_server_id = s.id
+      and s.team_id = t.id
+      and c.created_at < now() - make_interval(days => t.call_record_days)
+      ${teamId ? sql`and t.id = ${teamId}` : sql``}
+    returning c.id`);
+  return rows.length;
+}
+
 /** Recent calls made with the team's credentials, newest first. For team owners. */
 export async function teamConnectionUses(
   db: Database,

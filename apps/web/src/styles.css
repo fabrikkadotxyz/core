@@ -2215,3 +2215,6 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
 .theme-preview-line.short { width: 65%; }
 .theme-preview-dots { display: flex; gap: 5px; margin-top: auto; }
 .theme-preview-dots > span { width: 12px; height: 12px; border-radius: 50%; }
+
+/* ---- M43: how long call records are kept ---- */
+.call-records { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }

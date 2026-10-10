@@ -569,7 +569,7 @@ teams  (additions)
 ```
 
 A job at start, then daily, deletes `team_mcp_calls` rows older than their
-team's setting. A fixed list, not any number: the privacy policy can name every
+team's setting; changing the setting runs it for that team at once. A fixed list, not any number: the privacy policy can name every
 possible answer.
 
 **`team_mcp_calls` stores no arguments and no results.** It answers *who* acted

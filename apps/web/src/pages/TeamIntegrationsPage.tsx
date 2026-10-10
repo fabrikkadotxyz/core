@@ -9,6 +9,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { teamConnections } from '../api.ts';
+import { Select } from '../components/Select.tsx';
+
+/** M43: the only answers, so the privacy policy can name them all. */
+const KEEP = [30, 60, 90, 180, 365].map((d) => ({ value: String(d), label: d === 365 ? '1 year' : `${d} days` }));
 import { useWorkspace } from '../shell/workspace.tsx';
 
 type State = Awaited<ReturnType<typeof teamConnections.list>>;
@@ -133,6 +137,24 @@ export function TeamIntegrationsPage() {
               The vendor's log names the team's account. This names who acted. Tool names only,
               never what was sent.
             </p>
+            <div className="row call-records">
+              <span className="small">Keep call records for</span>
+              <Select
+                label="Keep call records for"
+                value={String(state.callRecordDays)}
+                options={KEEP}
+                onChange={async (v) => {
+                  setError(null);
+                  try {
+                    await teamConnections.setCallRecordDays(id, Number(v));
+                    load();
+                  } catch (err) {
+                    setError((err as Error).message);
+                  }
+                }}
+              />
+              <span className="muted small">Shortening it deletes older records at once.</span>
+            </div>
             {state.uses.length === 0 && <p className="muted small">Nobody has used them yet.</p>}
             <ul className="session-list">
               {state.uses.map((u, i) => (
@@ -153,7 +175,13 @@ export function TeamIntegrationsPage() {
             </ul>
           </>
         ) : (
-          <p className="muted small">Only team owners add or remove team connections.</p>
+          <>
+            <p className="muted small">Only team owners add or remove team connections.</p>
+            <p className="muted small">
+              Who used a team connection, and when, is kept for {state.callRecordDays} days, for the
+              team's owners.
+            </p>
+          </>
         )}
       </main>
     </div>

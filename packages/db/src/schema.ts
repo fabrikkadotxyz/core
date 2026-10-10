@@ -64,14 +64,23 @@ export const users = pgTable('users', {
  * A team: a list of people who trust each other, and nothing else. See ADR 0025.
  * No SSO or permission matrix — owners invite and remove, that is all.
  */
-export const teams = pgTable('teams', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  createdByUserId: uuid('created_by_user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const teams = pgTable(
+  'teams',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * M43: how long team_mcp_calls rows are kept. A fixed list, so the privacy
+     * policy can name every possible answer.
+     */
+    callRecordDays: integer('call_record_days').notNull().default(90),
+  },
+  (t) => [check('teams_call_record_days', sql`${t.callRecordDays} in (30, 60, 90, 180, 365)`)],
+);
 
 export const teamMembers = pgTable(
   'team_members',

@@ -1758,8 +1758,10 @@ on is one-time.
 - **A team setting, *Keep call records for*:** 30, 60, **90** (the default),
   180 or 365 days. Only a team owner changes it, from **Team → Integrations**.
 - **Records older than the setting are deleted,** by a job that runs at start
-  and then once a day. Shortening the setting deletes the older records on the
-  next run, and the selector says so before it's saved.
+  and then once a day. Shortening the setting deletes the older records at
+  once, and the selector says so beside it.
+- **The database refuses any other value** (a check constraint), not only the
+  API.
 - **The setting is shown where the records are,** above the list: *"Kept for
   90 days."*
 - **Only the call records expire.** Nothing else of the team's changes.
@@ -1768,7 +1770,7 @@ on is one-time.
 1. A new team keeps call records for 90 days.
 2. A team owner opens Team → Integrations → *Keep call records for* → 30 days
    (**3 clicks**). A member sees the value and can't change it.
-3. With records 29 and 31 days old, the next run deletes the 31-day one and
+3. With records 29 and 31 days old, setting 30 days deletes the 31-day one and
    keeps the 29-day one.
 4. Another team at 90 days loses nothing.
 

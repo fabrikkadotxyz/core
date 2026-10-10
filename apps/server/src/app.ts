@@ -59,6 +59,10 @@ import {
   slugsInSession,
   teamConnectionUses,
   teamServersFor,
+  CALL_RECORD_DAYS,
+  callRecordDays,
+  pruneTeamCalls,
+  setCallRecordDays,
   usableServers,
 } from './aggregation.ts';
 import {
@@ -778,8 +782,25 @@ export function createApp(options: CreateAppOptions = {}) {
       connections: await listTeamConnections(db, teamId),
       canManage: role === 'owner',
       uses: role === 'owner' ? await teamConnectionUses(db, teamId) : [],
+      // Every member may know how long who-used-what is kept (M43).
+      callRecordDays: await callRecordDays(db, teamId),
       encryptionConfigured: isEncryptionConfigured(),
     });
+  });
+
+  /** M43: team owners choose how long call records are kept. */
+  app.put('/api/teams/:id/call-records', requireUser(db), async (c) => {
+    const teamId = c.req.param('id');
+    const role = await teamRole(db, teamId, c.get('user').id);
+    if (!role) return c.notFound();
+    if (role !== 'owner') return c.json({ error: 'only team owners choose how long call records are kept' }, 403);
+    const body = await c.req.json<{ days?: unknown }>().catch(() => ({}) as { days?: unknown });
+    const days = Number(body.days);
+    if (!(CALL_RECORD_DAYS as readonly number[]).includes(days)) {
+      return c.json({ error: `choose one of ${CALL_RECORD_DAYS.join(', ')} days` }, 400);
+    }
+    await setCallRecordDays(db, teamId, days);
+    return c.json({ callRecordDays: days });
   });
 
   /** Team owners only: a team credential lends access to everyone on the team. */
@@ -2542,6 +2563,13 @@ export function createApp(options: CreateAppOptions = {}) {
     async start(port = PORT) {
       await runMigrations(db);
       await setup.prepare();
+      // M43: call records expire. Once now, then daily; never keeps the process alive.
+      const prune = () =>
+        pruneTeamCalls(db)
+          .then((n) => n && console.log(`[call records] deleted ${n} past their team's setting`))
+          .catch((err) => console.warn(`[call records] cleanup failed: ${(err as Error).message}`));
+      void prune();
+      setInterval(prune, 24 * 60 * 60 * 1000).unref();
       return new Promise<ReturnType<typeof serve>>((resolveStart) => {
         const server = serve({ fetch: app.fetch, port }, (info) => {
           console.log(`fabrikka server on http://localhost:${info.port}`);

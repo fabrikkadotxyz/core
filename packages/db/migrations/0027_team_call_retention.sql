@@ -1,0 +1,2 @@
+ALTER TABLE "teams" ADD COLUMN "call_record_days" integer DEFAULT 90 NOT NULL;--> statement-breakpoint
+ALTER TABLE "teams" ADD CONSTRAINT "teams_call_record_days" CHECK ("teams"."call_record_days" in (30, 60, 90, 180, 365));

@@ -223,8 +223,12 @@ export const teamConnections = {
       connections: { id: string; slug: string; label: string; url: string; hasCredential: boolean; addedBy: string | null; createdAt: string }[];
       canManage: boolean;
       uses: { slug: string; toolName: string; person: string | null; agent: string | null; session: string | null; ok: boolean; at: string }[];
+      /** M43: how long who-used-what is kept, in days. */
+      callRecordDays: number;
       encryptionConfigured: boolean;
     }>(`/teams/${teamId}/connections`),
+  setCallRecordDays: (teamId: string, days: number) =>
+    call<{ callRecordDays: number }>(`/teams/${teamId}/call-records`, { method: 'PUT', body: { days } }),
   save: (teamId: string, body: { slug: string; url: string; label?: string; credential?: string }) =>
     call<{ id: string }>(`/teams/${teamId}/connections`, { method: 'POST', body }),
   remove: (teamId: string, slug: string) =>

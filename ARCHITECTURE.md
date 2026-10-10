@@ -14,7 +14,9 @@ Agents may be Claude Code, Codex, Cursor, OpenCode, or something that doesn't ex
 - What context is relevant?
 - Who is being addressed?
 
-That boundary is the product. Everything below serves it.
+That boundary is the product. Everything below serves it, and all of it exists to
+keep the promises in [`PRINCIPLES.md`](PRINCIPLES.md). The design is the current
+means; the promises are the fixed point.
 
 ```
                  ┌───────────────────────────┐
@@ -178,6 +180,7 @@ The MVP answers one question: *does it feel useful to have a private room where 
 
 ## Further reading
 
+- `PRINCIPLES.md` — what the user gets, and the rules that settle an argument
 - `docs/protocol.md` — the contract agents bind to
 - `docs/security.md` — trust model and its limits
 - `docs/decisions/` — why each of the above is the way it is

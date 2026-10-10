@@ -1,5 +1,9 @@
 # Fabrikka — working agreements
 
+**Start with [`PRINCIPLES.md`](PRINCIPLES.md)**: what the person using Fabrikka gets,
+and the ground rules that settle an argument. Everything below is how we keep
+those promises.
+
 ## Documentation first
 
 **This project is documentation-first. Docs are written before the code they describe, and they are the source of truth.**
@@ -17,6 +21,7 @@ Why this project in particular: Fabrikka's value is a *protocol surface* that ex
 
 | Doc | Holds |
 | --- | --- |
+| `PRINCIPLES.md` | What the user gets, the current bet, the ground rules |
 | `README.md` | What Fabrikka is, quickstart |
 | `ARCHITECTURE.md` | The architectural rule, layers, hybrid wake-up design |
 | `docs/protocol.md` | **The contract external agents depend on** — MCP tools, channel notifications, spawn invocations |

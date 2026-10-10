@@ -103,6 +103,7 @@ link*, and send it however you like. Forgot a password?
 
 | Doc | Holds |
 | --- | --- |
+| [`PRINCIPLES.md`](PRINCIPLES.md) | What the user gets, the current bet, the ground rules |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | The rule, the layers, the hybrid wake-up design |
 | [`docs/protocol.md`](docs/protocol.md) | **The contract external agents bind to** |
 | [`docs/security.md`](docs/security.md) | Trust model, prompt injection, credential boundaries |

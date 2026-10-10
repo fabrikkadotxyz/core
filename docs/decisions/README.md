@@ -68,3 +68,4 @@ What we rejected and why.
 | [0033](0033-desktop-sign-ins-finish-in-the-default-browser.md) | In the desktop app, a vendor sign-in runs in the default browser, through a one-time handoff | Proposed |
 | [0034](0034-license-agpl-3.0.md) | License: AGPL-3.0, with a contributor agreement | Accepted |
 | [0035](0035-the-first-owner-is-created-in-the-browser-with-a-setup-code.md) | The first owner is created in the browser, with a setup code | Proposed |
+| [0036](0036-chat-apps-connect-through-oauth-to-a-per-person-endpoint.md) | Chat apps connect through OAuth to a per-person endpoint | Proposed |

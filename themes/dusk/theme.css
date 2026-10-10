@@ -1,0 +1,5 @@
+/*
+ * Dusk (M44, ADR 0038): the default. Its tokens are the default values in
+ * apps/web/src/styles.css, so this file sets nothing. It exists so the default
+ * is a pack like any other, and the picker can offer it.
+ */

@@ -1,0 +1,10 @@
+{
+  "contract": 1,
+  "id": "dusk-night",
+  "name": "Dusk Night",
+  "description": "The same palette, dark: Light Cyan on Jet Black, Powder Blue for actions.",
+  "author": "Fabrikka",
+  "license": "AGPL-3.0-only",
+  "scheme": "dark",
+  "swatches": ["#1f2633", "#1a202b", "#98c1d9", "#3d5a80", "#ee6c4d"]
+}

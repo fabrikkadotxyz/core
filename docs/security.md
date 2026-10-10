@@ -525,6 +525,19 @@ website to reach. The terminal host keeps its defended `127.0.0.1` page.
   per device, removes the line.
 - **The desktop app's two commands** are in the desktop table above.
 
+## Themes (M44)
+
+[ADR 0038](decisions/0038-themes-are-css-packs-checked-by-the-server.md). A
+theme is CSS that every person on the instance may load.
+
+| Risk | Control |
+| --- | --- |
+| A theme's CSS reports what a page shows (attribute selectors that each fetch a different URL) or tracks who opens what | The server refuses a theme with `@import` or any `url()` that isn't a relative path inside its own folder. Nothing a theme references is on another origin. |
+| A theme ships a file that runs as script on the instance's origin | Only CSS, JSON, woff, woff2, png, jpg and webp are served, typed by extension, with `nosniff`. **No SVG.** Only files the check accepted at start are served, so nothing added later and no `..` path is reachable. |
+| Legacy CSS script hooks, and fetching without `url(` | `expression(`, `javascript:`, `-moz-binding`, `behavior:` and `image-set(` are refused, and so is any backslash, since an escape can spell `url(` or `@import` without its letters. |
+| A theme hides or relabels a warning or trust label | Not preventable by checking CSS. Themes are installed by the operator, like any change to the instance; people only choose among them. `docs/themes.md` tells operators so. Built-in themes are reviewed like code. |
+| A saved theme choice names something odd | `PUT /api/me/theme` accepts only an id the instance offers, or `system`, or null. |
+
 ## Declined capabilities
 
 **Permission relay** (`claude/channel/permission`). Claude Code can forward tool-approval prompts to a channel so they can be answered remotely. We do **not** declare this capability: anyone able to reply through the channel could approve tool use in the owner's session, which in a multi-participant room is a straightforward privilege escalation. Revisit only with per-participant verdict attribution.

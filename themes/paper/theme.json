@@ -1,0 +1,10 @@
+{
+  "contract": 1,
+  "id": "paper",
+  "name": "Paper",
+  "description": "An editorial page: cream paper, serif type, ink-red accents, hairline rules and no shadows.",
+  "author": "Fabrikka",
+  "license": "AGPL-3.0-only",
+  "scheme": "light",
+  "swatches": ["#f5efe3", "#ebe2d0", "#a8322a", "#2b2620", "#7a6f60"]
+}

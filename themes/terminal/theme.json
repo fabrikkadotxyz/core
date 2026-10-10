@@ -1,0 +1,10 @@
+{
+  "contract": 1,
+  "id": "terminal",
+  "name": "Terminal",
+  "description": "A terminal multiplexer: monospace everywhere, square panes with titles in their borders, lavender on near-black.",
+  "author": "Fabrikka",
+  "license": "AGPL-3.0-only",
+  "scheme": "dark",
+  "swatches": ["#13121a", "#1a1923", "#b9a6f0", "#a6da95", "#e5895f", "#f28fad"]
+}

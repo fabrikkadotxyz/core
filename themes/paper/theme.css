@@ -1,0 +1,172 @@
+/*
+ * Paper (M44, ADR 0038): an editorial page. Cream paper, a serif for reading,
+ * ink-red for what you act on, and hairline rules instead of boxes and shadows.
+ * Made for long reading: papers, proposals, study groups.
+ */
+:root {
+  --p-paper: #f5efe3;
+  --p-sheet: #fbf7ef;
+  --p-margin: #ebe2d0;
+  --p-rule: #d8ccb6;
+  --p-ink: #2b2620;
+  --p-pencil: #7a6f60;
+  --p-red: #a8322a;
+  --p-red-dark: #8a2620;
+
+  color-scheme: light;
+  --font-ui: "Iowan Old Style", "Charter", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --font-heading: var(--font-ui);
+  --font-mono: "Courier Prime", "Courier New", ui-monospace, monospace;
+  --heading-weight: 500;
+  --heading-tracking: -0.01em;
+  --heading-case: none;
+
+  --bg: var(--p-paper);
+  --bg-sunken: #eee6d6;
+  --panel: var(--p-sheet);
+  --panel-tint: #f1e9da;
+  --border: var(--p-rule);
+  --text: var(--p-ink);
+  --muted: var(--p-pencil);
+  --accent: var(--p-red);
+  --on-accent: #fbf7ef;
+  --attention: var(--p-red);
+  --hover: rgba(43, 38, 32, 0.04);
+  --selected: rgba(168, 50, 42, 0.08);
+  --agent: #f1e9da;
+  --agent-border: var(--p-rule);
+  --author: var(--p-ink);
+  --ok: #3f6b3a;
+  --ok-soft: #e6ead8;
+  --ok-border: #b8c4a2;
+  --warn: #8a5a00;
+  --warn-soft: #f4e6c4;
+  --warn-border: #d6bd84;
+  --danger: var(--p-red);
+  --danger-soft: #f3dcd4;
+  --danger-border: #d9a597;
+
+  --side-bg: var(--p-margin);
+  --side-text: #4a4237;
+  --side-strong: var(--p-ink);
+  --side-muted: var(--p-pencil);
+  --side-hover: rgba(43, 38, 32, 0.05);
+  --side-selected: transparent;
+  --side-border: var(--p-rule);
+  --grad-side: var(--p-margin);
+  --grad-side-on: transparent;
+  --side-on-text: var(--p-red);
+  --side-on-meta: var(--p-red);
+  --side-on-shadow: none;
+  --side-field: var(--p-sheet);
+  --side-shadow: none;
+
+  --radius: 2px;
+  --radius-control: 2px;
+  --radius-card: 2px;
+  --radius-pill: 2px;
+  --border-width: 1px;
+
+  --grad-accent: var(--p-red);
+  --grad-accent-hover: var(--p-red-dark);
+  --grad-attention: var(--p-red);
+  --grad-tint: #f1e9da;
+  --grad-panel: var(--p-sheet);
+  --grad-agent: #f1e9da;
+  --shadow-soft: none;
+  --shadow-lift: none;
+  --shadow-accent: none;
+  --shadow-msg: none;
+  --lift: 0;
+
+  --app-bg: var(--p-paper);
+  --surface-border: var(--p-rule);
+  --field-bg: var(--p-sheet);
+  --focus-border: var(--p-ink);
+  --focus-ring: 0 1px 0 0 var(--p-ink);
+  --bar-bg: var(--p-paper);
+  --bar-blur: none;
+  --composer-bg: var(--p-paper);
+  --rail-bg: var(--p-paper);
+  --badge-bg: transparent;
+  --badge-text: var(--p-pencil);
+  --badge-ok-bg: transparent;
+  --badge-shared-bg: transparent;
+  --vendor-bg: var(--p-sheet);
+  --frame: linear-gradient(var(--p-ink), var(--p-ink));
+  --stripe: var(--p-red);
+  --hover-border: var(--p-ink);
+  --team-initial: var(--p-ink);
+
+  --banner-bg: transparent;
+  --banner-text: var(--p-ink);
+  --banner-shadow: none;
+  --banner-radius: 0;
+  --banner-ring: transparent;
+  --title-ink: linear-gradient(var(--p-ink), var(--p-ink));
+}
+
+body { font-size: 16.5px; line-height: 1.55; }
+
+/* A page's title is a headline, with a double rule beneath, like a masthead. */
+.column > h1 {
+  padding: 0.4rem 0 0.7rem;
+  margin: 0.75rem 0 1.5rem;
+  font-size: 2.4rem;
+  font-style: italic;
+  border-bottom: 3px double var(--p-ink);
+}
+.column > h1::after { display: none; }
+.column > h2 {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--p-pencil);
+  border-bottom: 1px solid var(--p-rule);
+  padding-bottom: 0.3rem;
+}
+.panel h2, .side-section h2 { font-variant: small-caps; text-transform: lowercase; letter-spacing: 0.08em; font-size: 0.9rem; }
+
+/* Cards are sheets: no boxes, a rule above and below. */
+.card,
+.catalogue-card,
+.session-list a,
+.output-card,
+.connection-row,
+.comment-thread { border-width: 0 0 1px; border-color: var(--p-rule); background: transparent; }
+.card { border: 1px solid var(--p-rule); background: var(--p-sheet); }
+.session-list a::before { width: 2px; }
+
+/* Messages read like a manuscript: an author in small caps, the text set in the serif. */
+.msg,
+.msg.agent { border: 0; border-bottom: 1px solid var(--p-rule); background: transparent; padding: 0.6rem 0; }
+.msg.agent { border-left: 2px solid var(--p-red); padding-left: 0.9rem; background: transparent; }
+.msg .meta > span:first-child { display: none; }
+.msg .author { font-variant: small-caps; letter-spacing: 0.04em; font-weight: 600; }
+.msg.agent .author { color: var(--p-red); font-style: italic; }
+.msg time { font-style: italic; color: var(--p-pencil); }
+
+/* Fields are lines to write on. */
+input, textarea, select, .select-button, .catalogue-search {
+  border-width: 0 0 1px;
+  border-color: var(--p-ink);
+  background: transparent;
+}
+.composer { border-top: 1px solid var(--p-ink); }
+
+/* Buttons: ink-red, small caps. Links are underlined, as on paper. */
+button { font-variant: small-caps; letter-spacing: 0.05em; font-size: 1rem; }
+button.link { font-variant: normal; letter-spacing: 0; color: var(--p-red); text-decoration: underline; text-underline-offset: 3px; }
+a { color: var(--p-red); text-underline-offset: 3px; }
+
+.badge, .badge-ok, .badge-shared { font-style: italic; padding: 0; }
+.badge-ok { color: var(--ok); }
+.badge-shared { color: var(--warn); }
+
+/* The sidebar is the margin: the selected item is underlined in red. */
+.sidebar { border-right: 1px solid var(--p-rule); }
+.side-item.on .side-label { text-decoration: underline; text-decoration-color: var(--p-red); text-underline-offset: 4px; }
+.sidebar .link { color: var(--p-red); }
+.side-item.unread::after { box-shadow: none; }
+.team-initial { color: var(--p-sheet); }
+::selection { background: rgba(168, 50, 42, 0.18); }

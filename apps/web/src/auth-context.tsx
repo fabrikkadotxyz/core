@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { AuthUser } from '@fabrikka/types';
 import { auth } from './api.ts';
+import { syncThemeFromAccount } from './themes.ts';
 
 interface AuthState {
   user: AuthUser | null;
@@ -36,6 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Signed in, or arrived signed in: the account's theme replaces the device's.
+  useEffect(() => {
+    if (user) syncThemeFromAccount();
+  }, [user?.id]);
 
   const signOut = useCallback(async () => {
     await auth.logout().catch(() => {});

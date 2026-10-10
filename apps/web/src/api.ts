@@ -79,6 +79,26 @@ async function call<T>(
   return json as T;
 }
 
+/* ----------------------------------------------------------------- themes */
+
+/** A theme the instance offers (M44, ADR 0038). */
+export interface ThemeInfo {
+  id: string;
+  name: string;
+  description: string;
+  author: string | null;
+  license: string | null;
+  scheme: 'light' | 'dark';
+  swatches: string[];
+  builtIn: boolean;
+}
+
+export const themes = {
+  list: () => call<{ themes: ThemeInfo[]; default: string; system: { light: string; dark: string } }>('/themes'),
+  mine: () => call<{ theme: string | null }>('/me/theme'),
+  choose: (theme: string | null) => call<{ theme: string | null }>('/me/theme', { method: 'PUT', body: { theme } }),
+};
+
 /* ------------------------------------------------------------------- auth */
 
 export const auth = {

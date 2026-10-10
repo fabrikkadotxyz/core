@@ -1,0 +1,60 @@
+/*
+ * Dusk Night (M44, ADR 0038): the same palette as Dusk, dark. Built in, and
+ * written the way any theme is: tokens on :root, then a few rules.
+ */
+:root {
+  --bg: #1f2633;
+  --bg-sunken: #1a202b;
+  --panel: var(--jet-black);
+  --panel-tint: #2f3a4b;
+  --border: #3b4a60;
+  --text: var(--light-cyan);
+  --muted: var(--powder-blue);
+  --accent: var(--powder-blue);
+  --on-accent: var(--jet-black);
+  --hover: rgba(224, 251, 252, 0.06);
+  --selected: rgba(152, 193, 217, 0.18);
+  --agent: #2c3a52;
+  --agent-border: var(--dusk-blue);
+  --ok: #6fcf9f;
+  --ok-soft: rgba(111, 207, 159, 0.14);
+  --ok-border: #2f6b52;
+  --warn: #f2c969;
+  --warn-soft: rgba(242, 201, 105, 0.12);
+  --warn-border: #7c6420;
+  --danger: var(--burnt-peach);
+  --danger-soft: rgba(238, 108, 77, 0.14);
+  --danger-border: #8a3f2c;
+  --side-bg: #1a202b;
+  color-scheme: dark;
+
+
+  --grad-panel: linear-gradient(180deg, #2b3546 0%, #263040 100%);
+  --grad-agent: linear-gradient(135deg, #2c3a52 0%, #2a3550 60%, #2d3550 100%);
+  --grad-tint: linear-gradient(135deg, #2f3a4b 0%, #33415a 100%);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.25), 0 12px 32px -18px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.3), 0 18px 40px -18px rgba(0, 0, 0, 0.7);
+  /* The accent is Powder Blue with Jet Black text, so the gradients follow it. */
+  --grad-accent: linear-gradient(120deg, #c4dceb 0%, var(--powder-blue) 45%, #7fa9c6 100%);
+  --grad-accent-hover: linear-gradient(120deg, #d3e5f0 0%, #a9cbe0 45%, #8fb5cf 100%);
+  --shadow-accent: 0 8px 20px -10px rgba(152, 193, 217, 0.55);
+  --app-bg:
+    radial-gradient(1000px 600px at 10% -10%, rgba(61, 90, 128, 0.45) 0%, rgba(61, 90, 128, 0) 65%),
+    radial-gradient(800px 520px at 100% 0%, rgba(238, 108, 77, 0.1) 0%, rgba(238, 108, 77, 0) 60%),
+    linear-gradient(180deg, #1f2633 0%, #1a202b 100%);
+  --surface-border: var(--border);
+  --field-bg: var(--bg-sunken);
+  --bar-bg: linear-gradient(180deg, rgba(41, 50, 65, 0.85) 0%, rgba(31, 38, 51, 0.7) 100%);
+  --composer-bg: linear-gradient(0deg, rgba(41, 50, 65, 0.9) 0%, rgba(31, 38, 51, 0.6) 100%);
+  --rail-bg: linear-gradient(180deg, rgba(41, 50, 65, 0.55) 0%, rgba(26, 32, 43, 0.55) 100%);
+  --banner-shadow: 0 24px 48px -26px rgba(0, 0, 0, 0.8);
+  --badge-text: var(--powder-blue);
+  --badge-ok-bg: var(--ok-soft);
+  --badge-shared-bg: var(--warn-soft);
+  --author: var(--powder-blue);
+  --focus-border: var(--powder-blue);
+  --vendor-bg: #ffffff;
+  --title-ink: linear-gradient(100deg, var(--light-cyan) 0%, var(--powder-blue) 70%, var(--burnt-peach) 130%);
+}
+
+.chip:not(.on) { background: var(--panel); }

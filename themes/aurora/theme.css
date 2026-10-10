@@ -1,0 +1,148 @@
+/*
+ * Aurora (M44, ADR 0038): frosted glass over a night sky lit by an aurora.
+ * Teal, violet and pink light behind translucent, blurred, very rounded panes;
+ * pill buttons that glow. The opposite of Terminal: soft where it is sharp.
+ */
+:root {
+  --a-night: #0a0f1f;
+  --a-deep: #0e1430;
+  --a-glass: rgba(255, 255, 255, 0.06);
+  --a-glass-strong: rgba(255, 255, 255, 0.1);
+  --a-edge: rgba(255, 255, 255, 0.12);
+  --a-text: #e7eaff;
+  --a-dim: #9aa3c7;
+  --a-violet: #7c5cff;
+  --a-teal: #2de2c4;
+  --a-pink: #f472b6;
+  --a-sky: #60a5fa;
+
+  color-scheme: dark;
+  --font-ui: "Inter", "SF Pro Rounded", ui-rounded, "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: var(--font-ui);
+  --heading-weight: 650;
+  --heading-tracking: -0.02em;
+  --heading-case: none;
+
+  --bg: var(--a-night);
+  --bg-sunken: rgba(0, 0, 0, 0.25);
+  --panel: #121933;
+  --panel-tint: rgba(124, 92, 255, 0.14);
+  --border: var(--a-edge);
+  --text: var(--a-text);
+  --muted: var(--a-dim);
+  --accent: #a48bff;
+  --on-accent: #ffffff;
+  --attention: var(--a-pink);
+  --hover: rgba(255, 255, 255, 0.05);
+  --selected: rgba(124, 92, 255, 0.2);
+  --agent: rgba(45, 226, 196, 0.08);
+  --agent-border: rgba(45, 226, 196, 0.3);
+  --author: #c4b5ff;
+  --ok: #5eead4;
+  --ok-soft: rgba(94, 234, 212, 0.12);
+  --ok-border: rgba(94, 234, 212, 0.35);
+  --warn: #fcd34d;
+  --warn-soft: rgba(252, 211, 77, 0.12);
+  --warn-border: rgba(252, 211, 77, 0.35);
+  --danger: #fb7185;
+  --danger-soft: rgba(251, 113, 133, 0.12);
+  --danger-border: rgba(251, 113, 133, 0.4);
+
+  --side-bg: rgba(10, 15, 31, 0.55);
+  --side-text: #c7cdee;
+  --side-strong: #ffffff;
+  --side-muted: #8189b0;
+  --side-hover: rgba(255, 255, 255, 0.06);
+  --side-selected: rgba(124, 92, 255, 0.3);
+  --side-border: rgba(255, 255, 255, 0.08);
+  --grad-side: linear-gradient(180deg, rgba(18, 25, 51, 0.75) 0%, rgba(10, 15, 31, 0.6) 100%);
+  --grad-side-on: linear-gradient(120deg, rgba(124, 92, 255, 0.55) 0%, rgba(45, 226, 196, 0.35) 100%);
+  --side-on-text: #ffffff;
+  --side-on-meta: #d6ccff;
+  --side-on-shadow: 0 0 24px -6px rgba(124, 92, 255, 0.8);
+  --side-field: rgba(255, 255, 255, 0.06);
+  --side-shadow: none;
+
+  --radius: 20px;
+  --radius-control: 999px;
+  --radius-card: 28px;
+  --radius-pill: 999px;
+  --border-width: 1px;
+
+  --grad-accent: linear-gradient(120deg, var(--a-violet) 0%, #9b6bff 40%, var(--a-pink) 100%);
+  --grad-accent-hover: linear-gradient(120deg, #6c4cf0 0%, #8a5af5 40%, #e65fa6 100%);
+  --grad-attention: linear-gradient(120deg, var(--a-pink) 0%, #fb923c 100%);
+  --grad-tint: rgba(124, 92, 255, 0.16);
+  --grad-panel: linear-gradient(160deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+  --grad-agent: linear-gradient(160deg, rgba(45, 226, 196, 0.12) 0%, rgba(96, 165, 250, 0.06) 100%);
+  --shadow-soft: 0 10px 40px -20px rgba(0, 0, 0, 0.8);
+  --shadow-lift: 0 0 0 1px rgba(164, 139, 255, 0.4), 0 20px 50px -20px rgba(124, 92, 255, 0.6);
+  --shadow-accent: 0 8px 30px -8px rgba(124, 92, 255, 0.8);
+  --shadow-msg: 0 8px 30px -22px rgba(0, 0, 0, 0.9);
+  --lift: -2px;
+
+  --app-bg:
+    radial-gradient(900px 520px at 15% -5%, rgba(45, 226, 196, 0.28) 0%, rgba(45, 226, 196, 0) 60%),
+    radial-gradient(800px 600px at 85% 5%, rgba(124, 92, 255, 0.35) 0%, rgba(124, 92, 255, 0) 60%),
+    radial-gradient(900px 700px at 60% 110%, rgba(244, 114, 182, 0.22) 0%, rgba(244, 114, 182, 0) 60%),
+    linear-gradient(180deg, #0a0f1f 0%, #0e1430 60%, #0a0f1f 100%);
+  --surface-border: var(--a-edge);
+  --field-bg: rgba(255, 255, 255, 0.05);
+  --focus-border: #a48bff;
+  --focus-ring: 0 0 0 4px rgba(124, 92, 255, 0.3);
+  --bar-bg: rgba(10, 15, 31, 0.45);
+  --bar-blur: blur(18px) saturate(140%);
+  --composer-bg: rgba(10, 15, 31, 0.5);
+  --rail-bg: rgba(255, 255, 255, 0.03);
+  --badge-bg: rgba(124, 92, 255, 0.2);
+  --badge-text: #d6ccff;
+  --badge-ok-bg: rgba(94, 234, 212, 0.14);
+  --badge-shared-bg: rgba(252, 211, 77, 0.14);
+  --vendor-bg: rgba(255, 255, 255, 0.92);
+  --frame: linear-gradient(120deg, var(--a-teal), var(--a-violet) 50%, var(--a-pink));
+  --stripe: linear-gradient(180deg, var(--a-teal), var(--a-violet), var(--a-pink));
+  --hover-border: rgba(164, 139, 255, 0.6);
+  --team-initial: linear-gradient(135deg, var(--a-teal) 0%, var(--a-violet) 60%, var(--a-pink) 100%);
+
+  --banner-bg:
+    radial-gradient(420px 220px at 100% 0%, rgba(244, 114, 182, 0.55) 0%, rgba(244, 114, 182, 0) 70%),
+    radial-gradient(420px 260px at 0% 120%, rgba(45, 226, 196, 0.5) 0%, rgba(45, 226, 196, 0) 70%),
+    linear-gradient(120deg, rgba(124, 92, 255, 0.55) 0%, rgba(18, 25, 51, 0.6) 100%);
+  --banner-text: #ffffff;
+  --banner-shadow: 0 24px 60px -24px rgba(124, 92, 255, 0.7);
+  --banner-radius: 28px;
+  --banner-ring: rgba(255, 255, 255, 0.07);
+  --title-ink: linear-gradient(100deg, var(--a-teal) 0%, #a48bff 50%, var(--a-pink) 100%);
+}
+
+/* Glass: every pane is translucent and blurs the sky behind it. */
+.card,
+.catalogue-card,
+.session-list a,
+.output-card,
+.comment-thread,
+.connection-row,
+.catchup,
+.theme-card,
+.msg,
+.column > h1 {
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+.sidebar { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-right: 1px solid rgba(255, 255, 255, 0.06); }
+.column > h1 { border: 1px solid rgba(255, 255, 255, 0.14); }
+
+/* Messages are soft bubbles; an agent's glows teal. */
+.msg { border-radius: 22px; }
+.msg.agent { box-shadow: 0 0 30px -14px rgba(45, 226, 196, 0.6); }
+.msg.agent .author { color: var(--a-teal); }
+
+/* Pill buttons that glow. */
+button { font-weight: 600; }
+button:hover:not(:disabled) { filter: brightness(1.08); }
+.side-item { border-radius: 14px; }
+.side-item.unread::after { box-shadow: 0 0 10px rgba(244, 114, 182, 0.9); }
+.sidebar .link { color: #c4b5ff; }
+.theme-card.on { box-shadow: 0 0 0 2px #a48bff, 0 0 40px -10px rgba(124, 92, 255, 0.9); }
+a { color: #c4b5ff; }
+::selection { background: rgba(124, 92, 255, 0.4); }

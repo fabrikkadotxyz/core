@@ -10,6 +10,7 @@ import { HomePage } from './pages/HomePage.tsx';
 import { IntegrationsPage } from './pages/IntegrationsPage.tsx';
 import { TeamIntegrationsPage } from './pages/TeamIntegrationsPage.tsx';
 import { DevicesPage } from './pages/DevicesPage.tsx';
+import { AppearancePage } from './pages/AppearancePage.tsx';
 import { PairPage } from './pages/PairPage.tsx';
 import { AppShell } from './shell/AppShell.tsx';
 import { WorkspaceProvider } from './shell/workspace.tsx';
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/teams/:id/integrations" element={<TeamIntegrationsPage />} />
           <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/devices" element={<DevicesPage />} />
+          <Route path="/appearance" element={<AppearancePage />} />
           <Route path="/pair/:code" element={<PairPage />} />
           <Route path="/o/:owner/s/:session" element={<SessionPage />} />
         </Route>

@@ -158,3 +158,13 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 32);
 }
+
+/** The theme a person chose (M44): an id, 'system', or null for the default. */
+export async function getUserTheme(db: Database, userId: string): Promise<string | null> {
+  const [row] = await db.select({ theme: users.theme }).from(users).where(eq(users.id, userId)).limit(1);
+  return row?.theme ?? null;
+}
+
+export async function setUserTheme(db: Database, userId: string, theme: string | null): Promise<void> {
+  await db.update(users).set({ theme }).where(eq(users.id, userId));
+}

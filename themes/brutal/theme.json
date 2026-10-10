@@ -1,0 +1,10 @@
+{
+  "contract": 1,
+  "id": "brutal",
+  "name": "Brutal",
+  "description": "Thick black borders, hard offset shadows, flat primary colours and loud uppercase headings.",
+  "author": "Fabrikka",
+  "license": "AGPL-3.0-only",
+  "scheme": "light",
+  "swatches": ["#fffdf2", "#ffde3b", "#2f4cff", "#ff5fa2", "#00c46a", "#111111"]
+}

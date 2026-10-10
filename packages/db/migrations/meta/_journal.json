@@ -183,6 +183,13 @@
       "when": 1791404955019,
       "tag": "0025_oauth_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791647847777,
+      "tag": "0026_user_theme",
+      "breakpoints": true
     }
   ]
 }

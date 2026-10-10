@@ -339,6 +339,14 @@ and it appears in Personal integrations marked **Preview**. Once it has worked,
 it moves into the registry for everyone, and the variable comes out. Unknown ids
 are ignored, with a warning in the log.
 
+### Themes
+
+Six themes are built in. To offer another, put its folder in the theme
+directory and restart: `/data/themes/<id>/` in the Docker image, or
+`FABRIKKA_THEMES_DIR` from a checkout. The log lists what's offered and what
+was skipped, and why. Making one, and the rules a theme must follow:
+`docs/themes.md`.
+
 ### Custom connections that sign in with an email and an API token
 
 Some vendors take a personal API token only as HTTP Basic, with your email as the

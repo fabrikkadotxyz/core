@@ -50,6 +50,11 @@ export const users = pgTable('users', {
    * identifier, not a proven address, and nothing in the core reads it.
    */
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+  /**
+   * The look this person chose (M44, ADR 0038): a theme id, 'system', or null
+   * for the default. Not a foreign key: themes are folders, not rows.
+   */
+  theme: text('theme'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

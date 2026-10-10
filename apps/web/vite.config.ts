@@ -16,6 +16,8 @@ export default defineConfig({
       '/api': { target: SERVER, changeOrigin: true, ws: true },
       // TeX engine assets, served by the instance (ADR 0020).
       '/tex-assets': { target: SERVER, changeOrigin: true },
+      // Theme packs, checked and served by the instance (M44, ADR 0038).
+      '/themes': { target: SERVER, changeOrigin: true },
     },
   },
 });

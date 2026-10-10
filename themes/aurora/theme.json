@@ -1,0 +1,10 @@
+{
+  "contract": 1,
+  "id": "aurora",
+  "name": "Aurora",
+  "description": "Frosted glass on a night sky lit in teal, violet and pink: rounded, glowing, calm.",
+  "author": "Fabrikka",
+  "license": "AGPL-3.0-only",
+  "scheme": "dark",
+  "swatches": ["#0a0f1f", "#151c33", "#7c5cff", "#2de2c4", "#f472b6"]
+}

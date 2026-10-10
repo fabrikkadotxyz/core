@@ -387,6 +387,18 @@ room". Choosing a setting in a room you've never opened writes a read position o
 per device, kept in that device's browser storage, because a work laptop and a
 shared screen want different answers.
 
+### M44 — themes
+
+```
+users  (additions)
+  theme           text    -- a theme id, 'system', or null for the default (Dusk)
+```
+
+**Not a foreign key.** Themes live in folders, not the database
+([ADR 0038](decisions/0038-themes-are-css-packs-checked-by-the-server.md)). A
+saved id the instance no longer offers is treated as the default when it's read,
+and is left as it is, so reinstalling the theme brings the choice back.
+
 ### M25 — templates
 
 ```

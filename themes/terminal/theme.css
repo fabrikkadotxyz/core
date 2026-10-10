@@ -1,0 +1,179 @@
+/*
+ * Terminal (M44, ADR 0038): a terminal multiplexer. Monospace everywhere,
+ * square panes with hairline borders and titles set into them, lavender for
+ * what's active, and status in small coloured dots. No gradients, no shadows.
+ */
+:root {
+  --t-bg: #13121a;
+  --t-pane: #16151e;
+  --t-side: #1a1923;
+  --t-line: #2e2c3b;
+  --t-text: #c9c7d6;
+  --t-strong: #ecebf5;
+  --t-dim: #6f6c83;
+  --t-lavender: #b9a6f0;
+  --t-green: #a6da95;
+  --t-peach: #e5895f;
+  --t-pink: #f28fad;
+  --t-yellow: #f5d58a;
+  --t-cyan: #8bd5ca;
+
+  color-scheme: dark;
+  --font-ui: "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, ui-monospace, monospace;
+  --font-mono: var(--font-ui);
+  --font-heading: var(--font-ui);
+  --heading-weight: 600;
+  --heading-tracking: 0;
+  --heading-case: lowercase;
+
+  --bg: var(--t-bg);
+  --bg-sunken: #0f0e15;
+  --panel: var(--t-pane);
+  --panel-tint: #201f2b;
+  --border: var(--t-line);
+  --text: var(--t-text);
+  --muted: var(--t-dim);
+  --accent: var(--t-lavender);
+  --on-accent: #13121a;
+  --attention: var(--t-peach);
+  --hover: rgba(185, 166, 240, 0.06);
+  --selected: rgba(185, 166, 240, 0.12);
+  --agent: var(--t-pane);
+  --agent-border: var(--t-line);
+  --author: var(--t-strong);
+  --ok: var(--t-green);
+  --ok-soft: rgba(166, 218, 149, 0.1);
+  --ok-border: #3f5a3a;
+  --warn: var(--t-yellow);
+  --warn-soft: rgba(245, 213, 138, 0.1);
+  --warn-border: #6b5c33;
+  --danger: var(--t-pink);
+  --danger-soft: rgba(242, 143, 173, 0.1);
+  --danger-border: #6e3a4b;
+
+  --side-bg: var(--t-side);
+  --side-text: var(--t-text);
+  --side-strong: var(--t-strong);
+  --side-muted: var(--t-dim);
+  --side-hover: #20202b;
+  --side-selected: #22212d;
+  --side-border: var(--t-line);
+  --grad-side: var(--t-side);
+  --grad-side-on: #24232f;
+  --side-on-text: var(--t-strong);
+  --side-on-meta: var(--t-lavender);
+  --side-on-shadow: none;
+  --side-field: #13121a;
+  --side-shadow: none;
+
+  --radius: 0;
+  --radius-control: 0;
+  --radius-card: 0;
+  --radius-pill: 0;
+  --border-width: 1px;
+
+  --grad-accent: var(--t-lavender);
+  --grad-accent-hover: #cbbcf5;
+  --grad-attention: var(--t-peach);
+  --grad-tint: #201f2b;
+  --grad-panel: var(--t-pane);
+  --grad-agent: var(--t-pane);
+  --shadow-soft: none;
+  --shadow-lift: none;
+  --shadow-accent: none;
+  --shadow-msg: none;
+  --lift: 0;
+
+  --app-bg: var(--t-bg);
+  --surface-border: var(--t-line);
+  --field-bg: #0f0e15;
+  --focus-border: var(--t-lavender);
+  --focus-ring: none;
+  --bar-bg: var(--t-bg);
+  --bar-blur: none;
+  --composer-bg: var(--t-bg);
+  --rail-bg: var(--t-bg);
+  --badge-bg: transparent;
+  --badge-text: var(--t-lavender);
+  --badge-ok-bg: transparent;
+  --badge-shared-bg: transparent;
+  --vendor-bg: #ecebf5;
+  --frame: linear-gradient(var(--t-lavender), var(--t-lavender));
+  --stripe: var(--t-line);
+  --hover-border: var(--t-lavender);
+  --team-initial: var(--t-lavender);
+
+  --banner-bg: transparent;
+  --banner-text: var(--t-lavender);
+  --banner-shadow: none;
+  --banner-radius: 0;
+  --banner-ring: transparent;
+  --title-ink: linear-gradient(var(--t-lavender), var(--t-lavender));
+}
+
+body { font-size: 14px; }
+
+/* A page's title is a pane title: set into the top border, the way tmux draws it. */
+.column > h1 {
+  padding: 0 0 0.6rem;
+  margin: 0.5rem 0 1.25rem;
+  font-size: 1rem;
+  border-bottom: 1px solid var(--t-line);
+}
+.column > h1::before { content: '── '; color: var(--t-dim); }
+.column > h1::after { display: none; }
+h2, h3 { color: var(--t-dim); font-weight: 500; }
+.column > h2::before { content: '# '; color: var(--t-lavender); }
+
+/* Panes: hairlines, and the active one (focused, hovered) lights up lavender. */
+.card,
+.catalogue-card,
+.session-list a,
+.output-card,
+.comment-thread,
+.connection-row,
+.theme-card { border: 1px solid var(--t-line); }
+.card:focus-within,
+.theme-card.on { border-color: var(--t-lavender); box-shadow: none; }
+.session-list a::before { display: none; }
+.session-list a { padding-left: 1rem; }
+
+/* Messages read like a transcript: no bubbles. A person's line starts with ❯, an agent's with ●. */
+.msg,
+.msg.agent { border: 0; background: transparent; padding: 0.35rem 0; }
+.msg .meta > span:first-child { display: none; }
+.msg .meta::before { content: '❯'; color: var(--t-lavender); font-weight: 700; margin-right: 0.15rem; }
+.msg.agent .meta::before { content: '●'; color: var(--t-peach); }
+.msg.agent .author { color: var(--t-peach); }
+.msg time { color: var(--t-dim); }
+.activity { color: var(--t-dim); }
+.activity-agent { color: var(--t-peach); }
+
+/* The composer is a prompt. */
+.composer { border-top: 1px solid var(--t-line); }
+.composer input { border-color: var(--t-line); }
+.composer input:focus-visible { border-color: var(--t-lavender); }
+
+/* Buttons are tabs: the active one is a lavender block with dark text. */
+button { color: var(--on-accent); font-weight: 600; }
+button.link { color: var(--t-lavender); font-weight: 400; }
+.tab.on { border-bottom-color: var(--t-lavender); color: var(--t-strong); }
+.chip.on { color: #13121a; }
+
+.badge,
+.badge-ok,
+.badge-shared { border: 1px solid currentColor; padding: 0 0.4rem; }
+.badge-ok { color: var(--t-green); }
+.badge-shared { color: var(--t-yellow); }
+
+/* The sidebar: lowercase section names, a coloured dot for unread. */
+.sidebar { border-right: 1px solid var(--t-line); }
+.side-section h2 { text-transform: lowercase; letter-spacing: 0; font-size: 0.85rem; color: var(--t-dim); }
+.sidebar .link { color: var(--t-lavender); }
+.side-item.on { font-weight: 600; }
+.side-item.unread::after { box-shadow: none; }
+.side-brand { color: var(--t-lavender); }
+
+a { color: var(--t-lavender); }
+code, .endpoint { color: var(--t-green); }
+::selection { background: rgba(185, 166, 240, 0.3); }

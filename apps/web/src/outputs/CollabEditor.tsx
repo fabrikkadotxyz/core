@@ -22,7 +22,7 @@ export const editorTheme = EditorView.theme(
   {
     '&': { color: 'var(--text)', backgroundColor: 'transparent', fontSize: '15px' },
     '.cm-content': {
-      fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+      fontFamily: 'var(--font-ui)',
       lineHeight: '1.65',
       padding: '0.75rem 0 3rem',
       caretColor: 'var(--accent)',
@@ -36,7 +36,7 @@ export const editorTheme = EditorView.theme(
     '.cm-placeholder': { color: 'var(--muted)' },
     '.cm-error-line': { backgroundColor: 'var(--danger-soft)', boxShadow: 'inset 3px 0 0 var(--danger)' },
     '.cm-ySelectionInfo': {
-      fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+      fontFamily: 'var(--font-ui)',
       fontSize: '11px',
       padding: '1px 4px',
       borderRadius: '4px',

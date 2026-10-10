@@ -303,6 +303,10 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             <span className="side-label">{team.name} — people</span>
           </NavLink>
         )}
+        <NavLink to="/appearance" className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
+          <span className="side-icon" aria-hidden>◐</span>
+          <span className="side-label">Appearance</span>
+        </NavLink>
         <div className="side-user">
           <span className="muted small">@{user?.ownerSlug}</span>
           <span className="spacer" />

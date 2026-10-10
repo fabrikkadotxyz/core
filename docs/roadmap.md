@@ -1772,6 +1772,55 @@ on is one-time.
    keeps the 29-day one.
 4. Another team at 90 days loses nothing.
 
+## M44 — Themes: choose a look, or make one
+
+> People spend hours in a room and want it to look the way they work: a
+> terminal, a page, something calm. [ADR 0038](decisions/0038-themes-are-css-packs-checked-by-the-server.md):
+> a theme is a folder of CSS with no code; tokens are the contract
+> (`docs/themes.md`); the server checks every theme; each person picks theirs.
+
+- **The pack:** `theme.json` (contract, id, name, description, author, license,
+  scheme, swatches) and `theme.css`, plus optional fonts and images.
+- **The app's stylesheet speaks tokens.** The gradient look's literal values
+  become the tokens in `docs/themes.md`; Dusk is their default values.
+- **Built in (`themes/`):** Dusk, Dusk Night (today's dark palette, moved out
+  of `styles.css`), **Terminal**, **Paper**, **Brutal** and **Aurora**. The four
+  new ones differ in type, shape and surface, not only colour.
+- **The instance's own:** `FABRIKKA_THEMES_DIR` (`/data/themes` in the image),
+  read at start. A bad pack is skipped and the log says why.
+- **The server:**
+  - `GET /api/themes` (public, so the sign-in page is themed too): each theme's
+    manifest, and the default;
+  - `GET /themes/<id>/<file>`: only files the check accepted, typed by
+    extension, `nosniff`;
+  - `GET`/`PUT /api/me/theme`: `{ theme }`, a theme id, `system`, or null for
+    the default. An unknown id is refused.
+- **The page:** **Appearance** at the bottom of the sidebar opens a grid of
+  cards drawn from each theme's swatches, plus *Match my system*. One click
+  applies it.
+- **No flash:** the choice is cached on the device, and an inline script in
+  `index.html` loads the theme's CSS before the app renders. The account's
+  choice wins once it arrives.
+- **Desktop app:** nothing new. It's the web app.
+
+**Test:**
+1. Open Appearance from the sidebar, and click **Terminal** (**2 clicks**). The
+   whole app turns monospace and dark at once, with no reload.
+2. Reload: it paints as Terminal from the first frame, with no flash of Dusk.
+3. Sign in on another browser: it's Terminal there too.
+4. Try each of the six: every page stays readable (sidebar, a room, Personal
+   integrations, the sign-in page), and Terminal, Paper, Brutal and Aurora look
+   unlike each other, not only in colour.
+5. Choose *Match my system*, switch the OS to dark: Dusk Night. To light: Dusk.
+6. Put a copy of `themes/paper` in the themes directory with `id`
+   `paper-copy` and a `url(https://example.com/x.png)` in it, and restart: the
+   log says it was skipped and why, and it isn't offered. Remove the URL,
+   restart: it's offered, after the built-ins.
+7. Nothing outside a pack is served: `/themes/terminal/x.svg` and a missing
+   file are 404, and `../` paths never return a file from outside the folder.
+
+**Clicks:** choosing a theme, **2** from anywhere.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

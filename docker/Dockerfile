@@ -24,6 +24,8 @@ ENV NODE_ENV=production \
 COPY --from=build --chown=node:node /out/server /app/apps/server
 COPY --from=build --chown=node:node /app/apps/web/dist /app/apps/web/dist
 COPY --from=build --chown=node:node /app/packages/bridge/dist /app/packages/bridge/dist
+# The built-in themes (M44). The instance's own go in /data/themes.
+COPY --from=build --chown=node:node /app/themes /app/themes
 COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/fabrikka-entrypoint
 RUN mkdir -p /data && chown node:node /data
 # No USER here: platforms mount /data as root (Render, Railway), so the

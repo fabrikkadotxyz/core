@@ -1,0 +1,151 @@
+/*
+ * Brutal (M44, ADR 0038): neo-brutalism. Thick black borders, hard offset
+ * shadows that move when you press, flat primary colours, and heavy uppercase
+ * headings. Nothing is subtle; everything is obvious.
+ */
+:root {
+  --b-ink: #111111;
+  --b-paper: #fffdf2;
+  --b-yellow: #ffde3b;
+  --b-blue: #2f4cff;
+  --b-pink: #ff5fa2;
+  --b-green: #00c46a;
+  --b-orange: #ff7a1a;
+
+  color-scheme: light;
+  --font-ui: "Archivo", "Helvetica Neue", Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Archivo Black", "Arial Black", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, Menlo, monospace;
+  --heading-weight: 900;
+  --heading-tracking: 0.01em;
+  --heading-case: uppercase;
+
+  --bg: var(--b-paper);
+  --bg-sunken: #f2eedb;
+  --panel: #ffffff;
+  --panel-tint: #fff4b8;
+  --border: var(--b-ink);
+  --text: var(--b-ink);
+  --muted: #4b4b4b;
+  --accent: var(--b-blue);
+  --on-accent: #ffffff;
+  --attention: var(--b-pink);
+  --hover: rgba(17, 17, 17, 0.06);
+  --selected: var(--b-yellow);
+  --agent: #e8ecff;
+  --agent-border: var(--b-ink);
+  --author: var(--b-ink);
+  --ok: #007a42;
+  --ok-soft: #c9f5df;
+  --ok-border: var(--b-ink);
+  --warn: #7a4a00;
+  --warn-soft: #ffe9a8;
+  --warn-border: var(--b-ink);
+  --danger: #c4002f;
+  --danger-soft: #ffd3df;
+  --danger-border: var(--b-ink);
+
+  --side-bg: var(--b-yellow);
+  --side-text: var(--b-ink);
+  --side-strong: var(--b-ink);
+  --side-muted: #3a3a3a;
+  --side-hover: rgba(17, 17, 17, 0.08);
+  --side-selected: var(--b-ink);
+  --side-border: var(--b-ink);
+  --grad-side: var(--b-yellow);
+  --grad-side-on: var(--b-ink);
+  --side-on-text: var(--b-yellow);
+  --side-on-meta: var(--b-yellow);
+  --side-on-shadow: 3px 3px 0 var(--b-pink);
+  --side-field: #ffffff;
+  --side-shadow: none;
+
+  --radius: 0;
+  --radius-control: 0;
+  --radius-card: 0;
+  --radius-pill: 0;
+  --border-width: 3px;
+
+  --grad-accent: var(--b-blue);
+  --grad-accent-hover: #1c34d6;
+  --grad-attention: var(--b-pink);
+  --grad-tint: var(--b-yellow);
+  --grad-panel: #ffffff;
+  --grad-agent: #e8ecff;
+  --shadow-soft: 5px 5px 0 var(--b-ink);
+  --shadow-lift: 8px 8px 0 var(--b-ink);
+  --shadow-accent: 4px 4px 0 var(--b-ink);
+  --shadow-msg: 4px 4px 0 var(--b-ink);
+  --lift: -3px;
+
+  --app-bg: var(--b-paper);
+  --surface-border: var(--b-ink);
+  --field-bg: #ffffff;
+  --focus-border: var(--b-ink);
+  --focus-ring: 4px 4px 0 var(--b-blue);
+  --bar-bg: var(--b-paper);
+  --bar-blur: none;
+  --composer-bg: var(--b-paper);
+  --rail-bg: var(--b-paper);
+  --badge-bg: var(--b-yellow);
+  --badge-text: var(--b-ink);
+  --badge-ok-bg: #c9f5df;
+  --badge-shared-bg: #ffe9a8;
+  --vendor-bg: #ffffff;
+  --frame: linear-gradient(var(--b-ink), var(--b-ink));
+  --stripe: var(--b-pink);
+  --hover-border: var(--b-ink);
+  --team-initial: var(--b-pink);
+
+  --banner-bg: var(--b-pink);
+  --banner-text: var(--b-ink);
+  --banner-shadow: 8px 8px 0 var(--b-ink);
+  --banner-radius: 0;
+  --banner-ring: transparent;
+  --title-ink: linear-gradient(var(--b-ink), var(--b-ink));
+}
+
+/* A page's title is a poster: a pink slab, a black border, a hard shadow. */
+.column > h1 { border: 3px solid var(--b-ink); font-size: 2.1rem; margin-right: 8px; }
+.column > h1::after { display: none; }
+.column > h2 { font-size: 1rem; display: inline-block; background: var(--b-ink); color: var(--b-yellow); padding: 0.15rem 0.5rem; }
+
+/* Every surface is a block. */
+.card,
+.catalogue-card,
+.session-list a,
+.output-card,
+.comment-thread,
+.connection-row,
+.catchup,
+.theme-card,
+.msg { border: 3px solid var(--b-ink); }
+.theme-card.on { box-shadow: 6px 6px 0 var(--b-blue); border-color: var(--b-ink); }
+.msg { margin-right: 4px; }
+.msg.agent { background: #e8ecff; }
+.msg .author { text-transform: uppercase; font-weight: 900; letter-spacing: 0.02em; }
+.msg.agent .author { color: var(--b-blue); }
+.session-list a::before { width: 8px; }
+
+/* Buttons press down: the shadow shrinks as the button moves into it. */
+button { border: 3px solid var(--b-ink); font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
+button:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--b-ink); }
+button:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--b-ink); }
+button.link { border: 0; text-transform: none; letter-spacing: 0; color: var(--b-blue); text-decoration: underline; text-decoration-thickness: 2px; }
+button.link:hover:not(:disabled), button.link:active:not(:disabled) { transform: none; box-shadow: none; }
+.chip { border: 3px solid var(--b-ink); }
+.chip.on { background: var(--b-ink); color: var(--b-yellow); }
+
+input, textarea, select, .select-button, .catalogue-search { border: 3px solid var(--b-ink); }
+
+.badge, .badge-ok, .badge-shared { border: 2px solid var(--b-ink); font-weight: 800; text-transform: uppercase; font-size: 0.7rem; }
+
+/* The sidebar is a yellow slab with a black edge. */
+.sidebar { border-right: 3px solid var(--b-ink); }
+.side-section h2 { font-family: var(--font-heading); font-weight: 900; letter-spacing: 0.04em; color: var(--b-ink); }
+.side-item.on { border: 2px solid var(--b-ink); }
+.side-item.unread::after { width: 10px; height: 10px; border: 2px solid var(--b-ink); box-shadow: none; }
+.sidebar .link { color: var(--b-blue); }
+.team-initial { border: 2px solid var(--b-ink); color: var(--b-ink); }
+a { color: var(--b-blue); text-decoration-thickness: 2px; }
+::selection { background: var(--b-yellow); color: var(--b-ink); }

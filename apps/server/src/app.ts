@@ -108,7 +108,8 @@ import {
   removeFile,
   renameOutput,
 } from './outputs/core.ts';
-import { createUser } from './users.ts';
+import { createUser, getUserTheme, setUserTheme } from './users.ts';
+import { DEFAULT_THEME, SYSTEM_THEMES, loadThemes, publicTheme, themeDirs, themeFile } from './themes.ts';
 import {
   addFromRoster,
   createTeam,
@@ -385,6 +386,47 @@ export function createApp(options: CreateAppOptions = {}) {
     const user = await resolveToken(db, readCookie(c));
     if (!user) return c.json({ error: 'not authenticated' }, 401);
     return c.json({ user });
+  });
+
+  /* ------------------------------------------------ themes (M44, ADR 0038) */
+
+  // Checked once, at start: a pack added later is offered after a restart.
+  const themes = loadThemes(themeDirs());
+
+  /** Every theme this instance offers. Public, so the sign-in page is themed too. */
+  app.get('/api/themes', (c) =>
+    c.json({ themes: [...themes.values()].map(publicTheme), default: DEFAULT_THEME, system: SYSTEM_THEMES }),
+  );
+
+  /** Only files the start-up check accepted, typed by extension. */
+  app.get('/themes/:id/*', async (c) => {
+    const id = c.req.param('id');
+    const path = decodeURIComponent(c.req.path.slice(`/themes/${id}/`.length));
+    const file = themeFile(themes, id, path);
+    if (!file) return c.notFound();
+    const body = await readFile(file.abs);
+    return c.body(body, 200, {
+      'content-type': file.type,
+      'x-content-type-options': 'nosniff',
+      'cache-control': 'no-cache',
+    });
+  });
+
+  app.get('/api/me/theme', requireUser(db), async (c) => {
+    const saved = await getUserTheme(db, c.get('user').id);
+    // A theme the instance no longer offers reads as the default, and stays saved.
+    const theme = saved === 'system' || (saved && themes.has(saved)) ? saved : null;
+    return c.json({ theme });
+  });
+
+  app.put('/api/me/theme', requireUser(db), async (c) => {
+    const body = await c.req.json<{ theme?: unknown }>().catch(() => ({}) as { theme?: unknown });
+    const theme = body.theme ?? null;
+    if (theme !== null && theme !== 'system' && (typeof theme !== 'string' || !themes.has(theme))) {
+      return c.json({ error: 'this instance offers no such theme' }, 400);
+    }
+    await setUserTheme(db, c.get('user').id, theme as string | null);
+    return c.json({ theme });
   });
 
   /** What the login page should offer (M32): reset by email, and a sign-up page an extension advertised. */
@@ -2479,7 +2521,7 @@ export function createApp(options: CreateAppOptions = {}) {
     // SPA fallback: every non-API path returns index.html so client-side routes
     // like /o/fede/s/demo work on a hard refresh.
     app.get('*', async (c) => {
-      if (c.req.path.startsWith('/api') || c.req.path.startsWith('/mcp')) {
+      if (c.req.path.startsWith('/api') || c.req.path.startsWith('/mcp') || c.req.path.startsWith('/themes/')) {
         return c.notFound();
       }
       const html = await readFile(resolvePath(WEB_DIST, 'index.html'), 'utf8');

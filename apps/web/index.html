@@ -6,6 +6,22 @@
     <title>Fabrikka</title>
   </head>
   <body>
+    <!--
+      M44: paint the chosen theme from the first frame. The choice is cached on
+      the device (src/themes.ts); the account's choice replaces it once it loads.
+      document.write makes the stylesheet render-blocking, so there's no flash.
+    -->
+    <script>
+      try {
+        var t = JSON.parse(localStorage.getItem('fabrikka.theme') || 'null');
+        var id = t && t.id;
+        if (t && t.choice === 'system') id = matchMedia('(prefers-color-scheme: dark)').matches ? 'dusk-night' : 'dusk';
+        if (id && /^[a-z0-9-]{1,40}$/.test(id) && id !== 'dusk') {
+          document.documentElement.dataset.theme = id;
+          document.write('<link id="theme-css" rel="stylesheet" href="/themes/' + id + '/theme.css">');
+        }
+      } catch (e) {}
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

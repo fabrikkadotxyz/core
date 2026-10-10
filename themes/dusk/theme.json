@@ -1,0 +1,10 @@
+{
+  "contract": 1,
+  "id": "dusk",
+  "name": "Dusk",
+  "description": "The default: Dusk Blue, Powder Blue and Burnt Peach as soft gradients, with a dark sidebar.",
+  "author": "Fabrikka",
+  "license": "AGPL-3.0-only",
+  "scheme": "light",
+  "swatches": ["#eef7fb", "#293241", "#3d5a80", "#98c1d9", "#ee6c4d"]
+}

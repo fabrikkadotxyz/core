@@ -2155,3 +2155,60 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
   border: 1px dashed var(--border); border-radius: var(--radius, 14px); background: var(--bg-sunken);
 }
 .catalogue-empty p { margin: 0; }
+
+/* ---- the gradient look, in the dark palette (fixes 2026-10-08's light-only colours) ---- */
+:root[data-theme="dark"] {
+  --grad-panel: linear-gradient(180deg, #2b3546 0%, #263040 100%);
+  --grad-agent: linear-gradient(135deg, #2c3a52 0%, #2a3550 60%, #2d3550 100%);
+  --grad-tint: linear-gradient(135deg, #2f3a4b 0%, #33415a 100%);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.25), 0 12px 32px -18px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.3), 0 18px 40px -18px rgba(0, 0, 0, 0.7);
+  /* In the dark palette the accent is Powder Blue with Jet Black text, so the gradients follow it. */
+  --grad-accent: linear-gradient(120deg, #c4dceb 0%, var(--powder-blue) 45%, #7fa9c6 100%);
+  --grad-accent-hover: linear-gradient(120deg, #d3e5f0 0%, #a9cbe0 45%, #8fb5cf 100%);
+  --shadow-accent: 0 8px 20px -10px rgba(152, 193, 217, 0.55);
+}
+:root[data-theme="dark"] .badge { color: var(--powder-blue); }
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(1000px 600px at 10% -10%, rgba(61, 90, 128, 0.45) 0%, rgba(61, 90, 128, 0) 65%),
+    radial-gradient(800px 520px at 100% 0%, rgba(238, 108, 77, 0.1) 0%, rgba(238, 108, 77, 0) 60%),
+    linear-gradient(180deg, #1f2633 0%, #1a202b 100%);
+  background-attachment: fixed;
+}
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] .select-button,
+:root[data-theme="dark"] .catalogue-search {
+  background: var(--bg-sunken);
+}
+:root[data-theme="dark"] .card,
+:root[data-theme="dark"] .card-hint,
+:root[data-theme="dark"] .catalogue-card,
+:root[data-theme="dark"] .session-list a,
+:root[data-theme="dark"] .output-card,
+:root[data-theme="dark"] .comment-thread,
+:root[data-theme="dark"] .msg,
+:root[data-theme="dark"] .connection-row {
+  border-color: var(--border);
+}
+:root[data-theme="dark"] .catchup {
+  background:
+    linear-gradient(var(--panel), var(--panel)) padding-box,
+    linear-gradient(120deg, var(--powder-blue), var(--dusk-blue) 60%, var(--burnt-peach)) border-box;
+}
+:root[data-theme="dark"] .session > header,
+:root[data-theme="dark"] .topbar {
+  background: linear-gradient(180deg, rgba(41, 50, 65, 0.85) 0%, rgba(31, 38, 51, 0.7) 100%);
+  border-bottom-color: var(--border);
+}
+:root[data-theme="dark"] .composer {
+  background: linear-gradient(0deg, rgba(41, 50, 65, 0.9) 0%, rgba(31, 38, 51, 0.6) 100%);
+  border-top-color: var(--border);
+}
+:root[data-theme="dark"] .rail { background: linear-gradient(180deg, rgba(41, 50, 65, 0.55) 0%, rgba(26, 32, 43, 0.55) 100%); }
+:root[data-theme="dark"] .column > h1 { box-shadow: 0 24px 48px -26px rgba(0, 0, 0, 0.8); }
+:root[data-theme="dark"] .chip:not(.on) { background: var(--panel); }
+:root[data-theme="dark"] .badge-ok { background: var(--ok-soft); }
+:root[data-theme="dark"] .badge-shared { background: var(--warn-soft); }

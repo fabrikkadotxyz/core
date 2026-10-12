@@ -24,6 +24,8 @@ if [ -z "${PUBLIC_URL:-}" ]; then
     PUBLIC_URL="$RENDER_EXTERNAL_URL"
   elif [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
     PUBLIC_URL="https://$RAILWAY_PUBLIC_DOMAIN"
+  elif [ -n "${FLY_APP_NAME:-}" ]; then
+    PUBLIC_URL="https://$FLY_APP_NAME.fly.dev"
   fi
   [ -n "${PUBLIC_URL:-}" ] && export PUBLIC_URL && echo "fabrikka: PUBLIC_URL is $PUBLIC_URL (from the platform)"
 fi
@@ -32,6 +34,11 @@ fi
 # client, not the proxy (docs/operations.md, "Behind a proxy"). Set it to be explicit.
 if [ -z "${FABRIKKA_TRUSTED_PROXIES:-}" ] && { [ -n "${RENDER_EXTERNAL_URL:-}" ] || [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; }; then
   export FABRIKKA_TRUSTED_PROXIES=1
+fi
+# Fly.io's X-Forwarded-For ends with the app's own address, so counting hops
+# would be wrong there; its proxy sets Fly-Client-IP to the client instead.
+if [ -z "${FABRIKKA_CLIENT_IP_HEADER:-}" ] && [ -n "${FLY_APP_NAME:-}" ]; then
+  export FABRIKKA_CLIENT_IP_HEADER=Fly-Client-IP
 fi
 
 # No key configured: generate one into the data volume once, and reuse it.

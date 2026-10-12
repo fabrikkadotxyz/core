@@ -91,6 +91,36 @@ if (process.env.FABRIKKA_TEST_DOCKER !== '1') {
       body: JSON.stringify({ code: 'render-generated-value', email: 'owner@m40.example', displayName: 'M40', password: 'm40-owner-password' }),
     });
     check(setup.status === 201, 'the setup code Render generated creates the owner');
+
+    /* ---------------------------------------------- 3. the same image, as Fly.io runs it */
+
+    await docker(['rm', '-f', app]);
+    await docker([
+      'run', '-d', '--name', app, '--network', net, '-v', `${vol}:/data`, '-p', '18090:8080',
+      '-e', `DATABASE_URL=postgres://fabrikka:m40@${pg}:5432/fabrikka`,
+      '-e', 'FLY_APP_NAME=fabrikka-m40',
+      '-e', 'FABRIKKA_MAIL=file:/data/mail',
+      tag,
+    ]);
+    let flyUp = false;
+    for (let i = 0; i < 90 && !flyUp; i++) {
+      flyUp = await fetch('http://127.0.0.1:18090/health').then((r) => r.ok, () => false);
+      if (!flyUp) await sleep(1000);
+    }
+    check(flyUp, 'on Fly.io (FLY_APP_NAME), the image starts with nothing else set');
+    const flyLogs = await docker(['logs', app]);
+    check(flyLogs.includes('PUBLIC_URL is https://fabrikka-m40.fly.dev'), 'it takes its address from the Fly app name');
+    check(/read from the platform's fly-client-ip header/.test(flyLogs), "it reads the client from Fly-Client-IP, not X-Forwarded-For (whose last entry is the app's own address there)");
+    const reset = (ip, forged) =>
+      fetch('http://127.0.0.1:18090/api/auth/password-reset', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'fly-client-ip': ip, 'x-forwarded-for': forged },
+        body: JSON.stringify({ email: `x-${Math.random()}@m40.example` }),
+      }).then((r) => r.status);
+    const codes = [];
+    for (let i = 0; i < 21; i++) codes.push(await reset('198.51.100.40', `6.6.6.${i}, 203.0.113.1`));
+    check(codes.slice(0, 20).every((c) => c === 200) && codes[20] === 429, 'ONE FLY CLIENT IS LIMITED, WHATEVER X-FORWARDED-FOR IT FORGES');
+    check((await reset('198.51.100.41', '203.0.113.1')) === 200, '…and another client is counted separately');
   } catch (err) {
     console.error('FAIL', err.message);
     failures++;

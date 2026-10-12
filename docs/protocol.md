@@ -883,7 +883,7 @@ serve its own pages as well as its own `/api/<name>/…` routes.
 | `sendEmail({ to, subject, text })` | Sends through the configured transport. Resolves `false` when none is configured. |
 | `canSendEmail` | Whether a transport is configured. |
 | `rateLimit(key, { max, windowMs })` | `true` while under the limit. In memory, per process. |
-| `clientIp(c)` | The client's address, for rate limits. The socket's, or, with `FABRIKKA_TRUSTED_PROXIES` set, the address the outermost trusted proxy saw (`docs/operations.md`, *Behind a proxy*). |
+| `clientIp(c)` | The client's address, for rate limits. The socket's, or, with `FABRIKKA_TRUSTED_PROXIES` set, the address the outermost trusted proxy saw, or the platform's own client header (`FABRIKKA_CLIENT_IP_HEADER`) (`docs/operations.md`, *Behind a proxy*). |
 | `advertise({ signupUrl })` | The login page then offers *Create an account*, linking there. |
 
 `GET /api/auth/options` returns what the login page should offer:

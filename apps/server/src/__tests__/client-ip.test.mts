@@ -1,5 +1,5 @@
 /** The client's address behind proxies (docs/operations.md, "Behind a proxy"). */
-import { parseTrustedProxies, pickClientIp } from '../client-ip.ts';
+import { fromPlatformHeader, parseClientIpHeader, parseTrustedProxies, pickClientIp } from '../client-ip.ts';
 
 let fails = 0;
 const ok = (label: string, cond: boolean) => {
@@ -20,5 +20,11 @@ ok('unset means 0', parseTrustedProxies(undefined) === 0 && parseTrustedProxies(
 ok('a number is read', parseTrustedProxies('2') === 2);
 refuses('a word is refused at start', () => parseTrustedProxies('yes'));
 refuses('an absurd count is refused at start', () => parseTrustedProxies('99'));
+
+ok("a platform's header names the client (Fly-Client-IP)", fromPlatformHeader('172.16.0.2', '198.51.100.9') === '198.51.100.9');
+ok('…missing, the socket is used', fromPlatformHeader('172.16.0.2', undefined) === '172.16.0.2');
+ok('…absurdly long, ignored', fromPlatformHeader('172.16.0.2', 'x'.repeat(200)) === '172.16.0.2');
+ok('a header name is read, case-insensitively', parseClientIpHeader('Fly-Client-IP') === 'fly-client-ip' && parseClientIpHeader('') === null);
+refuses('a header name with a colon or space is refused at start', () => parseClientIpHeader('Fly-Client-IP: x'));
 
 if (fails) process.exit(1);

@@ -195,7 +195,7 @@ import { mailerFromEnv } from './mail.ts';
 import { APP_ZIP_NAME, appRelease, clientRelease, installCommand, installScript, manifest } from './client.ts';
 import { completePasswordReset, requestPasswordReset } from './password-reset.ts';
 import { rateLimit } from './rate-limit.ts';
-import { clientIp, trustedProxies } from './client-ip.ts';
+import { clientIp, clientIpHeader, trustedProxies } from './client-ip.ts';
 
 export interface CreateAppOptions {
   /** Deployment-specific additions: a sign-up page, for one. */
@@ -2629,7 +2629,7 @@ export function createApp(options: CreateAppOptions = {}) {
       return new Promise<ReturnType<typeof serve>>((resolveStart) => {
         const server = serve({ fetch: app.fetch, port }, (info) => {
           console.log(`fabrikka server on http://localhost:${info.port}`);
-          console.log(`[rate limits] ${trustedProxies ? `client address read behind ${trustedProxies} proxy(ies) (FABRIKKA_TRUSTED_PROXIES)` : 'client address is the socket (no FABRIKKA_TRUSTED_PROXIES)'}`);
+          console.log(`[rate limits] ${clientIpHeader ? `client address read from the platform's ${clientIpHeader} header (FABRIKKA_CLIENT_IP_HEADER)` : trustedProxies ? `client address read behind ${trustedProxies} proxy(ies) (FABRIKKA_TRUSTED_PROXIES)` : 'client address is the socket (no FABRIKKA_TRUSTED_PROXIES)'}`);
           resolveStart(server);
         });
         injectWebSocket(server);

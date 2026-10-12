@@ -540,6 +540,15 @@ Too high, and anyone can choose their own address by sending the header, which
 dodges the limits. Too low, and everyone shares one. The log prints the value at
 start.
 
+**A platform that names the client in its own header** can say so instead:
+`FABRIKKA_CLIENT_IP_HEADER` is that header, which its proxy sets on every
+request, overwriting whatever the client sent. It takes precedence over
+`FABRIKKA_TRUSTED_PROXIES`. **Fly.io** is one: its `X-Forwarded-For` ends with
+the app's own address, not the proxy's, so counting hops would pick the wrong
+entry. The image sets `FABRIKKA_CLIENT_IP_HEADER=Fly-Client-IP` there, and
+`PUBLIC_URL` to `https://<app>.fly.dev` unless you set it. Set this only for a
+header your platform guarantees: any other header is whatever the client wrote.
+
 ## Ports
 
 | Port | What | Note |

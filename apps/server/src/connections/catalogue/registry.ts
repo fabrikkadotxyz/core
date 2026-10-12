@@ -8,7 +8,9 @@
  */
 import { confluence, jira } from './atlassian.ts';
 import { github } from './github.ts';
+import { grafana } from './grafana.ts';
 import { linear } from './linear.ts';
+import { sentry } from './sentry.ts';
 import type { CatalogueEntry } from './types.ts';
 
 // One line per vendor, added once it has been connected for real.
@@ -19,7 +21,7 @@ const BUILT_IN: CatalogueEntry[] = [github, jira, confluence];
  * FABRIKKA_PREPARED_VENDORS names them, so the owner can connect one and
  * verify it before it joins BUILT_IN (docs/operations.md, "A prepared vendor").
  */
-const PREPARED: CatalogueEntry[] = [linear];
+const PREPARED: CatalogueEntry[] = [linear, sentry, grafana];
 
 function preparedOffered(): CatalogueEntry[] {
   const ids = (process.env.FABRIKKA_PREPARED_VENDORS ?? '')

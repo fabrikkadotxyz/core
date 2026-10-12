@@ -456,6 +456,13 @@ A Tauri app around the same web app that, since M34, also **runs your agents**:
 it carries its own Node and the instance's client, and runs the local host for
 you, with a tray icon and a **Folders** window ([ADR 0031](decisions/0031-the-desktop-app-runs-the-local-host.md)).
 
+**Finding your agent tools.** An app opened from the Dock or Finder gets only
+the system's PATH (`/usr/bin:/bin:/usr/sbin:/sbin`), which misses where Claude
+Code and Codex usually live. So the app asks your login shell for its PATH once
+at start (`$SHELL -l -c`, 3 seconds at most), and adds `~/.local/bin`,
+`/opt/homebrew/bin` and `/usr/local/bin` in case the shell doesn't answer. The
+host gets that PATH. It only finds tools; it never installs or updates them.
+
 ```bash
 pnpm --filter @fabrikka/desktop node:fetch   # once: the pinned official Node build, checksum-verified
 pnpm --filter @fabrikka/desktop package      # builds the app and the zip the instance serves

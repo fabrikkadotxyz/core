@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde_json::{json, Value};
@@ -89,6 +89,67 @@ struct Host {
 }
 
 /// Start the host for the saved server, unless one is running already.
+/**
+ * The PATH the host searches for agent tools (docs/operations.md, "Finding your
+ * agent tools"). Opened from the Dock, the app gets only the system's PATH, so
+ * ask the login shell for the one a terminal would have, once, and add the
+ * usual install folders in case it doesn't answer in time. Finding, never
+ * installing: the agent's runtime stays the person's.
+ */
+fn tool_path() -> &'static str {
+    static PATH: OnceLock<String> = OnceLock::new();
+    PATH.get_or_init(|| {
+        let mut dirs: Vec<String> = Vec::new();
+        let mut add = |list: &str| {
+            for d in list.split(':').map(str::trim).filter(|d| !d.is_empty()) {
+                if !dirs.iter().any(|x| x == d) {
+                    dirs.push(d.to_string());
+                }
+            }
+        };
+        if let Some(p) = login_shell_path() {
+            add(&p);
+        }
+        add(&std::env::var("PATH").unwrap_or_default());
+        if let Ok(home) = std::env::var("HOME") {
+            add(&format!("{home}/.local/bin"));
+        }
+        add("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
+        dirs.join(":")
+    })
+}
+
+/// `$SHELL -l -c 'printf %s "$PATH"'`, given 3 seconds; None on any failure.
+fn login_shell_path() -> Option<String> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    let shell = std::env::var("SHELL").ok().filter(|s| s.starts_with('/'))?;
+    // Markers, so whatever a profile prints around it is ignored.
+    let mut child = Command::new(shell)
+        .args(["-l", "-c", "printf '__FABRIKKA_PATH__%s__FABRIKKA_PATH__' \"$PATH\""])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let started = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if started.elapsed() < Duration::from_secs(3) => std::thread::sleep(Duration::from_millis(25)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+    let mut out = String::new();
+    child.stdout.take()?.read_to_string(&mut out).ok()?;
+    let path = out.split("__FABRIKKA_PATH__").nth(1)?.trim().to_string();
+    (!path.is_empty()).then_some(path)
+}
+
 fn start_host(app: &AppHandle) {
     let Some(server) = stored_url(app) else { return };
     let state = app.state::<Host>();
@@ -106,6 +167,7 @@ fn start_host(app: &AppHandle) {
     };
     let spawned = app.shell().sidecar("node").and_then(|cmd| {
         cmd.args([client.to_string_lossy().as_ref(), "host", "--server", &server, "--control", "stdio"])
+            .env("PATH", tool_path())
             .spawn()
     });
     let (mut events, child) = match spawned {

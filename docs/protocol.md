@@ -891,6 +891,7 @@ serve its own pages as well as its own `/api/<name>/…` routes.
 | `onTeamMembersChanged(listener)` | `listener({ teamId, members })` after a team gains or loses a member, or is created, once the change has committed. Never blocks it; a failure is logged. |
 | `team(teamId)` | `{ id, name, createdAt, createdByUserId, members }` or null. |
 | `teamRole(teamId, userId)` | `'owner'`, `'member'` or null. |
+| `teamsOf(userId)` | `[{ teamId, role }]`: the teams someone is on. |
 | `accountCount()` | How many accounts exist, to refuse early (say, before sending a sign-up email). `guardNewAccounts` stays the check that counts. |
 
 `GET /api/auth/options` returns what the login page should offer:

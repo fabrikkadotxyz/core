@@ -83,10 +83,11 @@ including by invite, removal or leaving. `members` is the new count. It's
 called after the change commits, never blocking it. A failing listener is
 logged and doesn't undo anything.
 
-Plus three small reads a deployment needs to act on these: `team(teamId)`
+Plus four small reads a deployment needs to act on these: `team(teamId)`
 (`{ id, name, createdAt, createdByUserId, members }` or null),
-`teamRole(teamId, userId)` (`'owner' | 'member' | null`) and `accountCount()`,
-to refuse early, before an email goes out.
+`teamRole(teamId, userId)` (`'owner' | 'member' | null`), `teamsOf(userId)`
+(for a room outside any team, whose owner's teams decide) and
+`accountCount()`, to refuse early, before an email goes out.
 
 ## Consequences
 

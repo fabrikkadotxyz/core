@@ -75,6 +75,8 @@ export interface Kit {
   teamRole(teamId: string, userId: string): Promise<'owner' | 'member' | null>;
   /** How many accounts exist: to refuse early, before guardNewAccounts would. */
   accountCount(): Promise<number>;
+  /** The teams someone is on, with their role. */
+  teamsOf(userId: string): Promise<{ teamId: string; role: 'owner' | 'member' }[]>;
 }
 
 /** What extensions advertised, for GET /api/auth/options. */
@@ -155,6 +157,11 @@ export function createKit(opts: {
     onTeamMembersChanged: register.members,
     team: (teamId) => teamInfo(db, teamId),
     teamRole: (teamId, userId) => teamRoleOf(db, teamId, userId),
+    teamsOf: async (userId) =>
+      (await db.select({ teamId: teamMembers.teamId, role: teamMembers.role }).from(teamMembers).where(eq(teamMembers.userId, userId))) as {
+        teamId: string;
+        role: 'owner' | 'member';
+      }[],
     accountCount: async () => {
       const [row] = await db.select({ n: count() }).from(users);
       return Number(row?.n ?? 0);

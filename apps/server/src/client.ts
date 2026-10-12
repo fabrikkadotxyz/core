@@ -203,7 +203,7 @@ install_app() {
   say "installed Fabrikka.app in $apps"
 
   # Point the app at this instance, so its first launch goes straight to sign-in.
-  settings="$HOME/Library/Application Support/dev.fabrikka.app"
+  settings="$HOME/Library/Application Support/xyz.fabrikka.app"
   mkdir -p "$settings"
   printf '%s' "$FABRIKKA_SERVER" > "$settings/server-url"
 

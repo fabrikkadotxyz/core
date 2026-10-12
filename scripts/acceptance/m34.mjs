@@ -198,7 +198,7 @@ if (process.platform === 'darwin' && process.arch === 'arm64' && existsSync(APP)
   const inst = await sh(`curl -fsSL ${CORE}/install.sh | bash -s -- --app --no-connect`, noNode);
   const installed = join(home, 'Applications/Fabrikka.app');
   check(inst.code === 0 && existsSync(join(installed, 'Contents/MacOS/node')), '`--app` installs Fabrikka.app into ~/Applications — WITH NO NODE ON THE PATH');
-  check(readFileSync(join(home, 'Library/Application Support/dev.fabrikka.app/server-url'), 'utf8') === CORE, "it points the app at this instance, so first launch goes to sign-in");
+  check(readFileSync(join(home, 'Library/Application Support/xyz.fabrikka.app/server-url'), 'utf8') === CORE, "it points the app at this instance, so first launch goes to sign-in");
   const quarantined = await sh(`xattr -p com.apple.quarantine '${installed}'`, process.env);
   check(quarantined.code !== 0, 'the installed app carries no quarantine flag, so it opens without a Gatekeeper prompt');
   check(!existsSync(join(home, '.zshrc')) && !existsSync(join(home, '.local')), 'and it touches no PATH and installs no command-line client');

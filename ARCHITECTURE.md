@@ -67,7 +67,7 @@ So `@claude-fede investigate this` has no standard delivery mechanism. Two thing
 ### Lane A — remote HTTP endpoint (universal, pull)
 
 ```
-https://app.fabrikka.dev/mcp/o/{owner_id}/s/{session_id}
+https://app.fabrikka.xyz/mcp/o/{owner_id}/s/{session_id}
 ```
 
 `owner_id` is the owner's public slug and is validated against the session on every request — a mismatch is a 404, never a 403. It is a routing and legibility aid, never an authorization input. See `docs/protocol.md`.

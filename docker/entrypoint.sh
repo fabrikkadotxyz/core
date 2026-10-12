@@ -28,6 +28,12 @@ if [ -z "${PUBLIC_URL:-}" ]; then
   [ -n "${PUBLIC_URL:-}" ] && export PUBLIC_URL && echo "fabrikka: PUBLIC_URL is $PUBLIC_URL (from the platform)"
 fi
 
+# Render and Railway put one proxy in front: count it, so rate limits see the
+# client, not the proxy (docs/operations.md, "Behind a proxy"). Set it to be explicit.
+if [ -z "${FABRIKKA_TRUSTED_PROXIES:-}" ] && { [ -n "${RENDER_EXTERNAL_URL:-}" ] || [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; }; then
+  export FABRIKKA_TRUSTED_PROXIES=1
+fi
+
 # No key configured: generate one into the data volume once, and reuse it.
 # Losing it means reconnecting integrations, never losing a room.
 if [ -z "${FABRIKKA_ENCRYPTION_KEY:-}" ]; then

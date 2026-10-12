@@ -16,6 +16,8 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:?run ./init.sh first}
       FABRIKKA_ENCRYPTION_KEY: ${FABRIKKA_ENCRYPTION_KEY:-}
       FABRIKKA_SETUP_CODE: ${FABRIKKA_SETUP_CODE:-}
+      # Caddy is the one proxy in front (docs/operations.md, "Behind a proxy").
+      FABRIKKA_TRUSTED_PROXIES: ${FABRIKKA_TRUSTED_PROXIES:-1}
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
     volumes:

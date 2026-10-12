@@ -191,11 +191,11 @@ import {
   readHandoff,
   startFlow,
 } from './connections/oauth.ts';
-import { getConnInfo } from '@hono/node-server/conninfo';
 import { mailerFromEnv } from './mail.ts';
 import { APP_ZIP_NAME, appRelease, clientRelease, installCommand, installScript, manifest } from './client.ts';
 import { completePasswordReset, requestPasswordReset } from './password-reset.ts';
 import { rateLimit } from './rate-limit.ts';
+import { clientIp, trustedProxies } from './client-ip.ts';
 
 export interface CreateAppOptions {
   /** Deployment-specific additions: a sign-up page, for one. */
@@ -450,7 +450,7 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!mailer.configured) return c.notFound();
     const { email } = await c.req.json<{ email?: string }>().catch(() => ({}) as { email?: string });
     if (!email?.includes('@')) return c.json({ error: 'an email address is required' }, 400);
-    const ip = getConnInfo(c).remote.address ?? 'unknown';
+    const ip = clientIp(c);
     const window = 15 * 60 * 1000;
     // Both counters move on every request, so neither can be dodged by varying the other.
     const underEmail = rateLimit(`reset:email:${email.trim().toLowerCase()}`, { max: 5, windowMs: window });
@@ -2629,6 +2629,7 @@ export function createApp(options: CreateAppOptions = {}) {
       return new Promise<ReturnType<typeof serve>>((resolveStart) => {
         const server = serve({ fetch: app.fetch, port }, (info) => {
           console.log(`fabrikka server on http://localhost:${info.port}`);
+          console.log(`[rate limits] ${trustedProxies ? `client address read behind ${trustedProxies} proxy(ies) (FABRIKKA_TRUSTED_PROXIES)` : 'client address is the socket (no FABRIKKA_TRUSTED_PROXIES)'}`);
           resolveStart(server);
         });
         injectWebSocket(server);

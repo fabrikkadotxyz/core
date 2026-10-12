@@ -12,7 +12,7 @@
     "start": "tsx --env-file-if-exists=../../.env src/index.ts",
     "typecheck": "tsc --noEmit",
     "admin": "tsx --env-file-if-exists=../../.env src/cli.ts",
-    "test": "tsx src/__tests__/mentions.test.mts && tsx src/__tests__/output-text.test.mts && tsx src/__tests__/output-kinds.test.mts && tsx src/__tests__/pdf-text.test.mts && tsx src/__tests__/themes.test.mts"
+    "test": "tsx src/__tests__/mentions.test.mts && tsx src/__tests__/output-text.test.mts && tsx src/__tests__/output-kinds.test.mts && tsx src/__tests__/pdf-text.test.mts && tsx src/__tests__/themes.test.mts && tsx src/__tests__/client-ip.test.mts"
   },
   "dependencies": {
     "@fabrikka/db": "workspace:*",

@@ -75,7 +75,8 @@ const sql = (q) => run('docker', ['exec', '-i', 'fabrikka-postgres', 'psql', '-U
 const mailDir = mkdtempSync(join(tmpdir(), 'm32-mail-'));
 const deployment = spawn('npx', ['tsx', '--env-file-if-exists=../../.env', '../../scripts/fixtures/extension-server.mts'], {
   cwd: 'apps/server',
-  env: { ...process.env, PORT: String(PORT), PUBLIC_URL: DEP, FABRIKKA_MAIL: `file:${mailDir}` },
+  // As if behind one proxy, like Render or Caddy (operations.md, "Behind a proxy").
+  env: { ...process.env, PORT: String(PORT), PUBLIC_URL: DEP, FABRIKKA_MAIL: `file:${mailDir}`, FABRIKKA_TRUSTED_PROXIES: '1' },
   stdio: ['ignore', 'ignore', 'pipe'],
 });
 for (let i = 0; i < 60; i++) {
@@ -166,6 +167,15 @@ const flood = `flood-${stamp}@example.com`;
 const statuses = [];
 for (let i = 0; i < 6; i++) statuses.push((await req(DEP, '/api/auth/password-reset', { method: 'POST', body: { email: flood } })).status);
 check(statuses.slice(0, 5).every((s) => s === 200) && statuses[5] === 429, 'after five requests for one address, the sixth is refused (429)');
+
+// Behind a proxy, the client is the address the proxy saw: the rightmost entry.
+const fromProxy = (email, forwardedFor) =>
+  fetch(`${DEP}/api/auth/password-reset`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': forwardedFor }, body: JSON.stringify({ email }) }).then((r) => r.status);
+const client = `198.51.${stamp % 250}.${(stamp >> 8) % 250}`;
+const forged = [];
+for (let i = 0; i < 21; i++) forged.push(await fromProxy(`proxy-${i}-${stamp}@example.com`, `6.6.${i}.${i}, ${client}`));
+check(forged.slice(0, 20).every((s) => s === 200) && forged[20] === 429, 'BEHIND A PROXY, A CLIENT CANNOT DODGE THE PER-IP LIMIT BY FORGING X-FORWARDED-FOR');
+check((await fromProxy(`proxy-other-${stamp}@example.com`, `198.51.${(stamp % 250) + 1}.1`)) === 200, '…and another client behind the same proxy still gets through (not one shared count)');
 
 /* ----------------------------------------------------------------- cleanup */
 

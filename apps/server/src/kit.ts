@@ -11,7 +11,6 @@
  * job. In-process code is trusted; the kit is a contract, not a sandbox.
  */
 import type { Context, Hono, MiddlewareHandler } from 'hono';
-import { getConnInfo } from '@hono/node-server/conninfo';
 import { eq } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import { teamMembers, teams, users } from '@fabrikka/db';
@@ -19,6 +18,7 @@ import type { AuthUser } from '@fabrikka/types';
 import { issueCookie, openLoginSession, requireUser, type AuthEnv } from './auth.ts';
 import { ensureGeneral } from './chats.ts';
 import type { Mailer, EmailMessage } from './mail.ts';
+import { clientIp } from './client-ip.ts';
 import { rateLimit } from './rate-limit.ts';
 import { createUser } from './users.ts';
 
@@ -54,7 +54,7 @@ export interface Kit {
   sendEmail(message: EmailMessage): Promise<boolean>;
   readonly canSendEmail: boolean;
   rateLimit(key: string, opts: { max: number; windowMs: number }): boolean;
-  /** The request's peer address, for rate limits. The socket's, not a header's: behind a proxy it's the proxy's. */
+  /** The client's address, for rate limits: the socket's, or behind FABRIKKA_TRUSTED_PROXIES proxies, the one the outermost saw. */
   clientIp(c: Context): string;
   /** Tell the login page a sign-up page exists. */
   advertise(offer: { signupUrl?: string }): void;
@@ -125,7 +125,7 @@ export function createKit(opts: {
       return opts.mailer.configured;
     },
     rateLimit,
-    clientIp: (c) => getConnInfo(c).remote.address ?? 'unknown',
+    clientIp,
 
     advertise(offer) {
       if (offer.signupUrl) opts.advertised.signupUrl = offer.signupUrl;

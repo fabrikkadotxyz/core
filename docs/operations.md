@@ -55,6 +55,8 @@ generated setup code. There's nothing to fill in.
   generated key wouldn't survive a deploy.
 - `PUBLIC_URL` is taken from Render (`RENDER_EXTERNAL_URL`). Set it yourself
   when you add a custom domain.
+- `FABRIKKA_TRUSTED_PROXIES` is 1 (Render's proxy), set by the image. See
+  *Behind a proxy*.
 - GitHub needs its OAuth App's two keys added to the service's environment,
   as on any instance.
 - The image starts as root only to take over the disk Render mounts, then runs
@@ -75,7 +77,8 @@ generated setup code. There's nothing to fill in.
      - `FABRIKKA_SETUP_CODE` = a long random value; Railway's *Generate*
        button makes one.
    - **Settings → Networking → Generate Domain.** The image takes
-     `PUBLIC_URL` from `RAILWAY_PUBLIC_DOMAIN`.
+     `PUBLIC_URL` from `RAILWAY_PUBLIC_DOMAIN`, and counts Railway's proxy
+     (`FABRIKKA_TRUSTED_PROXIES=1`, *Behind a proxy*).
    - **Attach a volume** at `/data`, for uploads and the generated encryption
      key. Without one, both are lost on every deploy.
 4. Open the domain, then **Create owner** with the setup code.
@@ -328,8 +331,10 @@ register itself (Atlassian, Grafana Cloud). **GitHub doesn't**, so it appears
 only once the instance has a GitHub OAuth App:
 
 1. GitHub → Settings → Developer settings → **OAuth Apps → New OAuth App**.
-2. Homepage URL: your `PUBLIC_URL`. Authorization callback URL:
-   `<PUBLIC_URL>/api/connections/oauth/callback`.
+2. Homepage URL: your `PUBLIC_URL`. Redirect URI (older forms call it the
+   Authorization callback URL): `<PUBLIC_URL>/api/connections/oauth/callback`.
+   Leave wildcard matching and Device Flow off. *Expire user access tokens*
+   can stay on: Fabrikka renews them with the refresh token.
 3. Register, then **Generate a new client secret**.
 4. In `.env`: `GITHUB_OAUTH_CLIENT_ID=…` and `GITHUB_OAUTH_CLIENT_SECRET=…`.
    Restart the server.
@@ -498,6 +503,29 @@ All durable state is in Postgres. Artifacts (M7) add object storage.
 docker compose -f docker/docker-compose.yml exec postgres \
   pg_dump -U fabrikka fabrikka > fabrikka-$(date +%F).sql
 ```
+
+## Behind a proxy
+
+Rate limits (password reset, a deployment's sign-up) count per
+client address. Behind a reverse proxy, every request comes from the proxy, so
+without telling the server, everyone shares one count: one person's flood
+refuses everyone.
+
+`FABRIKKA_TRUSTED_PROXIES` is **how many proxies sit in front** of the server.
+The client is then the address the outermost of them saw, read from
+`X-Forwarded-For`. Entries further left are ignored, because anyone can write
+them.
+
+| Where | Value | Set by |
+| --- | --- | --- |
+| A checkout, or `docker run` with no proxy | `0` (the default) | — |
+| Self-hosted with Docker (Caddy in front) | `1` | `docker/selfhost/compose.yaml` |
+| Render, Railway | `1` | the image, when it sees the platform |
+| Any of these with Cloudflare's proxy in front | one more | you |
+
+Too high, and anyone can choose their own address by sending the header, which
+dodges the limits. Too low, and everyone shares one. The log prints the value at
+start.
 
 ## Ports
 

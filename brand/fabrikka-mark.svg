@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="238 12 547 547" fill="currentColor" role="img" aria-label="Fabrikka">
+  <title>Fabrikka</title>
+  <defs>
+    <!-- The puzzle cuts: three pieces of one factory, joined. Cut out of the
+         silhouette, so the mark is one colour on any background. -->
+    <mask id="fabrikka-cuts" maskUnits="userSpaceOnUse" x="238" y="12" width="547" height="547">
+      <rect x="238" y="12" width="547" height="547" fill="#fff"/>
+      <g fill="none" stroke="#000" stroke-width="10" stroke-linejoin="round">
+        <path d="M413 180 V370 C413 381 424 382 431 375 A33 33 0 1 1 431 429 C424 422 413 423 413 434 V520"/>
+        <path d="M610 180 V370 C610 381 621 382 628 375 A33 33 0 1 1 628 429 C621 422 610 423 610 434 V520"/>
+      </g>
+    </mask>
+  </defs>
+  <path mask="url(#fabrikka-cuts)" d="M248 208 L368 296 V208 L488 296 V208 L605 296 H648 L668 68 H737 L757 296 H775 V503 H248 Z"/>
+</svg>

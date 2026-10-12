@@ -541,7 +541,10 @@ fn build_tray(app: &AppHandle) -> tauri::Result<MenuItem<Wry>> {
             }
             _ => {}
         });
-    if let Some(icon) = app.default_window_icon() {
+    // The bare mark, as a template image: macOS tints it to match the menu bar.
+    if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png")) {
+        tray = tray.icon(icon).icon_as_template(true);
+    } else if let Some(icon) = app.default_window_icon() {
         tray = tray.icon(icon.clone());
     }
     tray.build(app)?;

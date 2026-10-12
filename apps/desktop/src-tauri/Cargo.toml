@@ -12,7 +12,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # M34 (ADR 0031): the tray; the host as a sidecar; the native folder picker;
 # start at login; one running app at a time.
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-autostart = "2"

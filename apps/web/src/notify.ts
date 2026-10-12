@@ -73,36 +73,35 @@ export function showTotal(total: number): void {
 }
 
 let plainIcon: string | null = null;
-/** A dot on the tab's icon, drawn over whatever icon the page has. */
+let mark: HTMLImageElement | null = null;
+/** A dot on the tab's icon: the Fabrikka mark, with Burnt Peach in its corner. */
 function setFaviconDot(on: boolean): void {
-  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"][type="image/svg+xml"]') ?? document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!link) {
     link = document.createElement('link');
     link.rel = 'icon';
     document.head.appendChild(link);
   }
-  if (plainIcon === null) plainIcon = link.href || '';
+  if (plainIcon === null) plainIcon = link.getAttribute('href') ?? '/favicon.svg';
   if (!on) {
-    if (plainIcon) link.href = plainIcon;
-    else link.removeAttribute('href');
+    link.href = plainIcon;
     return;
   }
-  const c = document.createElement('canvas');
-  c.width = c.height = 32;
-  const g = c.getContext('2d');
-  if (!g) return;
-  g.fillStyle = '#3d5a80';
-  g.beginPath();
-  g.roundRect?.(2, 2, 28, 28, 7);
-  g.fill();
-  g.fillStyle = '#ffffff';
-  g.font = 'bold 18px system-ui, sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText('M', 16, 17);
-  g.fillStyle = '#ee6c4d';
-  g.beginPath();
-  g.arc(25, 7, 7, 0, Math.PI * 2);
-  g.fill();
-  link.href = c.toDataURL('image/png');
+  const target = link;
+  const draw = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    if (!g || !mark) return;
+    g.drawImage(mark, 0, 0, 64, 64);
+    g.fillStyle = '#ee6c4d';
+    g.beginPath();
+    g.arc(50, 14, 13, 0, Math.PI * 2);
+    g.fill();
+    target.href = c.toDataURL('image/png');
+  };
+  if (mark?.complete) return draw();
+  mark = new Image();
+  mark.onload = draw;
+  mark.src = '/favicon.svg';
 }

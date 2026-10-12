@@ -2589,6 +2589,11 @@ export function createApp(options: CreateAppOptions = {}) {
 
   if (existsSync(WEB_DIST)) {
     app.use('/assets/*', serveStatic({ root: relative(process.cwd(), WEB_DIST) }));
+    // The icons and manifest at the site root (brand/README.md). Named one by one,
+    // so nothing else in the build becomes reachable by accident.
+    for (const file of ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'site.webmanifest']) {
+      app.get(`/${file}`, serveStatic({ root: relative(process.cwd(), WEB_DIST), path: file }));
+    }
 
     // SPA fallback: every non-API path returns index.html so client-side routes
     // like /o/fede/s/demo work on a hard refresh.

@@ -47,5 +47,10 @@ if [ -z "${FABRIKKA_ENCRYPTION_KEY:-}" ]; then
   export FABRIKKA_ENCRYPTION_KEY
 fi
 
+# A deployment that extends the core (docs/operations.md) passes its own start
+# command; with none, start the core's own server.
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
 cd /app/apps/server
 exec ./node_modules/.bin/tsx src/index.ts

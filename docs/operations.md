@@ -192,6 +192,12 @@ tables and pages, and starts it. A sign-up page for a hosted instance is built
 that way. The kit an extension may use is listed in
 `docs/protocol.md`. Everything else in the core is internal.
 
+**Its image** can reuse the core's entrypoint (`docker/entrypoint.sh`), which
+prepares `/data`, the encryption key, `PUBLIC_URL` and the proxy count. Given a
+command, the entrypoint runs that command as the unprivileged user instead of
+the core's own server: `ENTRYPOINT ["fabrikka-entrypoint"]` with
+`CMD ["your-start-script"]`. With no command, it starts the core.
+
 ## The license, and your source
 
 Fabrikka is licensed **AGPL-3.0-only** ([ADR 0034](decisions/0034-license-agpl-3.0.md)).

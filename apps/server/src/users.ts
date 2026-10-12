@@ -4,6 +4,7 @@
  * Shared by the HTTP signup route and the admin CLI so the two cannot disagree
  * about how an account is made. See docs/operations.md.
  */
+import { checkNewAccount } from './gates.ts';
 import { asc, eq } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import { hashPassword, users } from '@fabrikka/db';
@@ -12,7 +13,8 @@ import { logoutAll } from './auth.ts';
 
 export type CreateUserResult =
   | { ok: true; user: AuthUser }
-  | { ok: false; error: string };
+  /** `refused`: a deployment's account check said no (ADR 0041). */
+  | { ok: false; error: string; refused?: boolean };
 
 export async function createUser(
   db: Database,
@@ -23,6 +25,12 @@ export async function createUser(
     isInstanceOwner?: boolean;
     /** Only a deployment that verified the address says so (ADR 0029). */
     emailVerified?: boolean;
+    /**
+     * False only for the operator's command line, which a deployment's account
+     * checks never stop (ADR 0041). Everywhere else, call this inside a
+     * transaction, so the check and the insert are one step.
+     */
+    guarded?: boolean;
   },
 ): Promise<CreateUserResult> {
   const email = input.email.trim().toLowerCase();
@@ -40,6 +48,11 @@ export async function createUser(
     .where(eq(users.email, email))
     .limit(1);
   if (existing) return { ok: false, error: 'that email is already registered' };
+
+  if (input.guarded !== false) {
+    const refusal = await checkNewAccount(db);
+    if (refusal) return { ok: false, error: refusal, refused: true };
+  }
 
   const [row] = await db
     .insert(users)

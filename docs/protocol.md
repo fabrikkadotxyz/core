@@ -885,9 +885,23 @@ serve its own pages as well as its own `/api/<name>/…` routes.
 | `rateLimit(key, { max, windowMs })` | `true` while under the limit. In memory, per process. |
 | `clientIp(c)` | The client's address, for rate limits. The socket's, or, with `FABRIKKA_TRUSTED_PROXIES` set, the address the outermost trusted proxy saw, or the platform's own client header (`FABRIKKA_CLIENT_IP_HEADER`) (`docs/operations.md`, *Behind a proxy*). |
 | `advertise({ signupUrl })` | The login page then offers *Create an account*, linking there. |
+| `guardNewAccounts(check)` | `check({ accounts })` runs before every account the core creates (the kit's, an invite's sign-up, `/setup`), never the operator's `admin create-user`. Return `null` to allow, or a sentence to refuse with: the person sees it. Counted and created under one lock, so two can't take the last place ([ADR 0041](decisions/0041-a-deployment-can-gate-accounts-and-team-writes.md)). |
+| `guardWrites(check)` | `check({ userId, teamId, ownerUserId, action })` runs before a write in a room or team: messages, rooms, agents and their runs, uploads, context, outputs, integrations, invites and members, and MCP tools that write. `teamId` is null for a room outside any team. Return `null`, or `{ reason, url? }` to refuse: see *Refused writes* below. Never asked for reading, marking read, notification settings, pausing, revoking, leaving or removing anything. |
+| `teamNotice(provide)` | `provide({ teamId, userId })` returns `null` or `{ text, url?, tone: 'info' \| 'attention' }`, shown as a bar above the team's rooms. Plain text up to 160 characters; `url` an `http(s)` URL or a path on the instance. |
+| `onTeamMembersChanged(listener)` | `listener({ teamId, members })` after a team gains or loses a member, or is created, once the change has committed. Never blocks it; a failure is logged. |
+| `team(teamId)` | `{ id, name, createdAt, createdByUserId, members }` or null. |
+| `teamRole(teamId, userId)` | `'owner'`, `'member'` or null. |
 
 `GET /api/auth/options` returns what the login page should offer:
 `{ passwordReset: boolean, signupUrl: string | null }`.
+
+**Refused writes.** When a deployment's write check refuses, the API answers
+**402 Payment Required** with `{ error, url, gated: true }`: the deployment's
+sentence and where to go about it. The web app shows both. Over MCP, the tool
+call returns an error whose text starts `Refused:` and carries the same
+sentence and link, so an agent can tell its human why it stopped. Starting an
+agent run (`/bridge/…/run-token`) answers 402 the same way. A core with no
+extension never answers 402.
 
 ## Presence
 

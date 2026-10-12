@@ -7,4 +7,5 @@ export { createApp, type CreateAppOptions } from './app.ts';
 export type { Extension, Kit, NewAccountResult } from './kit.ts';
 export type { AuthEnv, AuthUser } from './auth.ts';
 export type { EmailMessage } from './mail.ts';
+export type { AccountCheck, MembersListener, NoticeProvider, Refusal, TeamNotice, WriteCheck, WriteContext } from './gates.ts';
 export type { CatalogueEntry, CatalogueField, Category } from './connections/catalogue/types.ts';

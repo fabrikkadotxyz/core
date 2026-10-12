@@ -102,6 +102,8 @@ try {
         password,
         displayName: name,
         isInstanceOwner,
+        // The operator's own command: a deployment's account cap doesn't apply (ADR 0041).
+        guarded: false,
       });
       if (!result.ok) die(result.error);
 

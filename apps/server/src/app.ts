@@ -18,7 +18,7 @@ import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { createClient, isEncryptionConfigured, runMigrations } from '@fabrikka/db';
+import { createClient, isEncryptionConfigured, runMigrations, type Database } from '@fabrikka/db';
 import type {
   LoginBody,
   NotifySetting,
@@ -196,6 +196,7 @@ import { APP_ZIP_NAME, appRelease, clientRelease, installCommand, installScript,
 import { completePasswordReset, requestPasswordReset } from './password-reset.ts';
 import { rateLimit } from './rate-limit.ts';
 import { clientIp, clientIpHeader, trustedProxies } from './client-ip.ts';
+import { checkWrite, membersChanged, noticeFor, roomScope, roomScopeByPublicId, writesGuarded } from './gates.ts';
 
 export interface CreateAppOptions {
   /** Deployment-specific additions: a sign-up page, for one. */
@@ -492,15 +493,19 @@ export function createApp(options: CreateAppOptions = {}) {
       return c.json({ error: 'this invite is for a different email address' }, 403);
     }
 
-    const created = await createUser(db, {
-      email: body.email,
-      password: body.password,
-      displayName: body.displayName,
-    });
-    if (!created.ok) return c.json({ error: created.error }, 409);
+    // In a transaction, so a deployment's account check and the insert are one step (ADR 0041).
+    const created = await db.transaction((tx) =>
+      createUser(tx as unknown as Database, {
+        email: body.email,
+        password: body.password,
+        displayName: body.displayName,
+      }),
+    );
+    if (!created.ok) return c.json({ error: created.error }, created.refused ? 403 : 409);
 
     const redeemed = await redeemInvite(db, body.token, created.user);
     if (!redeemed.ok) return c.json({ error: `invite ${redeemed.reason}` }, 400);
+    if (redeemed.team) membersChanged(db, redeemed.team.id);
 
     const token = await login(db, body.email, body.password);
     if (token) issueCookie(c, token, SECURE_COOKIES);
@@ -524,6 +529,7 @@ export function createApp(options: CreateAppOptions = {}) {
   app.post('/api/invites/:token/redeem', requireUser(db), async (c) => {
     const result = await redeemInvite(db, c.req.param('token'), c.get('user'));
     if (!result.ok) return c.json({ error: result.reason }, 400);
+    if (result.team) membersChanged(db, result.team.id);
     return c.json({ session: result.session, team: result.team });
   });
 
@@ -535,12 +541,28 @@ export function createApp(options: CreateAppOptions = {}) {
     c.json(await listSessionsForUser(db, c.get('user').id)),
   );
 
+  /**
+   * ADR 0041: a deployment's write check, answered 402 with its reason and link.
+   * Null when the write may go ahead (always, when no check is registered).
+   */
+  async function gateWrite(
+    c: Context<AuthEnv>,
+    scope: { teamId: string | null; ownerUserId: string },
+    action: string,
+  ): Promise<Response | null> {
+    if (!writesGuarded()) return null;
+    const refusal = await checkWrite({ userId: c.get('user').id, ...scope, action });
+    return refusal ? c.json({ error: refusal.reason, url: refusal.url ?? null, gated: true }, 402) : null;
+  }
+
   app.post('/api/sessions', requireUser(db), async (c) => {
     const { title, teamId, templateRef } = await c.req.json<{ title?: string; teamId?: string; templateRef?: string }>();
     const trimmed = title?.trim();
     if (!trimmed) return c.json({ error: 'title is required' }, 400);
     // A team you aren't on is indistinguishable from one that doesn't exist.
     if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such team' }, 404);
+    const gated = await gateWrite(c, { teamId: teamId ?? null, ownerUserId: c.get('user').id }, 'room');
+    if (gated) return gated;
 
     // M25: a template you can't use is indistinguishable from one that doesn't exist.
     const template = templateRef ? await findTemplate(db, c.get('user').id, templateRef) : null;
@@ -562,13 +584,17 @@ export function createApp(options: CreateAppOptions = {}) {
     const mine = await listTeamsForUser(db, c.get('user').id);
     // Teams from before M29 get their #general the first time anyone looks.
     for (const t of mine) await ensureGeneral(db, t.id);
-    return c.json(mine);
+    // ADR 0041: a deployment's notice on each team, when it gives one.
+    const withNotices = await Promise.all(mine.map(async (t) => ({ ...t, notice: await noticeFor(t.id, c.get('user').id) })));
+    return c.json(withNotices);
   });
 
   app.post('/api/teams', requireUser(db), async (c) => {
     const { name } = await c.req.json<{ name?: string }>().catch(() => ({ name: undefined }));
     try {
-      return c.json(await createTeam(db, c.get('user').id, name ?? ''), 201);
+      const team = await createTeam(db, c.get('user').id, name ?? '');
+      membersChanged(db, team.id);
+      return c.json(team, 201);
     } catch (err) {
       if (err instanceof TeamError) return c.json({ error: err.message }, 400);
       throw err;
@@ -589,6 +615,8 @@ export function createApp(options: CreateAppOptions = {}) {
   app.post('/api/teams/:id/invites', requireUser(db), async (c) => {
     const teamId = c.req.param('id');
     if ((await teamRole(db, teamId, c.get('user').id)) !== 'owner') return c.notFound();
+    const gated = await gateWrite(c, { teamId, ownerUserId: c.get('user').id }, 'invite');
+    if (gated) return gated;
     const body = await c.req.json<{ invitedEmail?: string; role?: string }>().catch(() => ({}) as { invitedEmail?: string; role?: string });
     const { summary, token } = await createInvite(db, {
       teamId,
@@ -619,6 +647,7 @@ export function createApp(options: CreateAppOptions = {}) {
       if (err instanceof TeamError) return c.json({ error: err.message }, 409);
       throw err;
     }
+    membersChanged(db, teamId);
     return c.json({ ok: true });
   });
 
@@ -812,6 +841,8 @@ export function createApp(options: CreateAppOptions = {}) {
     const role = await teamRole(db, teamId, c.get('user').id);
     if (!role) return c.notFound();
     if (role !== 'owner') return c.json({ error: 'only team owners can add team integrations' }, 403);
+    const gated = await gateWrite(c, { teamId, ownerUserId: c.get('user').id }, 'integration');
+    if (gated) return gated;
     const body = await c.req.json<{ slug?: string; label?: string; url?: string; credential?: string }>();
     if (!body.slug || !body.url) return c.json({ error: 'slug and url are required' }, 400);
     const saved = await saveTeamConnection(db, { teamId, userId: c.get('user').id, slug: body.slug, label: body.label, url: body.url, credential: body.credential });
@@ -837,6 +868,8 @@ export function createApp(options: CreateAppOptions = {}) {
   app.post('/api/teams/:id/chats', requireUser(db), async (c) => {
     const teamId = c.req.param('id');
     if (!(await teamRole(db, teamId, c.get('user').id))) return c.notFound();
+    const gatedChat = await gateWrite(c, { teamId, ownerUserId: c.get('user').id }, 'room');
+    if (gatedChat) return gatedChat;
     const { name } = await c.req.json<{ name?: string }>().catch(() => ({ name: undefined }));
     try {
       return c.json(await createChat(db, { teamId, userId: c.get('user').id, name: name ?? '' }), 201);
@@ -901,6 +934,41 @@ export function createApp(options: CreateAppOptions = {}) {
   const sessionRoutes = new Hono<AuthEnv>();
 
   sessionRoutes.use('*', requireUser(db));
+
+  /**
+   * ADR 0041: every write in a room asks the deployment's write check first.
+   * Default-deny: anything not listed as exempt is a write. Exempt is what a
+   * gated team must still be able to do: mark read, set notifications, pause
+   * agents, revoke, leave, and remove things.
+   */
+  const NEVER_GATED: [string, RegExp][] = [
+    ['POST', /^\/seen$/],
+    ['PUT', /^\/notify$/],
+    ['POST', /^\/pause$/],
+    ['POST', /^\/tokens\/[^/]+\/revoke$/],
+    ['POST', /^\/invites\/[^/]+\/revoke$/],
+  ];
+  const ACTIONS: [RegExp, string][] = [
+    [/^\/messages/, 'message'],
+    [/^\/agents|^\/tokens|^\/pause/, 'agent'],
+    [/^\/artifacts/, 'upload'],
+    [/^\/context|^\/links/, 'context'],
+    [/^\/outputs/, 'output'],
+    [/^\/integrations/, 'integration'],
+    [/^\/invites|^\/members|^\/guests|^\/team/, 'member'],
+  ];
+  sessionRoutes.use('*', async (c, next) => {
+    const method = c.req.method;
+    if (method === 'GET' || method === 'HEAD' || !writesGuarded()) return next();
+    const sub = c.req.path.replace(/^\/api\/o\/[^/]+\/s\/[^/]+/, '') || '/';
+    // Removing is never gated, except DELETE /pause, which resumes agents.
+    if (method === 'DELETE' && sub !== '/pause') return next();
+    if (NEVER_GATED.some(([m, re]) => m === method && re.test(sub))) return next();
+    const scope = await roomScopeByPublicId(db, c.req.param('session') ?? '');
+    if (!scope) return next(); // The route answers 404 itself.
+    const action = ACTIONS.find(([re]) => re.test(sub))?.[1] ?? 'room';
+    return (await gateWrite(c, scope, action)) ?? next();
+  });
 
   sessionRoutes.get('/', async (c) => {
     // Readable by viewers (M22) — but a viewer's view leaves out the member list
@@ -2154,6 +2222,13 @@ export function createApp(options: CreateAppOptions = {}) {
       actor.participantKind !== 'agent'
     ) {
       return c.notFound();
+    }
+
+    // ADR 0041: a gated room starts no new agent runs.
+    if (writesGuarded()) {
+      const scope = await roomScope(db, actor.sessionId);
+      const refusal = scope && (await checkWrite({ userId: actor.agent?.ownerUserId ?? null, ...scope, action: 'agent-run' }));
+      if (refusal) return c.json({ error: refusal.reason, url: refusal.url ?? null, gated: true }, 402);
     }
 
     const minted = await issueRunToken(db, {

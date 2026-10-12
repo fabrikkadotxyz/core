@@ -527,6 +527,15 @@ export interface TeamSummary {
   name: string;
   role: TeamRole;
   memberCount: number;
+  /** A deployment's notice on this team (ADR 0041), e.g. a limit it set. */
+  notice?: TeamNotice | null;
+}
+
+/** Short plain text, an optional link (a path on the instance, or http(s)), and a tone. */
+export interface TeamNotice {
+  text: string;
+  url?: string;
+  tone: 'info' | 'attention';
 }
 
 export interface TeamMember {

@@ -13,6 +13,7 @@
 import type { StandardSchemaWithJSON } from '@modelcontextprotocol/server';
 import { createMcpHandler, fromJsonSchema, McpServer } from '@modelcontextprotocol/server';
 import { createMcpHonoApp } from '@modelcontextprotocol/hono';
+import { checkWrite, roomScope, writesGuarded } from './gates.ts';
 import { z } from 'zod';
 import { LINK_TYPES } from '@fabrikka/types';
 import type { Database } from '@fabrikka/db';
@@ -177,7 +178,35 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
    * misconfigured token becomes obvious in one call instead of after a
    * confusing write.
    */
-  server.registerTool(
+  /**
+   * ADR 0041: the tools that write ask the deployment's write check first. A
+   * refusal is a tool error with the reason, so the agent can tell its human
+   * why it stopped. Reading tools are never gated.
+   */
+  const WRITES = new Set(['update_session_context', 'create_artifact', 'link', 'edit_output', 'create_output', 'post_message']);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const registerTool = ((name: string, config: any, cb: (...args: any[]) => any) =>
+    server.registerTool(
+      name,
+      config,
+      WRITES.has(name)
+        ? async (...args: unknown[]) => {
+            if (writesGuarded()) {
+              const scope = await roomScope(db, actor.sessionId);
+              const refusal = scope && (await checkWrite({ userId: actor.agent?.ownerUserId ?? null, ...scope, action: name === 'post_message' ? 'message' : 'context' }));
+              if (refusal) {
+                return {
+                  isError: true,
+                  content: [{ type: 'text' as const, text: `Refused: ${refusal.reason}${refusal.url ? ` (${refusal.url})` : ''}` }],
+                };
+              }
+            }
+            return cb(...args);
+          }
+        : cb,
+    )) as typeof server.registerTool;
+
+  registerTool(
     'whoami',
     {
       title: 'Who am I',
@@ -202,7 +231,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
       }),
   );
 
-  server.registerTool(
+  registerTool(
     'get_session_context',
     {
       title: 'Get session context',
@@ -214,7 +243,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
     async () => text(await getSessionContext(db, actor.sessionId)),
   );
 
-  server.registerTool(
+  registerTool(
     'update_session_context',
     {
       title: 'Update session context',
@@ -281,7 +310,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
     },
   );
 
-  server.registerTool(
+  registerTool(
     'list_artifacts',
     {
       title: 'List artifacts',
@@ -305,7 +334,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
     },
   );
 
-  server.registerTool(
+  registerTool(
     'read_artifact',
     {
       title: 'Read an artifact',
@@ -367,7 +396,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
     },
   );
 
-  server.registerTool(
+  registerTool(
     'create_artifact',
     {
       title: 'Create an artifact',
@@ -404,7 +433,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
 
   /* ---- links (M19): what the session is about, outside it. ---- */
 
-  server.registerTool(
+  registerTool(
     'list_links',
     {
       title: 'List links',
@@ -417,7 +446,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
     async (args) => text(await listLinks(db, actor.sessionId, args.type)),
   );
 
-  server.registerTool(
+  registerTool(
     'link',
     {
       title: 'Link something to the session',
@@ -440,7 +469,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'unlink',
     {
       title: 'Unlink',
@@ -456,7 +485,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
 
   /* ---- outputs (M12): live documents. One set of tools for every kind. ---- */
 
-  server.registerTool(
+  registerTool(
     'list_outputs',
     {
       title: 'List outputs',
@@ -479,7 +508,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'read_output',
     {
       title: 'Read an output',
@@ -515,7 +544,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
       }),
   );
 
-  server.registerTool(
+  registerTool(
     'edit_output',
     {
       title: 'Edit an output',
@@ -585,7 +614,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
       }),
   );
 
-  server.registerTool(
+  registerTool(
     'list_comments',
     {
       title: 'List comments on an output',
@@ -606,7 +635,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'create_output',
     {
       title: 'Create an output',
@@ -636,7 +665,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
       }),
   );
 
-  server.registerTool(
+  registerTool(
     'list_participants',
     {
       title: 'List participants',
@@ -657,7 +686,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
     },
   );
 
-  server.registerTool(
+  registerTool(
     'read_messages',
     {
       title: 'Read messages',
@@ -714,7 +743,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
     },
   );
 
-  server.registerTool(
+  registerTool(
     'post_message',
     {
       title: 'Post a message',

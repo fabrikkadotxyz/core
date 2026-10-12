@@ -1856,6 +1856,35 @@ on is one-time.
 
 **Clicks:** a reset, **2** from the login page.
 
+## M46 — A deployment can gate new accounts and a team's writes
+
+> A deployment that opens sign-up must be able to say no (an operator's
+> capacity cap, a suspended organization) and say why, without the core
+> learning its rules. [ADR 0041](decisions/0041-a-deployment-can-gate-accounts-and-team-writes.md):
+> four optional kit additions. With none registered, nothing changes.
+
+- **`guardNewAccounts`:** before every account the core creates (the kit's, an
+  invite's sign-up, `/setup`), never the operator's CLI. Checked and created
+  under one lock.
+- **`guardWrites`:** before writes in a room or team, from the web app, over
+  MCP, and when an agent run starts. Refused with **402** and the
+  deployment's reason and link. Never: reading, marking read, notifications,
+  pausing, revoking, leaving, removing.
+- **`teamNotice`:** a bar above the team's rooms. A 402 shows in the same bar.
+- **`onTeamMembersChanged`:** a team's new size after joins, leaves and
+  creation. Plus `team()` and `teamRole()`.
+
+**Test.** With a deployment that caps accounts and gates one team:
+1. At the cap, signing up through a team invite is refused with the
+   deployment's sentence, and no account is made. The CLI still makes one.
+2. In the gated team's room, sending a message shows the bar with the reason
+   and its link: **0 extra clicks** to see why, **1** to go there. Reading,
+   leaving and removing still work.
+3. An agent in that room gets a tool error starting `Refused:` from
+   `post_message`, and can still `read_messages`.
+4. The other team, ungated, works as before, and shows its notice.
+5. Without the deployment (the core alone), none of this exists.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

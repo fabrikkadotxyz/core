@@ -19,6 +19,7 @@ import { issueCookie, openLoginSession, requireUser, type AuthEnv } from './auth
 import { ensureGeneral } from './chats.ts';
 import type { Mailer, EmailMessage } from './mail.ts';
 import { clientIp } from './client-ip.ts';
+import { membersChanged, register, teamInfo, teamRoleOf, type AccountCheck, type MembersListener, type NoticeProvider, type WriteCheck } from './gates.ts';
 import { rateLimit } from './rate-limit.ts';
 import { createUser } from './users.ts';
 
@@ -58,6 +59,20 @@ export interface Kit {
   clientIp(c: Context): string;
   /** Tell the login page a sign-up page exists. */
   advertise(offer: { signupUrl?: string }): void;
+
+  /* ADR 0041: where a deployment may say no, explain, and listen. */
+  /** Before every account the core creates, except the operator's CLI. Null allows; a sentence refuses. */
+  guardNewAccounts(check: AccountCheck): void;
+  /** Before a write in a room or team. Null allows; `{ reason, url? }` refuses with 402. */
+  guardWrites(check: WriteCheck): void;
+  /** A short notice on a team, shown above its rooms. */
+  teamNotice(provide: NoticeProvider): void;
+  /** After a team's membership changed, with its new size. */
+  onTeamMembersChanged(listener: MembersListener): void;
+  /** A team's basics, or null. */
+  team(teamId: string): Promise<{ id: string; name: string; createdAt: Date; createdByUserId: string | null; members: number } | null>;
+  /** Someone's role in a team, or null. */
+  teamRole(teamId: string, userId: string): Promise<'owner' | 'member' | null>;
 }
 
 /** What extensions advertised, for GET /api/auth/options. */
@@ -107,6 +122,7 @@ export function createKit(opts: {
         });
         // Every team starts with #general (M29), outside the transaction like createTeam.
         await ensureGeneral(db, created.team.id);
+        membersChanged(db, created.team.id);
         return { ok: true, ...created };
       } catch (err) {
         if (err instanceof KitError) return { ok: false, error: err.message };
@@ -130,6 +146,13 @@ export function createKit(opts: {
     advertise(offer) {
       if (offer.signupUrl) opts.advertised.signupUrl = offer.signupUrl;
     },
+
+    guardNewAccounts: register.account,
+    guardWrites: register.write,
+    teamNotice: register.notice,
+    onTeamMembersChanged: register.members,
+    team: (teamId) => teamInfo(db, teamId),
+    teamRole: (teamId, userId) => teamRoleOf(db, teamId, userId),
   };
 }
 

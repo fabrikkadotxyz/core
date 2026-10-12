@@ -75,6 +75,11 @@ async function call<T>(
   if (!res.ok) {
     const message =
       (json as { error?: string } | undefined)?.error ?? `request failed (${res.status})`;
+    // ADR 0041: a deployment refused a write. Tell the shell, which shows why and where to go.
+    if (res.status === 402) {
+      const url = (json as { url?: string | null } | undefined)?.url ?? undefined;
+      window.dispatchEvent(new CustomEvent('fabrikka:gated', { detail: { text: message, url } }));
+    }
     throw new ApiError(res.status, message);
   }
   return json as T;

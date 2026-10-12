@@ -97,6 +97,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const side = useSidebarWidth();
   const location = useLocation();
   const { sessions, team, selectTeam, refresh } = useWorkspace();
+  // ADR 0041: the last write a deployment refused, shown until dismissed.
+  const [gated, setGated] = useState<{ text: string; url?: string } | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setGated((e as CustomEvent<{ text: string; url?: string }>).detail);
+    window.addEventListener('fabrikka:gated', on);
+    return () => window.removeEventListener('fabrikka:gated', on);
+  }, []);
+  const notice = gated ? { ...gated, tone: 'attention' as const } : (team?.notice ?? null);
 
   // Navigating is a good moment to refresh the lists (a new message moves a
   // session up), and opening another team's session switches team, the way a
@@ -120,6 +128,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         <button className="shell-menu" aria-label="Open menu" onClick={() => setDrawer(true)}>
           ☰
         </button>
+        {notice && (
+          <div className={`team-notice ${notice.tone}`} role="status">
+            {notice.url ? <a href={notice.url}>{notice.text}</a> : <span>{notice.text}</span>}
+            {gated && (
+              <button className="team-notice-close" aria-label="Dismiss" onClick={() => setGated(null)}>
+                ×
+              </button>
+            )}
+          </div>
+        )}
         {children}
       </div>
     </div>

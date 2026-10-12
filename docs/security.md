@@ -538,6 +538,16 @@ theme is CSS that every person on the instance may load.
 | A theme hides or relabels a warning or trust label | Not preventable by checking CSS. Themes are installed by the operator, like any change to the instance; people only choose among them. `docs/themes.md` tells operators so. Built-in themes are reviewed like code. |
 | A saved theme choice names something odd | `PUT /api/me/theme` accepts only an id the instance offers, or `system`, or null. |
 
+## Email over SMTP (M45)
+
+[ADR 0040](decisions/0040-email-goes-out-over-smtp.md).
+
+- **No credentials or mail over plain text** to another machine: `smtp://`
+  requires STARTTLS, and plain SMTP is allowed only to localhost.
+- **The SMTP URL holds a password,** like `DATABASE_URL`: it's an environment
+  variable, never stored in the database, and never logged. Start-up and
+  failure messages name the host, never the URL.
+
 ## Declined capabilities
 
 **Permission relay** (`claude/channel/permission`). Claude Code can forward tool-approval prompts to a channel so they can be answered remotely. We do **not** declare this capability: anyone able to reply through the channel could approve tool use in the owner's session, which in a multi-participant room is a straightforward privilege escalation. Revisit only with per-participant verdict attribution.

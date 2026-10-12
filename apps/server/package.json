@@ -15,17 +15,18 @@
     "test": "tsx src/__tests__/mentions.test.mts && tsx src/__tests__/output-text.test.mts && tsx src/__tests__/output-kinds.test.mts && tsx src/__tests__/pdf-text.test.mts && tsx src/__tests__/themes.test.mts"
   },
   "dependencies": {
+    "@fabrikka/db": "workspace:*",
+    "@fabrikka/types": "workspace:*",
     "@hono/node-server": "^1.19.17",
     "@hono/node-ws": "^1.3.1",
     "@modelcontextprotocol/client": "2.1.0",
     "@modelcontextprotocol/hono": "2.0.1",
     "@modelcontextprotocol/server": "2.1.0",
-    "@fabrikka/db": "workspace:*",
-    "@fabrikka/types": "workspace:*",
     "diff": "^9.0.0",
     "drizzle-orm": "0.45.3",
     "hono": "^4.13.9",
     "lib0": "^0.2.119",
+    "nodemailer": "^6.10.1",
     "pdfjs-dist": "^6.3.289",
     "tsx": "^4.23.15",
     "y-protocols": "^1.0.7",
@@ -34,6 +35,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/nodemailer": "^6.4.24",
     "typescript": "^7.0.2"
   }
 }

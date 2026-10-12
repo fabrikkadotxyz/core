@@ -53,6 +53,12 @@ importers:
 
   apps/server:
     dependencies:
+      '@fabrikka/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@fabrikka/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@hono/node-server':
         specifier: ^1.19.17
         version: 1.19.17(hono@4.13.9)
@@ -68,12 +74,6 @@ importers:
       '@modelcontextprotocol/server':
         specifier: 2.1.0
         version: 2.1.0
-      '@fabrikka/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@fabrikka/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       diff:
         specifier: ^9.0.0
         version: 9.0.0
@@ -86,6 +86,9 @@ importers:
       lib0:
         specifier: ^0.2.119
         version: 0.2.119
+      nodemailer:
+        specifier: ^6.10.1
+        version: 6.10.1
       pdfjs-dist:
         specifier: ^6.3.289
         version: 6.3.289
@@ -105,6 +108,9 @@ importers:
       '@types/node':
         specifier: ^24.0.0
         version: 24.19.0
+      '@types/nodemailer':
+        specifier: ^6.4.24
+        version: 6.4.24
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -129,12 +135,12 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.13
         version: 6.43.13
-      '@lezer/highlight':
-        specifier: ^1.2.5
-        version: 1.2.5
       '@fabrikka/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@lezer/highlight':
+        specifier: ^1.2.5
+        version: 1.2.5
       '@typeward/texlive-wasm':
         specifier: 0.2.4-alpha
         version: 0.2.4-alpha
@@ -190,15 +196,15 @@ importers:
 
   packages/bridge:
     dependencies:
+      '@fabrikka/types':
+        specifier: workspace:*
+        version: link:../types
       '@modelcontextprotocol/client':
         specifier: 2.1.0
         version: 2.1.0
       '@modelcontextprotocol/sdk':
         specifier: 1.30.1
         version: 1.30.1(zod@4.6.5)
-      '@fabrikka/types':
-        specifier: workspace:*
-        version: link:../types
       ws:
         specifier: ^8.18.3
         version: 8.21.3
@@ -1043,6 +1049,9 @@ packages:
   '@types/node@24.19.0':
     resolution: {integrity: sha512-zY+5tKxXdhGh1PYI0ac+7juvEu4OI6vWtVVoj5i2m42jxAY1U+zHGt6QCyOFwykdP62sM3MJ9stoYYUw5aCWew==}
 
+  '@types/nodemailer@6.4.24':
+    resolution: {integrity: sha512-Ww4u0rT9wQNXh4JiQaIwx3QWdcOFXzOjQA2zc+jtFYNmQiT4mIUqcDin51bDFdkzKubFnQCZNK7FIHlPKQ/q9w==}
+
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
     peerDependencies:
@@ -1677,6 +1686,10 @@ packages:
   negotiator@1.1.0:
     resolution: {integrity: sha512-NMPBRMJgiQHjbd8phG3Vebdx4kZ1H121rbl5IkMqeOsahptB9BKo/d7oJ3zTXqTgagn2bWlNSXkh0QUGM31RYg==}
     engines: {node: '>=18'}
+
+  nodemailer@6.10.1:
+    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
+    engines: {node: '>=6.0.0'}
 
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
@@ -2539,6 +2552,10 @@ snapshots:
     dependencies:
       undici-types: 7.24.6
 
+  '@types/nodemailer@6.4.24':
+    dependencies:
+      '@types/node': 24.19.0
+
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:
       '@types/react': 19.3.0
@@ -3047,6 +3064,8 @@ snapshots:
   negotiator@1.1.0:
     dependencies:
       content-type: 2.1.0
+
+  nodemailer@6.10.1: {}
 
   object-assign@4.1.1: {}
 

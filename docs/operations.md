@@ -163,10 +163,22 @@ a different code path and there is no deployment-mode flag. Since M32
 | unset or `none` | No email. The default. |
 | `log` | Each message is printed to the server log. For a quick local try. |
 | `file:<dir>` | Each message is written to `<dir>` as one JSON file. For development and the acceptance checks. |
+| `smtps://user:pass@host:465` | Real email, over SMTP with TLS from the start ([ADR 0040](decisions/0040-email-goes-out-over-smtp.md)). |
+| `smtp://user:pass@host:587` | Real email, over SMTP with STARTTLS, which is required. Plain SMTP only to `localhost`. |
+
+**With SMTP, also set `FABRIKKA_MAIL_FROM`**, the sender people see, such as
+`Fabrikka <hello@fabrikka.xyz>`, on a domain your provider has verified. Any
+provider works: Resend, Postmark, Amazon SES, Brevo, Mailgun, your company's
+own mail server. Use its SMTP host, port and credentials. Characters such as
+`@` or `/` in the password are written URL-encoded (`%40`, `%2F`).
+
+The server checks the connection when it starts and logs the result. It starts
+either way. A wrong URL, or SMTP without `FABRIKKA_MAIL_FROM`, stops it at start
+with the reason.
 
 With a transport configured, the login page offers **Forgot password?**: a
 single-use link, valid for one hour, that signs the account out everywhere once
-used. A transport for a real email provider comes later.
+used.
 *Send invite by email* is not built yet.
 
 ## Deployments that extend the core

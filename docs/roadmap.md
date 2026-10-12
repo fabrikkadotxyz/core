@@ -1831,6 +1831,31 @@ on is one-time.
 
 **Clicks:** choosing a theme, **2** from anywhere.
 
+## M45 — Email to any provider, over SMTP
+
+> The mailer reaches no inbox: `log` and `file:` are for development. The
+> deployment with open sign-up can't verify an address, and self-hosters can't reset a password
+> by email. [ADR 0040](decisions/0040-email-goes-out-over-smtp.md): one more
+> transport, SMTP, configured as a URL, so any provider works.
+
+- `FABRIKKA_MAIL=smtps://…:465` or `smtp://…:587` (STARTTLS required; plain only
+  to localhost), plus `FABRIKKA_MAIL_FROM`.
+- A malformed URL, or SMTP without a sender, stops the server at start. A
+  provider that's down is logged at start and doesn't.
+- The URL, which holds the password, is never logged.
+
+**Test:**
+1. With a real provider's SMTP credentials and a verified sender, start the
+   server. The log says the mail connection works, without printing the URL.
+2. On the login page: **Forgot password?** → email → **Send** (2 clicks). The
+   email arrives from the sender you set, and its link resets the password.
+3. `smtp://` to a provider on port 25 with no STARTTLS: nothing is sent, and the
+   log says why.
+4. A wrong password in the URL: the server starts, the log says the connection
+   failed, and the login page still works.
+
+**Clicks:** a reset, **2** from the login page.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

@@ -11,7 +11,7 @@
  * job. In-process code is trusted; the kit is a contract, not a sandbox.
  */
 import type { Context, Hono, MiddlewareHandler } from 'hono';
-import { eq } from 'drizzle-orm';
+import { eq, count } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import { teamMembers, teams, users } from '@fabrikka/db';
 import type { AuthUser } from '@fabrikka/types';
@@ -73,6 +73,8 @@ export interface Kit {
   team(teamId: string): Promise<{ id: string; name: string; createdAt: Date; createdByUserId: string | null; members: number } | null>;
   /** Someone's role in a team, or null. */
   teamRole(teamId: string, userId: string): Promise<'owner' | 'member' | null>;
+  /** How many accounts exist: to refuse early, before guardNewAccounts would. */
+  accountCount(): Promise<number>;
 }
 
 /** What extensions advertised, for GET /api/auth/options. */
@@ -153,6 +155,10 @@ export function createKit(opts: {
     onTeamMembersChanged: register.members,
     team: (teamId) => teamInfo(db, teamId),
     teamRole: (teamId, userId) => teamRoleOf(db, teamId, userId),
+    accountCount: async () => {
+      const [row] = await db.select({ n: count() }).from(users);
+      return Number(row?.n ?? 0);
+    },
   };
 }
 

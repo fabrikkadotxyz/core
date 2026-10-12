@@ -53,6 +53,25 @@ const MAX_READ_LIMIT = 200;
 const DEFAULT_READ_LIMIT = 50;
 
 /**
+ * The hostnames the server answers to (docs/operations.md, "The hostnames it
+ * answers to"): PUBLIC_URL's, localhost, and MCP_ALLOWED_HOSTS. Undefined when
+ * that's only localhost, so the adapter applies its own localhost protection
+ * (Host and Origin), as in development.
+ */
+export function allowedHostsFor(publicUrl: string, extra: string | undefined): string[] | undefined {
+  const LOCAL = ['localhost', '127.0.0.1', '[::1]', '::1'];
+  const listed = (extra ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
+  let own = '';
+  try {
+    own = new URL(publicUrl).hostname.toLowerCase();
+  } catch {
+    // An unparseable PUBLIC_URL fails elsewhere; here it adds nothing.
+  }
+  if (!listed.length && (!own || LOCAL.includes(own))) return undefined;
+  return [...new Set([own, ...listed, 'localhost', '127.0.0.1', '[::1]', '::1'].filter(Boolean))];
+}
+
+/**
  * Mount the MCP endpoint.
  *
  * `createMcpHonoApp` supplies Host/Origin validation and JSON body parsing; the

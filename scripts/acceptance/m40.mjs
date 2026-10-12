@@ -15,6 +15,18 @@
  */
 import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { request } from 'node:http';
+
+/** A GET with a chosen Host header, as a browser on that domain sends it. fetch() won't set Host. */
+const getAs = (host, path) =>
+  new Promise((ok, fail) => {
+    const req = request({ host: '127.0.0.1', port: 18090, path, headers: { host } }, (res) => {
+      res.resume();
+      res.on('end', () => ok(res.statusCode));
+    });
+    req.on('error', fail);
+    req.end();
+  });
 
 let failures = 0;
 const check = (cond, m) => {
@@ -91,6 +103,8 @@ if (process.env.FABRIKKA_TEST_DOCKER !== '1') {
       body: JSON.stringify({ code: 'render-generated-value', email: 'owner@m40.example', displayName: 'M40', password: 'm40-owner-password' }),
     });
     check(setup.status === 201, 'the setup code Render generated creates the owner');
+    check((await getAs('fabrikka-m40.onrender.com', '/')) === 200, "THE WEB APP ANSWERS ON RENDER'S ADDRESS (its Host is accepted)");
+    check((await getAs('evil.example', '/')) === 403, 'a request for a hostname it was never given is refused (DNS rebinding)');
 
     /* ---------------------------------------------- 3. the same image, as Fly.io runs it */
 
@@ -110,6 +124,7 @@ if (process.env.FABRIKKA_TEST_DOCKER !== '1') {
     check(flyUp, 'on Fly.io (FLY_APP_NAME), the image starts with nothing else set');
     const flyLogs = await docker(['logs', app]);
     check(flyLogs.includes('PUBLIC_URL is https://fabrikka-m40.fly.dev'), 'it takes its address from the Fly app name');
+    check((await getAs('fabrikka-m40.fly.dev', '/')) === 200 && (await getAs('fabrikka-m40.fly.dev:443', '/api/auth/options')) === 200, "THE WEB APP AND API ANSWER ON FLY'S ADDRESS");
     check(/read from the platform's fly-client-ip header/.test(flyLogs), "it reads the client from Fly-Client-IP, not X-Forwarded-For (whose last entry is the app's own address there)");
     const reset = (ip, forged) =>
       fetch('http://127.0.0.1:18090/api/auth/password-reset', {

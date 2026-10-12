@@ -41,7 +41,7 @@ import {
 } from './auth.ts';
 import { publish, subscribe } from './bus.ts';
 import { createSetup, SetupError } from './setup.ts';
-import { createMcpApp } from './mcp.ts';
+import { allowedHostsFor, createMcpApp } from './mcp.ts';
 import { broadcastAbort, onAbort, pauseState, setPaused } from './rails.ts';
 import { catchUp, endRun, recordActivity, startRun } from './activity.ts';
 import {
@@ -2202,7 +2202,7 @@ export function createApp(options: CreateAppOptions = {}) {
   const mcp = createMcpApp({
     db,
     publicUrl: PUBLIC_URL,
-    allowedHosts: process.env.MCP_ALLOWED_HOSTS?.split(',').map((h) => h.trim()).filter(Boolean),
+    allowedHosts: allowedHostsFor(PUBLIC_URL, process.env.MCP_ALLOWED_HOSTS),
   });
   app.route('/', mcp.app);
 

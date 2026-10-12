@@ -517,6 +517,25 @@ docker compose -f docker/docker-compose.yml exec postgres \
   pg_dump -U fabrikka fabrikka > fabrikka-$(date +%F).sql
 ```
 
+## The hostnames it answers to
+
+To stop DNS rebinding (a hostile page in someone's browser reaching a server by
+a name the attacker controls), the server answers only requests whose `Host` is
+one it knows. Anything else gets `403 Invalid Host`.
+
+- **`PUBLIC_URL`'s hostname**, and `localhost`, always.
+- **`MCP_ALLOWED_HOSTS`**: more hostnames, comma-separated (ports don't
+  matter). The name is historical: the check covers the whole server, not only
+  `/mcp`.
+- **The platform's own address**, added by the image: `<app>.fly.dev` on
+  Fly.io, Render's `RENDER_EXTERNAL_HOSTNAME`, Railway's
+  `RAILWAY_PUBLIC_DOMAIN`. So the platform's address keeps working after
+  `PUBLIC_URL` moves to your own domain, which is how you reach a fresh
+  instance before its DNS exists.
+
+With `PUBLIC_URL` on `localhost` and no list, only `localhost` is accepted, as
+in development.
+
 ## Behind a proxy
 
 Rate limits (password reset, a deployment's sign-up) count per

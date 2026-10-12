@@ -108,6 +108,7 @@ one, recovery is the operator's `admin reset-password`.
 | A reset link is a bearer credential in an inbox | 32 random bytes, only the SHA-256 stored; **single use**; **one hour**; a newer request does not revoke an older link, but each still expires within the hour. |
 | Finding out who has an account | The request answers identically whether or not the email is registered, and sends nothing when it isn't. |
 | Flooding someone's inbox, or guessing at scale | At most 5 requests per email and 20 per IP per 15 minutes; past that, refused with 429. In memory, so per process. The IP is the client's, not a proxy's, when `FABRIKKA_TRUSTED_PROXIES` says how many proxies are in front (`docs/operations.md`, *Behind a proxy*); `X-Forwarded-For` entries beyond those are ignored, so a client can't choose its own. On a platform that sets its own client header (Fly.io's `Fly-Client-IP`), `FABRIKKA_CLIENT_IP_HEADER` names it, and only that header is read. |
+| A hostile page reaches the server through DNS rebinding | Every request's `Host` must be `PUBLIC_URL`'s hostname, `localhost`, the platform's own address, or one listed in `MCP_ALLOWED_HOSTS`; anything else is refused with 403 (`docs/operations.md`, *The hostnames it answers to*). |
 | A stolen session survives the reset | Completing a reset deletes every `auth_sessions` row for the user, as the CLI reset does. |
 | The link leaks through the Referer header or logs | The token is in the URL path of a page that posts it once and then replaces the URL; the page loads no third-party resources. |
 

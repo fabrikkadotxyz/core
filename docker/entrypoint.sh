@@ -30,6 +30,20 @@ if [ -z "${PUBLIC_URL:-}" ]; then
   [ -n "${PUBLIC_URL:-}" ] && export PUBLIC_URL && echo "fabrikka: PUBLIC_URL is $PUBLIC_URL (from the platform)"
 fi
 
+# The platform's own address stays reachable after PUBLIC_URL moves to your
+# domain (docs/operations.md, "The hostnames it answers to").
+platform_host=""
+if [ -n "${FLY_APP_NAME:-}" ]; then
+  platform_host="$FLY_APP_NAME.fly.dev"
+elif [ -n "${RENDER_EXTERNAL_HOSTNAME:-}" ]; then
+  platform_host="$RENDER_EXTERNAL_HOSTNAME"
+elif [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
+  platform_host="$RAILWAY_PUBLIC_DOMAIN"
+fi
+if [ -n "$platform_host" ]; then
+  export MCP_ALLOWED_HOSTS="${MCP_ALLOWED_HOSTS:+$MCP_ALLOWED_HOSTS,}$platform_host"
+fi
+
 # Render and Railway put one proxy in front: count it, so rate limits see the
 # client, not the proxy (docs/operations.md, "Behind a proxy"). Set it to be explicit.
 if [ -z "${FABRIKKA_TRUSTED_PROXIES:-}" ] && { [ -n "${RENDER_EXTERNAL_URL:-}" ] || [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; }; then

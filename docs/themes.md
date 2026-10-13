@@ -22,6 +22,7 @@ Dusk in light mode and Dusk Night in dark mode.
 | **Paper** | light | An editorial page: cream paper, serif type, ink-red accents, hairline rules, no shadows |
 | **Brutal** | light | Thick black borders, hard offset shadows, flat primary colours, uppercase headings |
 | **Aurora** | dark | Frosted glass on a night sky of teal, violet and pink light; rounded, glowing |
+| **Fabrikka** | dark | The look of fabrikka.xyz: black ground, hairline borders, Geist type, small uppercase mono labels, white buttons, a dusk-blue sidebar. Ships Geist and Geist Mono (SIL OFL) |
 
 ## A theme is a folder
 
@@ -31,6 +32,7 @@ my-theme/
   theme.css
   fonts/      optional: .woff2, .woff
   images/     optional: .png, .jpg, .webp
+  *.txt       optional: licences, e.g. a font's OFL.txt (served as plain text)
 ```
 
 ### `theme.json`
@@ -90,7 +92,7 @@ rule, logging why. A theme may not:
   `image-set(`;
 - contain a backslash. CSS escapes can spell `url(` without its letters, so
   write characters themselves: `content: '—'`, not `content: '\2014'`;
-- be over 256 KB of CSS, or ship a font or image over 2 MB;
+- be over 256 KB of CSS, or ship a font, image or text file over 2 MB;
 - ship any other kind of file. **No SVG**, because an SVG opened from the
   instance can run script.
 

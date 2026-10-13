@@ -27,6 +27,8 @@ const TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
+  // A font's licence (the SIL OFL asks that it travel with the font). Served as plain text, never run.
+  '.txt': 'text/plain; charset=utf-8',
 };
 const FORBIDDEN = [/@import/i, /expression\s*\(/i, /javascript\s*:/i, /-moz-binding/i, /behavior\s*:/i, /image-set\s*\(/i];
 
@@ -155,7 +157,7 @@ export function loadThemes(dirs: { dir: string; builtIn: boolean }[], log = cons
 }
 
 /** Built-ins in the order the picker shows them; anything else alphabetically after. */
-const ORDER = ['dusk', 'dusk-night', 'terminal', 'paper', 'brutal', 'aurora'];
+const ORDER = ['dusk', 'dusk-night', 'terminal', 'paper', 'brutal', 'aurora', 'fabrikka'];
 function builtInOrder(a: string, b: string): number {
   const ia = ORDER.indexOf(a);
   const ib = ORDER.indexOf(b);

@@ -1,0 +1,10 @@
+{
+  "contract": 1,
+  "id": "fabrikka",
+  "name": "Fabrikka",
+  "description": "The look of fabrikka.xyz: black ground, hairline borders, Geist type, mono labels, white buttons and a dusk-blue sidebar.",
+  "author": "Fabrikka",
+  "license": "CC0-1.0 (fonts: SIL OFL 1.1, see fonts/OFL.txt)",
+  "scheme": "dark",
+  "swatches": ["#000000", "#0a0a0c", "#ffffff", "#98c1d9", "#ee6c4d", "#1d2d44"]
+}

@@ -1,0 +1,212 @@
+/*
+ * Fabrikka: the look of fabrikka.xyz (its Astro landing, fabrikka-landing).
+ * Dark and editorial-technical: a black ground, hairline borders instead of
+ * shadows, Geist in light weights for titles, small uppercase Geist Mono for
+ * labels, white primary buttons, and the brand palette as accents (Dusk Blue
+ * for the sidebar, Powder Blue for agents and links, Burnt Peach for what
+ * needs you).
+ *
+ * Fonts: Geist and Geist Mono, Copyright (c) 2023 Vercel, in collaboration
+ * with basement.studio, under the SIL Open Font License 1.1 (fonts/OFL.txt).
+ */
+@font-face {
+  font-family: "Geist";
+  src: url("fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* The landing's own names. */
+  --f-black: #000000;
+  --f-panel: #0a0a0c;
+  --f-panel-2: #101114;
+  --f-panel-3: #16171c;
+  --f-line: #1a1b1f;
+  --f-line-2: #26272d;
+  --f-line-3: #3a3c44;
+  --f-text: #ededed;
+  --f-text-2: #b8bcc4;
+  --f-muted: #7d8290;
+  --f-dusk: #3d5a80;
+  --f-powder: #98c1d9;
+  --f-cyan: #e0fbfc;
+  --f-peach: #ee6c4d;
+  --f-peach-soft: #ff9367;
+  --f-green: #27c93f;
+  --f-amber: #f5c044;
+
+  color-scheme: dark;
+  --font-ui: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-heading: var(--font-ui);
+  --heading-weight: 300;
+  --heading-tracking: -0.03em;
+  --heading-case: none;
+
+  --bg: var(--f-black);
+  --bg-sunken: #050507;
+  --panel: var(--f-panel);
+  --panel-tint: var(--f-panel-2);
+  --border: var(--f-line-2);
+  --text: var(--f-text);
+  --muted: var(--f-muted);
+  --accent: #ffffff;
+  --on-accent: #000000;
+  --attention: var(--f-peach);
+  --hover: rgba(255, 255, 255, 0.04);
+  --selected: rgba(224, 251, 252, 0.08);
+  --agent: #10151d;
+  --agent-border: rgba(152, 193, 217, 0.22);
+  --author: var(--f-text);
+  --ok: #6ee28a;
+  --ok-soft: rgba(39, 201, 63, 0.1);
+  --ok-border: rgba(39, 201, 63, 0.35);
+  --warn: var(--f-amber);
+  --warn-soft: rgba(245, 192, 68, 0.1);
+  --warn-border: rgba(245, 192, 68, 0.35);
+  --danger: var(--f-peach-soft);
+  --danger-soft: rgba(238, 108, 77, 0.08);
+  --danger-border: rgba(238, 108, 77, 0.45);
+
+  /* The sidebar is the landing's room mock: dusk-blue light rising from below. */
+  --side-bg: #0f141c;
+  --side-text: #aab6c6;
+  --side-strong: var(--f-cyan);
+  --side-muted: #5c6b80;
+  --side-hover: rgba(224, 251, 252, 0.06);
+  --side-selected: rgba(224, 251, 252, 0.12);
+  --side-border: rgba(255, 255, 255, 0.08);
+  --grad-side: linear-gradient(175deg, #0f141c 0%, #16202e 60%, #1d2d44 100%);
+  --grad-side-on: rgba(224, 251, 252, 0.12);
+  --side-on-text: var(--f-cyan);
+  --side-on-meta: var(--f-powder);
+  --side-on-shadow: none;
+  --side-field: rgba(255, 255, 255, 0.05);
+  --side-shadow: none;
+
+  --radius: 10px;
+  --radius-control: 4px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+  --border-width: 1px;
+
+  /* Flat: the landing has no gradients on surfaces, only light in the background. */
+  --grad-accent: linear-gradient(#ffffff, #ffffff);
+  --grad-accent-hover: linear-gradient(var(--f-cyan), var(--f-cyan));
+  --grad-attention: linear-gradient(var(--f-peach), var(--f-peach));
+  --grad-tint: rgba(224, 251, 252, 0.08);
+  --grad-panel: var(--f-panel);
+  --grad-agent: #10151d;
+  --shadow-soft: none;
+  --shadow-lift: none;
+  --shadow-accent: none;
+  --shadow-msg: none;
+  --lift: 0;
+
+  --app-bg:
+    radial-gradient(1100px 520px at 50% -12%, rgba(61, 90, 128, 0.22) 0%, rgba(61, 90, 128, 0) 70%),
+    var(--f-black);
+  --surface-border: var(--f-line-2);
+  --field-bg: var(--f-panel);
+  --focus-border: var(--f-powder);
+  --focus-ring: 0 0 0 3px rgba(152, 193, 217, 0.18);
+  --bar-bg: rgba(0, 0, 0, 0.72);
+  --bar-blur: blur(14px);
+  --composer-bg: rgba(5, 5, 7, 0.9);
+  --rail-bg: #0d0e13;
+  --badge-bg: rgba(224, 251, 252, 0.1);
+  --badge-text: var(--f-cyan);
+  --badge-ok-bg: rgba(39, 201, 63, 0.1);
+  --badge-shared-bg: rgba(238, 108, 77, 0.14);
+  --vendor-bg: #ffffff;
+  --frame: linear-gradient(120deg, var(--f-powder), var(--f-dusk) 60%, var(--f-peach));
+  --stripe: var(--f-line-3);
+  --hover-border: var(--f-line-3);
+  --team-initial: var(--f-dusk);
+
+  /* A page's title: no banner, just large light type over a hairline, as on the landing. */
+  --banner-bg: transparent;
+  --banner-text: var(--f-text);
+  --banner-shadow: none;
+  --banner-radius: 0;
+  --banner-ring: transparent;
+  --title-ink: linear-gradient(100deg, #ffffff 0%, var(--f-cyan) 60%, var(--f-powder) 100%);
+}
+
+/* Titles: light and large, with a hairline under them instead of a banner. */
+.column > h1 {
+  padding: 0.5rem 0 1.25rem;
+  font-size: 2.6rem;
+  line-height: 1.04;
+  border-bottom: 1px solid var(--f-line);
+}
+.column > h1::after { display: none; }
+h2, h3 { font-weight: 400; letter-spacing: -0.015em; }
+
+/* Labels: the landing's small uppercase mono. */
+.side-section h2,
+.panel h2,
+.subhead {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.panel h2, .subhead { color: var(--f-muted); }
+.badge,
+.badge-ok,
+.badge-shared {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 3px;
+}
+.badge-shared { color: var(--f-peach-soft); }
+.badge-ok { color: var(--ok); }
+
+/* Buttons: square-ish, mono, uppercase. Primary is white on black, cyan on hover. */
+button {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+button.link,
+button.theme-card,
+button.select-button,
+button.side-button,
+button.side-add,
+button.shell-menu,
+.segmented button,
+.switch {
+  font-family: var(--font-ui);
+  font-size: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+button.primary { background: #ffffff; border-color: #ffffff; color: #000000; }
+button.primary:hover:not(:disabled) { background: var(--f-cyan); border-color: var(--f-cyan); }
+
+/* Messages: an agent's is the landing's dark blue card with a powder-blue hairline. */
+.msg.agent .author { color: var(--f-powder); }
+code { font-family: var(--font-mono); }
+
+/* Unread is a peach dot that glows, like the landing's eyebrow. */
+.side-item.unread::after { box-shadow: 0 0 10px var(--f-peach); }
+
+a { color: var(--f-powder); }
+.sidebar .link { color: var(--f-powder); }
+.theme-card.on { box-shadow: 0 0 0 1px #ffffff; border-color: #ffffff; }
+::selection { background: var(--f-dusk); color: #ffffff; }

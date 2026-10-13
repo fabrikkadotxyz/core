@@ -1,7 +1,7 @@
 /**
  * M44 acceptance: themes (ADR 0038, docs/themes.md).
  *
- * What can be checked without a person: the six built-in themes are offered in
+ * What can be checked without a person: the seven built-in themes are offered in
  * order; only checked files are served, typed and nosniff; a choice is saved
  * per account, and a theme the instance doesn't offer is refused; the page
  * paints the cached theme before the app loads. How each theme looks stays the
@@ -27,7 +27,7 @@ const check = (cond, m) => {
 /* ------------------------------------------------ 1. what's offered */
 
 const list = await (await fetch(`${BASE}/api/themes`)).json();
-check(list.themes.map((t) => t.id).join() .startsWith('dusk,dusk-night,terminal,paper,brutal,aurora'), 'the six built-in themes are offered, in order, without signing in');
+check(list.themes.map((t) => t.id).join().startsWith('dusk,dusk-night,terminal,paper,brutal,aurora,fabrikka'), 'the seven built-in themes are offered, in order, without signing in');
 check(list.default === 'dusk' && list.system.light === 'dusk' && list.system.dark === 'dusk-night', 'Dusk is the default; Match my system is Dusk and Dusk Night');
 check(list.themes.every((t) => (t.scheme === 'light' || t.scheme === 'dark') && t.swatches.length >= 2), 'each theme has a scheme and swatches for its card');
 check(list.themes.every((t) => !('files' in t)), 'the listing exposes no file paths');

@@ -43,13 +43,15 @@ mkdirSync(join(dir, 'p'));
 writeFileSync(join(dir, 'p', 'theme.json'), JSON.stringify({ ...manifest, id: 'p' }));
 writeFileSync(join(dir, 'p', 'theme.css'), ':root{--bg:#000}');
 ok('a minimal pack loads', loadPack(join(dir, 'p'), false).id === 'p');
+writeFileSync(join(dir, 'p', 'OFL.txt'), 'SIL Open Font License 1.1');
+ok("a font's licence, as .txt, may travel with the pack", loadPack(join(dir, 'p'), false).files.has('OFL.txt'));
 writeFileSync(join(dir, 'p', 'logo.svg'), '<svg onload="alert(1)"/>');
 refuses('A PACK SHIPPING AN SVG IS REFUSED', () => loadPack(join(dir, 'p'), false));
 
 // The built-ins all pass, in the picker's order.
 const quiet = { log: () => {}, warn: (m: string) => console.error(m) };
 const builtIn = loadThemes(themeDirs().filter((d) => d.builtIn), quiet as unknown as Console);
-ok('the six built-in themes load, in order', [...builtIn.keys()].join() === 'dusk,dusk-night,terminal,paper,brutal,aurora');
+ok('the seven built-in themes load, in order', [...builtIn.keys()].join() === 'dusk,dusk-night,terminal,paper,brutal,aurora,fabrikka');
 
 if (fails) { console.error(`\n${fails} failure(s)`); process.exit(1); }
 console.log('\nthemes: all passed');

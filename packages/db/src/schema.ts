@@ -993,6 +993,12 @@ export const deviceGrants = pgTable(
     label: text('label').notNull(),
     /** Agent tools installed on that machine. */
     providers: text('providers').array().notNull(),
+    /**
+     * ADR 0043: the organization whose rooms may use it, chosen on the machine;
+     * null for Personal. Deleting the organization deletes the row, never makes
+     * it Personal.
+     */
+    teamId: uuid('team_id').references(() => teams.id, { onDelete: 'cascade' }),
   },
   (t) => [primaryKey({ columns: [t.deviceId, t.grantId] })],
 );
@@ -1008,4 +1014,9 @@ export const sessionAgentHosts = pgTable('session_agent_hosts', {
   grantId: text('grant_id').notNull(),
   /** The token the host holds for it now; re-minted per host connection. */
   tokenId: uuid('token_id').references(() => sessionTokens.id, { onDelete: 'set null' }),
+  /**
+   * ADR 0043: a Personal folder bound in an organization's room before folders
+   * had organizations. Honoured (and marked in the room) until it's redone.
+   */
+  fromPersonal: boolean('from_personal').notNull().default(false),
 });

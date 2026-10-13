@@ -512,6 +512,7 @@ device_grants                             -- what the host reports it may use; l
   grant_id        text not null           -- opaque, minted by the host
   label           text not null
   providers       text[] not null         -- agent tools installed on that machine
+  team_id         uuid -> teams.id cascade -- ADR 0043: the organization whose rooms may use it; null = Personal
   primary key (device_id, grant_id)
 
 session_agent_hosts                       -- "this session agent runs on that device, in that grant"
@@ -519,7 +520,14 @@ session_agent_hosts                       -- "this session agent runs on that de
   device_id       uuid -> devices.id not null
   grant_id        text not null
   token_id        uuid -> session_tokens.id   -- the token the host holds for it now
+  from_personal   boolean not null default false -- ADR 0043: bound in an organization's room before folders had organizations
 ```
+
+**A folder is for one organization, or Personal** (ADR 0043). `device_grants.team_id`
+is the host's choice, kept only while its owner is in that organization; a
+binding is sent to the host only when its grant's scope is the room's (or it's
+an old Personal binding, `from_personal`). Deleting an organization deletes its
+grant rows rather than making them Personal.
 
 **A binding's token is re-minted on every host connection** and the previous one
 revoked, so a token only lives as long as one connection. The server can't

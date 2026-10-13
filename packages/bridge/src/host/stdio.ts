@@ -35,7 +35,7 @@ export function startStdioControl(): { attach(host: Host): void } {
       case 'state':
         return reply({ ok: true, state: host.state() });
       case 'grant': {
-        const added = addGrant(host, { path: req.path as string, label: req.label as string, policy: req.policy });
+        const added = addGrant(host, { path: req.path as string, label: req.label as string, policy: req.policy, org: req.org });
         return added.ok ? reply({ ok: true, grant: added.value }) : reply(added);
       }
       case 'policy': {

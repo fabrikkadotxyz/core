@@ -143,7 +143,10 @@ import {
   hostHub,
   hostOf,
   listDevices,
+  organizationsOf,
   pollPairing,
+  refreshHostsInRoom,
+  refreshHostsOf,
   resolveDevice,
   revokeDevice,
   setGrants,
@@ -552,6 +555,8 @@ export function createApp(options: CreateAppOptions = {}) {
     const result = await redeemInvite(db, c.req.param('token'), c.get('user'));
     if (!result.ok) return c.json({ error: result.reason }, 400);
     if (result.team) membersChanged(db, result.team.id);
+    // ADR 0043: their computers learn the new organization, for the Folders window's "For".
+    if (result.team) void refreshHostsOf(db, c.get('user').id).catch(() => {});
     return c.json({ session: result.session, team: result.team });
   });
 
@@ -616,6 +621,7 @@ export function createApp(options: CreateAppOptions = {}) {
     try {
       const team = await createTeam(db, c.get('user').id, name ?? '');
       membersChanged(db, team.id);
+      void refreshHostsOf(db, c.get('user').id).catch(() => {});
       return c.json(team, 201);
     } catch (err) {
       if (err instanceof TeamError) return c.json({ error: err.message }, 400);
@@ -670,6 +676,8 @@ export function createApp(options: CreateAppOptions = {}) {
       throw err;
     }
     membersChanged(db, teamId);
+    // ADR 0043: their computers stop offering, and running, that organization's folders.
+    void refreshHostsOf(db, target, true).catch(() => {});
     return c.json({ ok: true });
   });
 
@@ -1269,6 +1277,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const body = await c.req.json<{ deviceId?: string; grantId?: string; displayName?: string; provider?: string }>();
     try {
       const agent = await bindAgent(db, {
+        sessionTeamId: (await sessionTeam(db, s.id))?.id ?? null,
         sessionId: s.id,
         sessionPublicId: s.view.publicId,
         ownerSlug: s.view.ownerSlug,
@@ -1295,10 +1304,12 @@ export function createApp(options: CreateAppOptions = {}) {
   sessionRoutes.get('/agents/hosts', async (c) => {
     const s = await resolve(c);
     if (!s) return c.notFound();
-    const out: Record<string, { deviceName: string; label: string | null; online: boolean }> = {};
+    const out: Record<string, { deviceName: string; label: string | null; online: boolean; fromPersonal: boolean }> = {};
+    const inOrg = (await sessionTeam(db, s.id)) !== null;
     for (const a of await listSessionAgents(db, s.id)) {
       const h = await hostOf(db, a.sessionAgentId);
-      if (h) out[a.participantId] = { deviceName: h.deviceName, label: h.label, online: hostHub.online(h.deviceId) };
+      // ADR 0043: a Personal folder bound here before folders had organizations.
+      if (h) out[a.participantId] = { deviceName: h.deviceName, label: h.label, online: hostHub.online(h.deviceId), fromPersonal: h.fromPersonal && inOrg };
     }
     return c.json(out);
   });
@@ -1328,6 +1339,8 @@ export function createApp(options: CreateAppOptions = {}) {
     const { teamId } = await c.req.json<{ teamId?: string | null }>();
     if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such organization' }, 404);
     await setSessionTeam(db, s.id, teamId ?? null);
+    // ADR 0043: its agents' folders are checked again against the room's new organization.
+    void refreshHostsInRoom(db, s.id).catch(() => {});
     return c.json(await sessionTeam(db, s.id));
   });
 
@@ -2355,6 +2368,8 @@ export function createApp(options: CreateAppOptions = {}) {
             me = { send: (d) => ws.send(d), close: () => ws.close() };
             hostHub.attach(device.id, me);
             ws.send(JSON.stringify({ type: 'ready', device: { id: device.id, name: device.name } }));
+            // ADR 0043: the organizations its folders may be for, for the "For" picker.
+            ws.send(JSON.stringify({ type: 'organizations', organizations: await organizationsOf(db, device.userId) }));
           })();
           // M33: the client this server serves, so an out-of-date host can say so.
           void opened.then(async () => {
@@ -2365,7 +2380,7 @@ export function createApp(options: CreateAppOptions = {}) {
         async onMessage(evt, ws) {
           await opened;
           if (!deviceId) return;
-          let frame: { type?: string; grants?: { id: string; label: string; providers: string[] }[] };
+          let frame: { type?: string; grants?: { id: string; label: string; providers: string[]; org?: string | null }[] };
           try {
             frame = JSON.parse(String(evt.data));
           } catch {
@@ -2373,7 +2388,8 @@ export function createApp(options: CreateAppOptions = {}) {
           }
           if (frame.type === 'grants' && Array.isArray(frame.grants)) {
             await setGrants(db, deviceId, frame.grants);
-            if (!bound) {
+            // ADR 0043: after an organization change, the bindings again, checked against the new scope.
+            if (!bound || hostHub.takeRebind(deviceId)) {
               bound = true;
               ws.send(JSON.stringify({ type: 'bindings', bindings: await bindingsForDevice(db, deviceId, PUBLIC_URL) }));
             }

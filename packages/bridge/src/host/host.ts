@@ -26,7 +26,10 @@ export interface Binding {
   grantId: string;
   provider: string;
   agent: { displayName: string };
-  session: { title: string; ownerSlug: string; publicId: string };
+  /** ADR 0043: `org` is the room's organization (null: Personal). Absent from older servers. */
+  session: { title: string; ownerSlug: string; publicId: string; org?: string | null };
+  /** A Personal folder bound in an organization's room before ADR 0043: honoured until redone. */
+  fromPersonal?: boolean;
   mcpUrl: string;
   bridgeUrl: string;
   token: string;
@@ -59,11 +62,28 @@ export class Host {
   connected = false;
   /** Re-checked when the person opens Agent tools or flips a switch. */
   installed = installedTools();
+  /** ADR 0043: the account's organizations, from the server, for the Folders window's "For". */
+  organizations: { id: string; name: string }[] = [];
+
+  scopeName(org: string | null | undefined): string {
+    if (!org) return 'Personal';
+    return this.organizations.find((o) => o.id === org)?.name ?? 'an organization you have left';
+  }
 
   /** What this computer offers: installed AND switched on in Agent tools (M37). */
   get providers(): string[] {
     return AGENT_TOOLS.filter((t) => this.installed.has(t.id) && this.cfg.tools?.[t.id] !== false).map((t) => t.id);
   }
+  /**
+   * ADR 0043: your organizations changed (or we just connected). Report the
+   * grants again, so the server drops those of an organization you've left.
+   */
+  private organizationsChanged(list: { id: string; name: string }[]): void {
+    this.organizations = list.filter((o) => typeof o?.id === 'string').map((o) => ({ id: o.id, name: String(o.name ?? '') }));
+    // Always: the server may be waiting on these to send the bindings again.
+    this.ws?.send(JSON.stringify({ type: 'grants', grants: this.reportedGrants() }));
+  }
+
   /** The client version the server serves (M33): newer than ours means "update available". */
   latestVersion: string | null = null;
 
@@ -76,7 +96,7 @@ export class Host {
 
   /** Grants as the server sees them: ids, labels and installed tools. No paths. */
   private reportedGrants() {
-    return this.cfg.grants.map((g) => ({ id: g.id, label: g.label, providers: this.providers }));
+    return this.cfg.grants.map((g) => ({ id: g.id, label: g.label, providers: this.providers, org: g.org ?? null }));
   }
 
   connect(): void {
@@ -91,7 +111,14 @@ export class Host {
       this.say(`connected to ${this.cfg.server}`);
     });
     ws.on('message', (data) => {
-      let frame: { type?: string; bindings?: Binding[]; binding?: Binding; code?: string; version?: string };
+      let frame: {
+        type?: string;
+        bindings?: Binding[];
+        binding?: Binding;
+        code?: string;
+        version?: string;
+        organizations?: { id: string; name: string }[];
+      };
       try {
         frame = JSON.parse(String(data));
       } catch {
@@ -100,6 +127,7 @@ export class Host {
       if (frame.type === 'bindings' && frame.bindings) this.reconcile(frame.bindings);
       if (frame.type === 'binding' && frame.binding) this.add(frame.binding);
       if (frame.type === 'client' && frame.version) this.clientVersion(frame.version);
+      if (frame.type === 'organizations' && Array.isArray(frame.organizations)) this.organizationsChanged(frame.organizations);
       if (frame.type === 'revoked' || (frame.type === 'error' && frame.code === 'unauthenticated')) this.forget();
     });
     ws.on('close', () => {
@@ -175,6 +203,12 @@ export class Host {
       this.record({ ...where, event: 'refused', detail });
     };
     if (!grant) return refuse('that folder is no longer granted on this computer');
+    // ADR 0043: checked here too, so the server can't steer a folder into another organization's room.
+    const folderOrg = grant.org ?? null;
+    const roomOrg = b.session.org ?? null;
+    if (folderOrg !== roomOrg && !(folderOrg === null && b.fromPersonal)) {
+      return refuse(`this folder is for ${this.scopeName(folderOrg)}, not this room's organization`);
+    }
     if (!existsSync(grant.path)) return refuse(`${grant.path} no longer exists`);
     if (!this.installed.has(b.provider)) return refuse(`${b.provider} is not installed here`);
     if (!this.providers.includes(b.provider)) return refuse(`${b.provider} is switched off in this computer's Agent tools`);
@@ -260,7 +294,8 @@ export class Host {
         installed: this.installed.has(t.id),
         enabled: this.installed.has(t.id) && this.cfg.tools?.[t.id] !== false,
       })),
-      grants: this.cfg.grants,
+      organizations: this.organizations,
+      grants: this.cfg.grants.map((g) => ({ ...g, org: g.org ?? null, orgName: this.scopeName(g.org) })),
       agents: [...this.bindings.values()].map((b) => ({
         id: b.id,
         agent: b.agent.displayName,

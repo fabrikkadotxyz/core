@@ -56,7 +56,7 @@ export async function startControl(host: Host, say: (...a: unknown[]) => void): 
     if (req.method === 'GET' && url.pathname === '/api/state') return send(res, 200, host.state());
 
     if (req.method === 'POST' && url.pathname === '/api/grants') {
-      const added = addGrant(host, (await json(req)) as { path?: string; label?: string; policy?: unknown });
+      const added = addGrant(host, (await json(req)) as { path?: string; label?: string; policy?: unknown; org?: unknown });
       return added.ok ? send(res, 201, host.state()) : send(res, 400, { error: added.error });
     }
 
@@ -164,10 +164,12 @@ const PAGE = `<!doctype html>
   <div class="card">
     <form id="add" class="row">
       <input id="path" placeholder="/Users/you/code/project" aria-label="Folder path">
+      <span class="muted">For</span> <span class="segmented" role="radiogroup" aria-label="For" id="org"></span>
       <span class="segmented" role="radiogroup" aria-label="What agents may do" id="policy"></span>
       <button>Grant folder</button>
     </form>
     <p class="muted" id="policyhelp"></p>
+    <p class="muted">A folder is for one organization's rooms, or Personal rooms. For two organizations, grant it twice.</p>
     <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code agents read only inside the folder.</p>
     <p class="error" id="adderror"></p>
   </div>
@@ -198,10 +200,14 @@ function render(s) {
   $('update').hidden = !s.updateAvailable;
   if (s.updateAvailable) $('update').innerHTML = '<strong>Update available</strong> <span class="muted">' + esc(s.version) + ' → ' + esc(s.latestVersion) + '</span><div class="muted">In a terminal: <code>fabrikka update</code>, then start the host again.</div>';
   $('who').textContent = s.deviceName + ' · ' + (s.connected ? 'connected to ' + s.server : 'reconnecting…') + (s.providers.length ? ' · ' + s.providers.join(', ') : ' · no agent tools found');
-  $('grants').innerHTML = s.grants.length ? s.grants.map((g) => '<div class="card row"><div class="grow"><strong>' + esc(g.label) + '</strong><div class="path">' + esc(g.path) + '</div></div>' +
+  $('grants').innerHTML = s.grants.length ? s.grants.map((g) => '<div class="card row"><div class="grow"><strong>' + esc(g.label) + '</strong> <span class="tag">' + esc(g.orgName) + '</span><div class="path">' + esc(g.path) + '</div></div>' +
     '<span class="segmented" role="radiogroup" aria-label="What agents may do in ' + esc(g.label) + '">' + segmented(g.id, g.policy) + '</span>' +
     '<button class="link" data-remove="' + g.id + '">Remove</button>' + (g.policy === 'full' ? '<div class="warn" style="flex-basis:100%">Full: agents can run any command on this computer from this folder.</div>' : '') + '</div>').join('')
     : '<p class="muted">No folders yet. Grant one below, then use “Add my agent” in a session.</p>';
+  // ADR 0043: "For": Personal, or one of your organizations. Keeps the current choice.
+  orgs = [{ id: '', name: 'Personal' }].concat(s.organizations);
+  if (!orgs.some((o) => o.id === newOrg)) newOrg = '';
+  drawOrg();
   $('tools').innerHTML = s.tools.map((t) => '<div class="card row"><div class="grow"><strong>' + esc(t.name) + '</strong> <span class="muted">' + (t.installed ? (t.enabled ? 'offered in Add my agent' : 'installed, not offered') : 'not installed') + '</span></div>' +
     '<button class="switch" role="switch" aria-label="Offer ' + esc(t.name) + '" data-tool="' + esc(t.id) + '" aria-checked="' + t.enabled + '"' + (t.installed ? '' : ' disabled') + '></button></div>').join('');
   $('agents').innerHTML = s.agents.length ? s.agents.map((a) => '<div class="card row"><div class="grow"><strong>@' + esc(a.agent) + '</strong> <span class="muted">in ' + esc(a.session) + '</span></div><span class="tag">' + esc(a.folder ?? 'folder removed') + '</span>' + (a.running ? '<span class="tag run">running</span>' : a.active ? '<span class="tag">ready</span>' : '<span class="tag">not running</span>') + '</div>').join('')
@@ -210,23 +216,26 @@ function render(s) {
 }
 async function refresh() { try { render(await api('GET', '/api/state')); } catch {} }
 let newPolicy = 'edit';
+let newOrg = ''; let orgs = [{ id: '', name: 'Personal' }];
+const drawOrg = () => { $('org').innerHTML = orgs.map((o) => '<button type="button" role="radio" data-seg="org" data-value="' + esc(o.id) + '" aria-checked="' + (o.id === newOrg) + '" tabindex="' + (o.id === newOrg ? 0 : -1) + '">' + esc(o.name) + '</button>').join(''); };
 const drawNew = () => { $('policy').innerHTML = segmented('new', newPolicy); $('policyhelp').textContent = HELP[newPolicy]; };
 drawNew();
 async function choose(name, value) {
   if (name === 'new') { newPolicy = value; return drawNew(); }
+  if (name === 'org') { newOrg = value; return drawOrg(); }
   if (value === 'full' && !confirm('Full lets agents run any command on this computer from this folder. Continue?')) return refresh();
   render(await api('POST', '/api/grants/' + name, { policy: value }));
 }
 document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-seg]'); if (b) choose(b.dataset.seg, b.dataset.value); });
 document.addEventListener('keydown', (e) => {
   const b = e.target.closest && e.target.closest('[data-seg]'); if (!b || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
-  e.preventDefault(); const keys = Object.keys(POLICY_NAMES);
+  e.preventDefault(); const keys = [...b.parentElement.querySelectorAll('[data-seg]')].map((x) => x.dataset.value);
   const next = keys[(keys.indexOf(b.dataset.value) + (e.key === 'ArrowRight' ? 1 : keys.length - 1)) % keys.length];
   Promise.resolve(choose(b.dataset.seg, next)).then(() => document.querySelector('[data-seg="' + b.dataset.seg + '"][data-value="' + next + '"]')?.focus());
 });
 $('add').onsubmit = async (e) => { e.preventDefault(); $('adderror').textContent = '';
   if (newPolicy === 'full' && !confirm('Full lets agents run any command on this computer from this folder. Grant it anyway?')) return;
-  try { render(await api('POST', '/api/grants', { path: $('path').value, policy: newPolicy })); $('path').value = ''; } catch (err) { $('adderror').textContent = err.message; } };
+  try { render(await api('POST', '/api/grants', { path: $('path').value, policy: newPolicy, org: newOrg || null })); $('path').value = ''; } catch (err) { $('adderror').textContent = err.message; } };
 document.addEventListener('click', async (e) => { const id = e.target.dataset && e.target.dataset.remove; if (id) render(await api('DELETE', '/api/grants/' + id)); });
 document.addEventListener('click', async (e) => { const t = e.target.closest && e.target.closest('[data-tool]'); if (!t || t.disabled) return;
   try { render(await api('POST', '/api/tools/' + t.dataset.tool, { enabled: t.getAttribute('aria-checked') !== 'true' })); } catch (err) { $('adderror').textContent = err.message; } });

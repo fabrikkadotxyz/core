@@ -73,9 +73,12 @@
       <section>
         <div class="list" id="grants"></div>
         <div class="add" style="margin-top: 10px">
+          <span class="muted">For</span>
+          <span class="segmented" role="radiogroup" aria-label="For" id="org"></span>
           <span class="segmented" role="radiogroup" aria-label="What agents may do in the new folder" id="newPolicy"></span>
           <button class="primary" id="add">Add folder…</button>
         </div>
+        <p class="muted">A folder is for one organization's rooms, or Personal rooms. For two organizations, add it twice.</p>
         <p class="muted" id="policyHelp">Edit in folder: read and edit files here only — no shell, no web.</p>
         <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code agents read only inside the folder.</p>
       </section>
@@ -109,6 +112,13 @@
           '<button type="button" role="radio" data-seg="' + esc(name) + '" data-value="' + p + '" aria-checked="' + (p === value) + '" tabindex="' + (p === value ? 0 : -1) + '">' + POLICY[p] + '</button>'
         ).join('');
       let newPolicy = 'edit';
+      let newOrg = '';
+      let orgs = [{ id: '', name: 'Personal' }];
+      const drawOrg = () => {
+        $('org').innerHTML = orgs.map((o) =>
+          '<button type="button" role="radio" data-seg="org" data-value="' + esc(o.id) + '" aria-checked="' + (o.id === newOrg) + '" tabindex="' + (o.id === newOrg ? 0 : -1) + '">' + esc(o.name) + '</button>'
+        ).join('');
+      };
       const drawNew = () => {
         $('newPolicy').innerHTML = segmented('new', newPolicy);
         $('policyHelp').textContent = HELP[newPolicy];
@@ -127,12 +137,16 @@
         if (s.updateAvailable) $('update').innerHTML = '<strong>Update available</strong> <span class="muted">' + esc(s.version) + ' → ' + esc(s.latestVersion) + '. Install the new app from your Fabrikka site.</span>';
         $('grants').innerHTML = s.grants.length
           ? s.grants.map((g) =>
-              '<div class="card"><div class="grow"><strong>' + esc(g.label) + '</strong><div class="path">' + esc(g.path) + '</div></div>' +
+              '<div class="card"><div class="grow"><strong>' + esc(g.label) + '</strong> <span class="tag">' + esc(g.orgName) + '</span><div class="path">' + esc(g.path) + '</div></div>' +
               '<span class="segmented" role="radiogroup" aria-label="What agents may do in ' + esc(g.label) + '">' + segmented(g.id, g.policy) + '</span>' +
               '<button class="link" data-remove="' + esc(g.id) + '">Remove</button>' +
               (g.policy === 'full' ? '<div class="warn">Full: agents can run any command on this computer from this folder.</div>' : '') +
               '</div>').join('')
           : '<p class="muted">No folders yet. Add one, then use “Add my agent” in a session.</p>';
+        // ADR 0043: "For": Personal, or one of your organizations. Keeps the current choice.
+        orgs = [{ id: '', name: 'Personal' }].concat(s.organizations || []);
+        if (!orgs.some((o) => o.id === newOrg)) newOrg = '';
+        drawOrg();
         $('tools').innerHTML = s.tools.map((t) =>
           '<div class="card"><div class="grow"><strong>' + esc(t.name) + '</strong> <span class="muted">' +
           (t.installed ? (t.enabled ? 'offered in Add my agent' : 'installed, not offered') : 'not installed') + '</span></div>' +
@@ -161,6 +175,10 @@
           newPolicy = value;
           return drawNew();
         }
+        if (name === 'org') {
+          newOrg = value;
+          return drawOrg();
+        }
         try {
           await invoke('host_policy', { grantId: name, policy: value });
         } catch (err) {
@@ -176,7 +194,7 @@
         const b = e.target.closest && e.target.closest('[data-seg]');
         if (!b || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
         e.preventDefault();
-        const keys = Object.keys(POLICY);
+        const keys = [...b.parentElement.querySelectorAll('[data-seg]')].map((x) => x.dataset.value);
         const next = keys[(keys.indexOf(b.dataset.value) + (e.key === 'ArrowRight' ? 1 : keys.length - 1)) % keys.length];
         choose(b.dataset.seg, next).then(() => document.querySelector('[data-seg="' + b.dataset.seg + '"][data-value="' + next + '"]')?.focus());
       });
@@ -189,7 +207,7 @@
           showError('Full lets agents run any command from that folder. Choose the folder only if that is what you want.');
         }
         try {
-          await invoke('host_add_folder', { policy });
+          await invoke('host_add_folder', { policy, org: newOrg || null });
           await refresh();
         } catch (e) {
           showError(String(e));

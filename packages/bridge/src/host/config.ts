@@ -18,6 +18,11 @@ export interface Grant {
   label: string;
   path: string;
   policy: Policy;
+  /**
+   * ADR 0043: the organization whose rooms may use this folder, by id; null or
+   * absent for Personal (rooms outside any organization). Chosen here, once.
+   */
+  org?: string | null;
 }
 
 export interface HostConfig {

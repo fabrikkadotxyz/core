@@ -337,7 +337,7 @@ export const sessions = {
   addHostAgent: (ref: SessionRef, body: { deviceId: string; grantId: string; displayName?: string; provider?: string }) =>
     call<{ agent: { displayName: string }; online: boolean }>(`${base(ref)}/agents/host`, { method: 'POST', body }),
   agentHosts: (ref: SessionRef) =>
-    call<Record<string, { deviceName: string; label: string | null; online: boolean }>>(`${base(ref)}/agents/hosts`),
+    call<Record<string, { deviceName: string; label: string | null; online: boolean; fromPersonal?: boolean }>>(`${base(ref)}/agents/hosts`),
   setAgentTrust: (ref: SessionRef, sessionAgentId: string, trustTier: AgentTrustPolicy) =>
     call<{ ok: true }>(`${base(ref)}/agents/${sessionAgentId}/trust`, {
       method: 'PATCH',

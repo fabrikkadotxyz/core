@@ -74,3 +74,4 @@ What we rejected and why.
 | [0040](0040-email-goes-out-over-smtp.md) | Email goes out over SMTP, to any provider | Proposed |
 | [0041](0041-a-deployment-can-gate-accounts-and-team-writes.md) | A deployment can gate new accounts and a team's writes | Proposed |
 | [0042](0042-people-see-organization-the-code-says-team.md) | People see "organization"; the code still says "team" | Proposed |
+| [0043](0043-folders-and-personal-connections-belong-to-one-organization.md) | A folder, and a personal connection, belongs to one organization | Proposed |

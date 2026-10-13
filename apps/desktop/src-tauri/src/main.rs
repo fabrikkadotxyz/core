@@ -278,11 +278,12 @@ async fn host_state(app: AppHandle) -> Result<Value, String> {
 
 /// The path comes from the native picker, here in Rust — never from a page.
 #[tauri::command]
-async fn host_add_folder(app: AppHandle, policy: String) -> Result<Value, String> {
+async fn host_add_folder(app: AppHandle, policy: String, org: Option<String>) -> Result<Value, String> {
     let picked = app.dialog().file().set_title("Choose a folder your agents may work in").blocking_pick_folder();
     let Some(picked) = picked else { return Ok(json!({ "cancelled": true })) };
     let path = picked.into_path().map_err(|e| e.to_string())?;
-    ask(&app, json!({ "op": "grant", "path": path.to_string_lossy(), "policy": policy })).await
+    // ADR 0043: which organization's rooms may use it; the host checks it's one of yours.
+    ask(&app, json!({ "op": "grant", "path": path.to_string_lossy(), "policy": policy, "org": org })).await
 }
 
 #[tauri::command]

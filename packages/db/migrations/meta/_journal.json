@@ -211,6 +211,13 @@
       "when": 1791861546150,
       "tag": "0029_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791865041557,
+      "tag": "0030_folder_organizations",
+      "breakpoints": true
     }
   ]
 }

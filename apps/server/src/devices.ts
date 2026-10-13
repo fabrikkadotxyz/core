@@ -23,6 +23,8 @@ import {
   sessionAgents,
   sessions,
   sessionTokens,
+  teamMembers,
+  teams,
   users,
 } from '@fabrikka/db';
 import { AGENT_TOOLS } from '@fabrikka/types';
@@ -131,7 +133,7 @@ export async function listDevices(db: Database, userId: string, online: (id: str
   const out: DeviceSummary[] = [];
   for (const d of rows) {
     const grants = await db
-      .select({ id: deviceGrants.grantId, label: deviceGrants.label, providers: deviceGrants.providers })
+      .select({ id: deviceGrants.grantId, label: deviceGrants.label, providers: deviceGrants.providers, org: deviceGrants.teamId })
       .from(deviceGrants)
       .where(eq(deviceGrants.deviceId, d.id))
       .orderBy(deviceGrants.label);
@@ -161,15 +163,32 @@ export async function revokeDevice(db: Database, userId: string, deviceId: strin
   return true;
 }
 
-/** What the host reports. Labels and ids only; the paths stay on the machine. */
+/** ADR 0043: the organizations a person is in, for the host's "For" picker. */
+export async function organizationsOf(db: Database, userId: string): Promise<{ id: string; name: string }[]> {
+  return db
+    .select({ id: teams.id, name: teams.name })
+    .from(teamMembers)
+    .innerJoin(teams, eq(teams.id, teamMembers.teamId))
+    .where(eq(teamMembers.userId, userId))
+    .orderBy(teams.name);
+}
+
+/**
+ * What the host reports. Labels and ids only; the paths stay on the machine.
+ * ADR 0043: a grant scoped to an organization its owner isn't in is ignored,
+ * as if it weren't sent (they left it, or the machine is wrong).
+ */
 export async function setGrants(
   db: Database,
   deviceId: string,
-  grants: { id: string; label: string; providers: string[] }[],
+  grants: { id: string; label: string; providers: string[]; org?: string | null }[],
 ): Promise<void> {
+  const [owner] = await db.select({ userId: devices.userId }).from(devices).where(eq(devices.id, deviceId)).limit(1);
+  const mine = new Set(owner ? (await organizationsOf(db, owner.userId)).map((o) => o.id) : []);
   const seen = new Set<string>();
   const clean = grants
     .filter((g) => typeof g.id === 'string' && g.id.length > 0 && g.id.length <= 64)
+    .filter((g) => g.org == null || (typeof g.org === 'string' && mine.has(g.org)))
     // One row per grant id, even if a frame repeats one: the key is (device, grant).
     .filter((g) => !seen.has(g.id) && Boolean(seen.add(g.id)))
     .slice(0, 100)
@@ -178,6 +197,7 @@ export async function setGrants(
       grantId: g.id,
       label: String(g.label ?? '').slice(0, 80) || 'folder',
       providers: (Array.isArray(g.providers) ? g.providers : []).map(String).slice(0, 10),
+      teamId: g.org ?? null,
     }));
   await db.transaction(async (tx) => {
     // Two frames from one host arrive back to back (a grant, then a policy
@@ -209,6 +229,8 @@ export async function bindAgent(
     grantId: string;
     provider?: string;
     displayName?: string;
+    /** ADR 0043: the room's organization; null for a room in none. */
+    sessionTeamId: string | null;
   },
 ) {
   const [device] = await db
@@ -224,6 +246,11 @@ export async function bindAgent(
     .where(and(eq(deviceGrants.deviceId, opts.deviceId), eq(deviceGrants.grantId, opts.grantId)))
     .limit(1);
   if (!grant) throw new DeviceError('that folder is not granted on this device');
+  // ADR 0043: a folder is for one organization's rooms, or Personal rooms.
+  if ((grant.teamId ?? null) !== opts.sessionTeamId) {
+    const [t] = grant.teamId ? await db.select({ name: teams.name }).from(teams).where(eq(teams.id, grant.teamId)).limit(1) : [];
+    throw new DeviceError(`this folder is for ${t ? t.name : 'Personal rooms'}, not this room`);
+  }
   const provider = opts.provider ?? grant.providers.find((p) => HOST_PROVIDERS.includes(p));
   if (!provider || !grant.providers.includes(provider)) throw new DeviceError('no supported agent tool is installed on that device');
   if (!HOST_PROVIDERS.includes(provider)) {
@@ -277,6 +304,10 @@ export async function bindingsForDevice(db: Database, deviceId: string, publicUr
       publicId: sessions.publicId,
       title: sessions.title,
       ownerSlug: users.ownerSlug,
+      roomOrg: sessions.teamId,
+      fromPersonal: sessionAgentHosts.fromPersonal,
+      grantOrg: deviceGrants.teamId,
+      granted: deviceGrants.grantId,
     })
     .from(sessionAgentHosts)
     .innerJoin(sessionAgents, eq(sessionAgents.id, sessionAgentHosts.sessionAgentId))
@@ -284,6 +315,7 @@ export async function bindingsForDevice(db: Database, deviceId: string, publicUr
     .innerJoin(participants, eq(participants.sessionAgentId, sessionAgents.id))
     .innerJoin(sessions, eq(sessions.id, sessionAgents.sessionId))
     .innerJoin(users, eq(users.id, sessions.ownerId))
+    .leftJoin(deviceGrants, and(eq(deviceGrants.deviceId, sessionAgentHosts.deviceId), eq(deviceGrants.grantId, sessionAgentHosts.grantId)))
     .where(
       only
         ? and(eq(sessionAgentHosts.deviceId, deviceId), eq(sessionAgentHosts.sessionAgentId, only))
@@ -292,6 +324,11 @@ export async function bindingsForDevice(db: Database, deviceId: string, publicUr
 
   const out = [];
   for (const r of rows) {
+    // ADR 0043: only a folder in the room's scope (or an old Personal binding,
+    // marked). A folder of an organization they've left isn't reported, so isn't here.
+    const grantOrg = r.granted ? (r.grantOrg ?? null) : undefined;
+    if (grantOrg === undefined) continue;
+    if (grantOrg !== (r.roomOrg ?? null) && !(grantOrg === null && r.fromPersonal)) continue;
     if (r.tokenId) await db.update(sessionTokens).set({ revokedAt: new Date() }).where(eq(sessionTokens.id, r.tokenId));
     const token = generateToken();
     const [t] = await db
@@ -305,7 +342,8 @@ export async function bindingsForDevice(db: Database, deviceId: string, publicUr
       grantId: r.grantId,
       provider: r.provider,
       agent: { displayName: r.displayName },
-      session: { title: r.title, ownerSlug: r.ownerSlug, publicId: r.publicId },
+      session: { title: r.title, ownerSlug: r.ownerSlug, publicId: r.publicId, org: r.roomOrg ?? null },
+      ...(r.fromPersonal && grantOrg === null && r.roomOrg ? { fromPersonal: true } : {}),
       mcpUrl: `${publicUrl}/mcp${path}`,
       bridgeUrl: `${publicUrl.replace(/^http/, 'ws')}/bridge${path}`,
       token,
@@ -317,7 +355,13 @@ export async function bindingsForDevice(db: Database, deviceId: string, publicUr
 /** The device a session agent is bound to, if any — for the Agents panel. */
 export async function hostOf(db: Database, sessionAgentId: string) {
   const [r] = await db
-    .select({ deviceId: devices.id, deviceName: devices.name, grantId: sessionAgentHosts.grantId, label: deviceGrants.label })
+    .select({
+      deviceId: devices.id,
+      deviceName: devices.name,
+      grantId: sessionAgentHosts.grantId,
+      label: deviceGrants.label,
+      fromPersonal: sessionAgentHosts.fromPersonal,
+    })
     .from(sessionAgentHosts)
     .innerJoin(devices, eq(devices.id, sessionAgentHosts.deviceId))
     .leftJoin(deviceGrants, and(eq(deviceGrants.deviceId, devices.id), eq(deviceGrants.grantId, sessionAgentHosts.grantId)))
@@ -330,6 +374,26 @@ export async function hostOf(db: Database, sessionAgentId: string) {
 
 /** Connected hosts, in-process like the event bus. */
 const hosts = new Map<string, { send: (data: string) => void; close: () => void }>();
+const rebinds = new Set<string>();
+
+/** ADR 0043: tell every connected computer of this person about their organizations. */
+export async function refreshHostsOf(db: Database, userId: string, rebind = false): Promise<void> {
+  const mine = await db.select({ id: devices.id }).from(devices).where(and(eq(devices.userId, userId), isNull(devices.revokedAt)));
+  if (!mine.some((d) => hostHub.online(d.id))) return;
+  const organizations = await organizationsOf(db, userId);
+  for (const d of mine) hostHub.refresh(d.id, organizations, rebind);
+}
+
+/** ADR 0043: a room changed organization: its hosts get their bindings anew (and check them). */
+export async function refreshHostsInRoom(db: Database, sessionId: string): Promise<void> {
+  const bound = await db
+    .selectDistinct({ deviceId: sessionAgentHosts.deviceId, userId: devices.userId })
+    .from(sessionAgentHosts)
+    .innerJoin(sessionAgents, eq(sessionAgents.id, sessionAgentHosts.sessionAgentId))
+    .innerJoin(devices, eq(devices.id, sessionAgentHosts.deviceId))
+    .where(eq(sessionAgents.sessionId, sessionId));
+  for (const b of bound) hostHub.refresh(b.deviceId, await organizationsOf(db, b.userId), true);
+}
 
 export const hostHub = {
   attach(deviceId: string, ws: { send: (data: string) => void; close: () => void }) {
@@ -343,6 +407,18 @@ export const hostHub = {
   send(deviceId: string, frame: unknown) {
     hosts.get(deviceId)?.send(JSON.stringify(frame));
   },
+  /**
+   * ADR 0043: organizations changed for this device's owner, or a room it serves
+   * moved. Send the list; the host reports its grants again, and (with `rebind`)
+   * gets its bindings anew once the server has them.
+   */
+  refresh(deviceId: string, organizations: { id: string; name: string }[], rebind = false) {
+    if (!hosts.has(deviceId)) return;
+    if (rebind) rebinds.add(deviceId);
+    hostHub.send(deviceId, { type: 'organizations', organizations });
+  },
+  /** True once after `refresh(…, true)`. */
+  takeRebind: (deviceId: string) => rebinds.delete(deviceId),
   kick(deviceId: string) {
     const ws = hosts.get(deviceId);
     if (!ws) return;

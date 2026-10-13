@@ -13,15 +13,21 @@ export type OpResult<T = undefined> = { ok: true; value: T } | { ok: false; erro
 
 const asPolicy = (p: unknown): Policy => (POLICIES.includes(p as Policy) ? (p as Policy) : 'edit');
 
-export function addGrant(host: Host, input: { path?: string; label?: string; policy?: unknown }): OpResult<Grant> {
+export function addGrant(host: Host, input: { path?: string; label?: string; policy?: unknown; org?: unknown }): OpResult<Grant> {
   const checked = checkGrantPath(input.path ?? '');
   if (!checked.ok) return checked;
-  if (host.cfg.grants.some((g) => g.path === checked.path)) return { ok: false, error: 'that folder is already granted' };
+  // ADR 0043: a folder is for one organization, or Personal; once per scope.
+  const org = typeof input.org === 'string' && input.org ? input.org : null;
+  if (org && !host.organizations.some((o) => o.id === org)) return { ok: false, error: "that organization isn't one of yours" };
+  if (host.cfg.grants.some((g) => g.path === checked.path && (g.org ?? null) === org)) {
+    return { ok: false, error: `that folder is already granted for ${host.scopeName(org)}` };
+  }
   const grant: Grant = {
     id: newGrantId(),
     label: (input.label ?? '').trim().slice(0, 80) || defaultLabel(checked.path),
     path: checked.path,
     policy: asPolicy(input.policy),
+    org,
   };
   host.cfg.grants.push(grant);
   host.grantsChanged();

@@ -642,6 +642,8 @@ export interface DeviceSummary {
     providers: string[];
     /** False when none of its agent tools has verified host policies (Codex, for now). */
     usable: boolean;
+    /** ADR 0043: the organization whose rooms may use it (chosen on the machine); null for Personal. */
+    org: string | null;
   }[];
 }
 

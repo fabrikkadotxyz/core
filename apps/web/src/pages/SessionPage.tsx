@@ -1206,10 +1206,13 @@ function AgentsPanel({
   const [choice, setChoice] = useState<string>('');
   const [tool, setTool] = useState('');
   const [caveatOk, setCaveatOk] = useState(false);
-  const [hosts, setHosts] = useState<Record<string, { deviceName: string; label: string | null; online: boolean }>>({});
+  const [hosts, setHosts] = useState<Record<string, { deviceName: string; label: string | null; online: boolean; fromPersonal?: boolean }>>({});
+  // ADR 0043: the room's organization (null: Personal). Only its folders are offered.
+  const [roomOrg, setRoomOrg] = useState<{ id: string; name: string } | null | undefined>(undefined);
 
   const refresh = useCallback(() => {
     sessions.agents(ref_).then(setAgents).catch(() => {});
+    sessions.team(ref_).then(setRoomOrg).catch(() => setRoomOrg(null));
     sessions.agentHosts(ref_).then(setHosts).catch(() => {});
     // Owner-only on the server (404 otherwise). Asking anyway would work, but a
     // request whose failure we plan on is a request not worth sending.
@@ -1234,8 +1237,11 @@ function AgentsPanel({
     }
   };
 
+  const inScope = (g: DeviceSummary['grants'][number]) => (g.org ?? null) === (roomOrg?.id ?? null);
+  const scopeName = roomOrg ? roomOrg.name : 'Personal rooms';
+  const elsewhere = (myDevices ?? []).some((d) => d.grants.some((g) => g.usable && !inScope(g)));
   const folders = (myDevices ?? []).flatMap((d) =>
-    d.grants.filter((g) => g.usable).map((g) => ({
+    d.grants.filter((g) => g.usable && inScope(g)).map((g) => ({
       key: `${d.id}|${g.id}`,
       deviceId: d.id,
       grantId: g.id,
@@ -1301,7 +1307,9 @@ function AgentsPanel({
                 </>
               ) : (
                 <>
-                  No folder granted yet on {myDevices.map((d) => d.name).join(', ')}.{' '}
+                  {elsewhere
+                    ? `No folder for ${scopeName} yet on ${myDevices.map((d) => d.name).join(', ')}: add one with “For: ${roomOrg ? roomOrg.name : 'Personal'}”. `
+                    : `No folder granted yet on ${myDevices.map((d) => d.name).join(', ')}. `}
                   {inDesktopApp() ? (
                     <button className="link small" onClick={() => openFolders().catch(() => {})}>
                       Add folders…
@@ -1395,7 +1403,9 @@ function AgentsPanel({
               <span>🤖 @{a.displayName}</span>
               <span className="muted small">
                 {hosts[a.participantId]
-                  ? `on ${hosts[a.participantId]!.deviceName} · ${hosts[a.participantId]!.label ?? 'folder removed'}${hosts[a.participantId]!.online ? '' : ' · offline'}`
+                  ? `on ${hosts[a.participantId]!.deviceName} · ${hosts[a.participantId]!.label ?? 'folder removed'}${hosts[a.participantId]!.online ? '' : ' · offline'}${
+                      hosts[a.participantId]!.fromPersonal ? ` · from Personal: add it for ${roomOrg?.name ?? 'this organization'}` : ''
+                    }`
                   : a.provider}
               </span>
               {/*

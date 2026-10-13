@@ -1951,6 +1951,47 @@ invite on the core):
    then goes away. **Dismiss** on another account hides it for good.
 6. An account from before M47 sees no welcome.
 
+## M48 — Each organization has its own folders and connections
+
+> People work for several organizations: an employer, a client. A folder or a
+> personal connection set up for one must never turn up in another's rooms by
+> a slip of the picker, and two organizations may need two GitHub accounts.
+> [ADR 0043](decisions/0043-folders-and-personal-connections-belong-to-one-organization.md).
+
+### Folders (first)
+
+- **The Folders window asks "For":** *Personal*, or one of your
+  organizations, sent to the host by the server. The same folder can be added
+  once per organization, each with its own policy.
+- **"Add my agent" offers only the room's folders;** the server refuses
+  another organization's, and the host refuses to run one even if asked.
+- **Leaving an organization** stops its folders being offered or run; a room
+  changing organization re-checks its agents.
+- **Existing folders are Personal.** One already bound in an organization's
+  room keeps working, marked *from Personal: add it for <org>*.
+
+### Personal connections (second)
+
+- **The Integrations page asks "For"** (default: the organization in the
+  sidebar). One connection per vendor per organization, so two GitHub
+  accounts for two organizations works.
+- **A room attaches, and resolves, only its organization's connections;** your
+  own still beats the organization's shared one, within that organization.
+- **Existing connections are Personal;** ones already attached in an
+  organization's room keep working, marked the same way.
+
+**Test.** With two organizations, *Acme* and *Client*:
+1. Folders window → **For: Acme** → Add folder… → pick the repo: **3 clicks**.
+   Add the same repo **For: Client**, as *Read only*. Both are listed, tagged.
+2. In an Acme room, **Add my agent** offers only the Acme folder → **Add**:
+   the agent answers a mention. In a Client room, only the Client one.
+3. Move the Acme room to Client (room settings → Organization): the agent
+   goes offline, and *Add my agent* there offers only the Client folder.
+4. Integrations → **For: Client** → Connect GitHub with a second account. In a
+   Client room, *attach* offers only that one, and calls use it.
+5. An agent bound before this milestone, in an organization's room, still
+   answers and says *from Personal: add it for <org>*.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

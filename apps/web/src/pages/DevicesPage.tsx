@@ -7,6 +7,7 @@ import type { DeviceSummary } from '@fabrikka/types';
 import { client, devices } from '../api.ts';
 import { inDesktopApp, openFolders } from '../desktop.ts';
 import { timeAgo } from '../outputs/Outputs.tsx';
+import { useWorkspace } from '../shell/workspace.tsx';
 
 /**
  * M33 (ADR 0030): this instance's own installer. Once per computer, so a paste
@@ -55,6 +56,9 @@ function ConnectCommand({ first }: { first: boolean }) {
 
 export function DevicesPage() {
   const [list, setList] = useState<DeviceSummary[] | null>(null);
+  // ADR 0043: each folder is for one organization's rooms, or Personal.
+  const { teams } = useWorkspace();
+  const orgName = (id: string | null) => (id ? (teams.find((t) => t.id === id)?.name ?? 'an organization') : 'Personal');
   const load = useCallback(() => {
     devices.list().then(setList).catch(() => setList([]));
   }, []);
@@ -116,7 +120,7 @@ export function DevicesPage() {
                 <ul className="grant-list">
                   {d.grants.map((g) => (
                     <li key={g.id}>
-                      📁 {g.label} <span className="muted small">{g.providers.join(', ') || 'no agent tools found'}</span>
+                      📁 {g.label} <span className="muted small">for {orgName(g.org)} · {g.providers.join(', ') || 'no agent tools found'}</span>
                       {!g.usable && <span className="muted small"> · no agent tool here can run from the host yet</span>}
                     </li>
                   ))}

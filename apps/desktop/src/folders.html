@@ -199,6 +199,8 @@
         choose(b.dataset.seg, next).then(() => document.querySelector('[data-seg="' + b.dataset.seg + '"][data-value="' + next + '"]')?.focus());
       });
       drawNew();
+      // Personal is always a choice, even before the host has the organizations (or is paired).
+      drawOrg();
 
       $('add').addEventListener('click', async () => {
         const policy = newPolicy;

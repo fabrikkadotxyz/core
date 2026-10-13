@@ -219,7 +219,7 @@ let newPolicy = 'edit';
 let newOrg = ''; let orgs = [{ id: '', name: 'Personal' }];
 const drawOrg = () => { $('org').innerHTML = orgs.map((o) => '<button type="button" role="radio" data-seg="org" data-value="' + esc(o.id) + '" aria-checked="' + (o.id === newOrg) + '" tabindex="' + (o.id === newOrg ? 0 : -1) + '">' + esc(o.name) + '</button>').join(''); };
 const drawNew = () => { $('policy').innerHTML = segmented('new', newPolicy); $('policyhelp').textContent = HELP[newPolicy]; };
-drawNew();
+drawNew(); drawOrg();
 async function choose(name, value) {
   if (name === 'new') { newPolicy = value; return drawNew(); }
   if (name === 'org') { newOrg = value; return drawOrg(); }

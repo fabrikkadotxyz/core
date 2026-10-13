@@ -565,9 +565,14 @@ export const mcpServers = pgTable(
     headers: jsonb('headers').$type<Record<string, string>>(),
     /** ok | needs_reconnect */
     status: text('status').notNull().default('ok'),
+    /**
+     * ADR 0043: the organization whose rooms may use it; null for Personal.
+     * One connection per vendor per scope. Deleting the organization deletes it.
+     */
+    teamId: uuid('team_id').references(() => teams.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique('mcp_servers_owner_slug').on(t.ownerId, t.slug)],
+  (t) => [unique('mcp_servers_owner_team_slug').on(t.ownerId, t.teamId, t.slug).nullsNotDistinct()],
 );
 
 /**
@@ -600,6 +605,8 @@ export const oauthFlows = pgTable('oauth_flows', {
   oauthClientId: uuid('oauth_client_id').references(() => oauthClients.id, { onDelete: 'cascade' }),
   tokenEndpoint: text('token_endpoint').notNull(),
   fields: jsonb('fields').$type<Record<string, string>>(),
+  /** ADR 0043: the organization the connection will be for; null for Personal. */
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'cascade' }),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 });
 
@@ -615,6 +622,11 @@ export const sessionMcpServers = pgTable(
     addedByUserId: uuid('added_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    /**
+     * ADR 0043: a Personal connection attached in an organization's room before
+     * connections had organizations. Honoured (and marked) until it's redone.
+     */
+    fromPersonal: boolean('from_personal').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.mcpServerId] })],

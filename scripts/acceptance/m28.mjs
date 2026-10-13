@@ -97,11 +97,12 @@ check(list.find((s) => s.publicId === personal.publicId)?.team === null, 'a pers
 const unauth = await fetch(`${API}/me/connections`);
 check(unauth.status === 401 || unauth.status === 404, 'connections need a signed-in user');
 const slug = `demo${stamp}`.slice(0, 20);
-const saved = await req('/me/connections', { method: 'POST', body: { slug, url: 'https://mcp.example.test/mcp', label: 'Demo' }, jar: fede });
+// ADR 0043: for the organization whose room it's attached to below.
+const saved = await req('/me/connections', { method: 'POST', body: { slug, url: 'https://mcp.example.test/mcp', label: 'Demo', teamId: T }, jar: fede });
 check(saved.status === 201, 'a connection is saved outside any session');
 check((await req('/me/connections', { method: 'POST', body: { slug: 'Bad Slug!', url: 'https://x.test' }, jar: fede })).status === 400, 'a bad name is refused');
 check((await req('/me/connections', { method: 'POST', body: { slug: 'x', url: 'file:///etc/passwd' }, jar: fede })).status === 400, 'only http(s) servers');
-let mine = (await req('/me/connections', { jar: fede })).json.connections.find((c) => c.slug === slug);
+let mine = (await req(`/me/connections?team=${T}`, { jar: fede })).json.connections.find((c) => c.slug === slug);
 check(mine && mine.sessions === 0 && mine.hasCredential === false, 'it is listed, in no session yet, with no token');
 
 const base = `/o/${made[1].ownerSlug}/s/${made[1].publicId}`;
@@ -110,11 +111,11 @@ check(integ.available.some((c) => c.slug === slug), "a session's Setup offers it
 check((await req(`${base}/integrations`, { method: 'POST', body: { slug }, jar: fede })).status === 201, 'it attaches by name alone');
 integ = (await req(`${base}/integrations`, { jar: fede })).json;
 check(integ.mine.some((c) => c.slug === slug) && !integ.available.some((c) => c.slug === slug), '…and moves from offered to attached');
-mine = (await req('/me/connections', { jar: fede })).json.connections.find((c) => c.slug === slug);
+mine = (await req(`/me/connections?team=${T}`, { jar: fede })).json.connections.find((c) => c.slug === slug);
 check(mine.sessions === 1, 'the integrations page counts the session it is in');
 check((await req(`${base}/integrations`, { method: 'POST', body: { slug: 'nothing-like-this' }, jar: fede })).status === 400, 'attaching a connection you do not have is refused');
 
-check((await req(`/me/connections/${slug}`, { method: 'DELETE', jar: fede })).status === 200, 'removing it on the page…');
+check((await req(`/me/connections/${slug}?team=${T}`, { method: 'DELETE', jar: fede })).status === 200, 'removing it on the page…');
 integ = (await req(`${base}/integrations`, { jar: fede })).json;
 check(!integ.mine.some((c) => c.slug === slug), '…detaches it from every session');
 

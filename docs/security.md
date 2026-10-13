@@ -240,6 +240,17 @@ GitHub audit log says: alice
 
 Tool grants (`session_mcp_tool_grants`) are **tool-level and default-deny**. Server-level allow/deny is too coarse: "GitHub read but not merge" is the actual requirement.
 
+### Each organization's own connections (ADR 0043)
+
+A personal connection is for **one organization's rooms, or Personal** rooms. A
+room attaches, and resolves at run time, only connections in its scope, and an
+organization's stop resolving the moment you leave it. So a credential you set
+up for an employer can't be used in a client's room by a slip of the picker,
+and two organizations can have two accounts at the same vendor. Folders on
+your computer follow the same rule, checked by the server and again by the
+host. Connections attached before ADR 0043 in an organization's room keep
+working, marked *from Personal* until redone.
+
 ### Team credentials (M30)
 
 [ADR 0028](decisions/0028-team-credentials-are-shared-marked-and-lose-to-your-own.md)

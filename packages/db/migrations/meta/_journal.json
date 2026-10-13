@@ -218,6 +218,13 @@
       "when": 1791865041557,
       "tag": "0030_folder_organizations",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791865652403,
+      "tag": "0031_connection_organizations",
+      "breakpoints": true
     }
   ]
 }

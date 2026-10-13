@@ -2278,3 +2278,6 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
   background: var(--accent); border: 1px solid var(--accent); color: var(--on-accent);
 }
 .step-action button { padding: 0.4rem 0.7rem; }
+
+/* ---- ADR 0043: which organization a personal connection is for ---- */
+.integrations-for { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; }

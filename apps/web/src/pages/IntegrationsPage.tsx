@@ -12,14 +12,24 @@ import { useSearchParams } from 'react-router-dom';
 import { connections, type CatalogueItem, type VendorLogo } from '../api.ts';
 import { Select } from '../components/Select.tsx';
 import { inDesktopApp } from '../desktop.ts';
+import { useWorkspace } from '../shell/workspace.tsx';
 
 type Conn = Awaited<ReturnType<typeof connections.list>>['connections'][number];
 
 export function IntegrationsPage() {
   const [list, setList] = useState<Conn[] | null>(null);
+  const [orphaned, setOrphaned] = useState<Conn[]>([]);
   const [catalogue, setCatalogue] = useState<Awaited<ReturnType<typeof connections.catalogue>> | null>(null);
   const [encryption, setEncryption] = useState(true);
   const [params, setParams] = useSearchParams();
+  // ADR 0043: which organization's rooms these connections are for. `?team=<id>`,
+  // `?team=` for Personal, and otherwise the organization chosen in the sidebar.
+  const { team, teams } = useWorkspace();
+  const asked = params.get('team');
+  const scope: string | null = asked === null ? (team?.id ?? null) : asked || null;
+  const scopeName = scope ? (teams.find((t) => t.id === scope)?.name ?? 'this organization') : 'Personal rooms';
+  /** Search params to keep, so the scope survives a notice or its dismissal. */
+  const withScope = (extra: Record<string, string> = {}) => ({ team: scope ?? '', ...extra });
   const [error, setError] = useState<string | null>(null);
   /** The vendor being signed in to in the default browser (desktop app), and whether it was already connected. */
   const [inBrowser, setInBrowser] = useState<string | null>(null);
@@ -27,14 +37,15 @@ export function IntegrationsPage() {
 
   const load = useCallback(() => {
     connections
-      .list()
+      .list(scope)
       .then((r) => {
         setList(r.connections);
+        setOrphaned(r.orphaned);
         setEncryption(r.encryptionConfigured);
       })
       .catch(() => setList([]));
-    connections.catalogue().then(setCatalogue).catch(() => setCatalogue({ categories: {}, entries: [], unavailable: [], encryptionConfigured: true }));
-  }, []);
+    connections.catalogue(scope).then(setCatalogue).catch(() => setCatalogue({ categories: {}, entries: [], unavailable: [], encryptionConfigured: true }));
+  }, [scope]);
   useEffect(load, [load]);
 
   // Signing in in the default browser (ADR 0033): pick the result up on the way back.
@@ -43,7 +54,7 @@ export function IntegrationsPage() {
     const done = catalogue?.entries.find((e) => e.id === inBrowser);
     if (done?.connected && done.status === 'ok' && !wasConnected.current) {
       setInBrowser(null);
-      setParams({ connected: inBrowser }, { replace: true });
+      setParams(withScope({ connected: inBrowser }), { replace: true });
       return;
     }
     const back = () => load();
@@ -61,14 +72,14 @@ export function IntegrationsPage() {
     try {
       if (inDesktopApp()) {
         // The app opens this one link in the default browser and stays here.
-        const { handoffUrl } = await connections.startHandoff(entry, fields);
+        const { handoffUrl } = await connections.startHandoff(entry, fields, scope);
         const before = catalogue?.entries.find((e) => e.id === entry);
         wasConnected.current = !!before?.connected && before.status === 'ok';
         setInBrowser(entry);
         window.location.href = handoffUrl;
         return;
       }
-      const { authorizeUrl } = await connections.startOAuth(entry, fields);
+      const { authorizeUrl } = await connections.startOAuth(entry, fields, scope);
       window.location.href = authorizeUrl;
     } catch (err) {
       setError((err as Error).message);
@@ -117,11 +128,21 @@ export function IntegrationsPage() {
           Your own connections. Calls made with them run as you — your account is what the vendor's audit log names.
           Attach one to a session from that session's Setup.
         </p>
+        <div className="row integrations-for">
+          <span className="muted small">For</span>
+          <Select
+            label="For"
+            value={scope ?? ''}
+            options={[{ value: '', label: 'Personal rooms' }, ...teams.map((t) => ({ value: t.id, label: t.name }))]}
+            onChange={(v) => setParams({ team: v }, { replace: true })}
+          />
+          <span className="muted small">Each organization has its own; for two, connect twice.</span>
+        </div>
 
         {(connected || failed) && (
           <p className={connected ? 'notice ok' : 'notice danger-hint'} role="status">
             {connected ? `Connected to ${connectedName}.` : `Couldn't connect: ${failed}`}{' '}
-            <button className="link small" onClick={() => setParams({}, { replace: true })}>
+            <button className="link small" onClick={() => setParams(withScope(), { replace: true })}>
               Dismiss
             </button>
           </p>
@@ -144,8 +165,8 @@ export function IntegrationsPage() {
           </p>
         )}
 
-        <h2>Your connections</h2>
-        {list && list.length === 0 && <p className="muted small">No connections yet. Add one below.</p>}
+        <h2>Your connections for {scopeName}</h2>
+        {list && list.length === 0 && <p className="muted small">No connections for {scopeName} yet. Add one below.</p>}
         <ul className="connection-list">
           {list?.map((c) => (
             <li key={c.id} className="connection-row">
@@ -179,7 +200,7 @@ export function IntegrationsPage() {
                 className="link small danger"
                 title={c.sessions ? `Also removes it from ${c.sessions} session${c.sessions === 1 ? '' : 's'}` : undefined}
                 onClick={async () => {
-                  await connections.remove(c.slug).catch(() => {});
+                  await connections.remove(c.slug, c.teamId).catch(() => {});
                   load();
                 }}
               >
@@ -189,7 +210,34 @@ export function IntegrationsPage() {
           ))}
         </ul>
 
-        <h2>Add a connection</h2>
+        {orphaned.length > 0 && (
+          <>
+            <h2>For organizations you've left</h2>
+            <p className="muted small">These no longer work anywhere. Remove them to delete their credentials.</p>
+            <ul className="connection-list">
+              {orphaned.map((c) => (
+                <li key={c.id} className="connection-row">
+                  <VendorMark logo={logoOf(c.entry)} name={c.label} />
+                  <span className="connection-text">
+                    <strong>{c.label}</strong>
+                    <span className="muted small">no longer a member</span>
+                  </span>
+                  <button
+                    className="link small danger"
+                    onClick={async () => {
+                      await connections.remove(c.slug, c.teamId).catch(() => {});
+                      load();
+                    }}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        <h2>Add a connection for {scopeName}</h2>
         <div className="catalogue-tools">
           <label className="catalogue-search">
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -262,7 +310,7 @@ export function IntegrationsPage() {
 
         <details className="custom-connection" open={customOpen} onToggle={(e) => setCustomOpen(e.currentTarget.open)}>
           <summary className="muted small">Custom connection (any MCP server, by URL and token)</summary>
-          <CustomConnection onSaved={load} />
+          <CustomConnection onSaved={load} teamId={scope} />
         </details>
       </main>
     </div>
@@ -326,7 +374,7 @@ function VendorMark({ logo, name }: { logo: VendorLogo | null; name: string }) {
   );
 }
 
-function CustomConnection({ onSaved }: { onSaved: () => void }) {
+function CustomConnection({ onSaved, teamId }: { onSaved: () => void; teamId: string | null }) {
   const [slug, setSlug] = useState('');
   const [url, setUrl] = useState('');
   const [token, setToken] = useState('');
@@ -346,6 +394,7 @@ function CustomConnection({ onSaved }: { onSaved: () => void }) {
             url: url.trim(),
             credential: token || undefined,
             username: scheme === 'basic' ? email.trim() : undefined,
+            teamId,
           });
           setSlug('');
           setUrl('');

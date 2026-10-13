@@ -178,6 +178,8 @@ export interface Handoff {
   userId: string;
   entryId: string;
   fields: Record<string, string>;
+  /** ADR 0043: the organization the connection will be for; null for Personal. */
+  teamId: string | null;
 }
 
 /**
@@ -185,11 +187,11 @@ export interface Handoff {
  * sealed (AES-256-GCM: it can't be forged or edited) and expires in 5 minutes.
  * The vendor and its fields are checked now, so a mistake shows in the app.
  */
-export function issueHandoff(opts: { userId: string; entryId: string; fields?: Record<string, string>; publicUrl: string }): string {
+export function issueHandoff(opts: { userId: string; entryId: string; fields?: Record<string, string>; publicUrl: string; teamId?: string | null }): string {
   const entry = findEntry(opts.entryId);
   if (!entry) throw new OAuthError('no such connection');
   checkFields(entry, opts.fields ?? {});
-  const ticket = seal(JSON.stringify({ u: opts.userId, e: entry.id, f: opts.fields ?? {}, x: Date.now() + HANDOFF_TTL_MS }));
+  const ticket = seal(JSON.stringify({ u: opts.userId, e: entry.id, f: opts.fields ?? {}, t: opts.teamId ?? null, x: Date.now() + HANDOFF_TTL_MS }));
   const url = new URL(`${opts.publicUrl}${handoffPath}`);
   url.searchParams.set('t', ticket);
   return url.href;
@@ -206,10 +208,10 @@ export function readHandoff(ticket: string | undefined): Handoff | null {
   }
   if (!raw) return null;
   try {
-    const t = JSON.parse(raw) as { u?: unknown; e?: unknown; f?: unknown; x?: unknown };
+    const t = JSON.parse(raw) as { u?: unknown; e?: unknown; f?: unknown; t?: unknown; x?: unknown };
     if (typeof t.u !== 'string' || typeof t.e !== 'string' || typeof t.x !== 'number' || t.x < Date.now()) return null;
     const fields = t.f && typeof t.f === 'object' ? (t.f as Record<string, string>) : {};
-    return { userId: t.u, entryId: t.e, fields };
+    return { userId: t.u, entryId: t.e, fields, teamId: typeof t.t === 'string' ? t.t : null };
   } catch {
     return null;
   }
@@ -218,7 +220,7 @@ export function readHandoff(ticket: string | undefined): Handoff | null {
 /** Begin connecting: returns the vendor's sign-in URL to send the browser to. */
 export async function startFlow(
   db: Database,
-  opts: { userId: string; entryId: string; fields?: Record<string, string>; publicUrl: string },
+  opts: { userId: string; entryId: string; fields?: Record<string, string>; publicUrl: string; teamId?: string | null },
 ): Promise<string> {
   const entry = findEntry(opts.entryId);
   if (!entry) throw new OAuthError('no such connection');
@@ -237,6 +239,7 @@ export async function startFlow(
     oauthClientId: client.rowId,
     tokenEndpoint: as.tokenEndpoint,
     fields: headers,
+    teamId: opts.teamId ?? null,
     expiresAt: new Date(Date.now() + FLOW_TTL_MS),
   });
 
@@ -293,7 +296,7 @@ async function clientById(db: Database, entry: CatalogueEntry, rowId: string | n
 export async function completeFlow(
   db: Database,
   opts: { userId: string | null; code: string; state: string; publicUrl: string },
-): Promise<CatalogueEntry> {
+): Promise<{ entry: CatalogueEntry; teamId: string | null }> {
   const [flow] = await db
     .delete(oauthFlows)
     .where(
@@ -332,9 +335,9 @@ export async function completeFlow(
   };
   await db
     .insert(mcpServers)
-    .values({ ownerId: flow.userId, slug: entry.slug, ...values })
-    .onConflictDoUpdate({ target: [mcpServers.ownerId, mcpServers.slug], set: values });
-  return entry;
+    .values({ ownerId: flow.userId, slug: entry.slug, teamId: flow.teamId, ...values })
+    .onConflictDoUpdate({ target: [mcpServers.ownerId, mcpServers.teamId, mcpServers.slug], set: values });
+  return { entry, teamId: flow.teamId };
 }
 
 /**

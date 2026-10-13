@@ -48,6 +48,7 @@ import { catchUp, endRun, recordActivity, startRun } from './activity.ts';
 import {
   attachServer,
   listConnections,
+  roomScopeOf,
   removeConnection,
   saveConnection,
   detachServer,
@@ -694,27 +695,56 @@ export function createApp(options: CreateAppOptions = {}) {
 
   /* ---- personal integrations (M28): your own connections, outside any session ---- */
 
-  app.get('/api/me/connections', requireUser(db), async (c) =>
-    c.json({ connections: await listConnections(db, c.get('user').id), encryptionConfigured: isEncryptionConfigured() }),
-  );
+  /**
+   * ADR 0043: a connection is for one organization's rooms (`?team=<id>`, or
+   * `teamId` in a body) or Personal (absent). An organization you're not in is
+   * refused, except to remove a connection you made while you were.
+   */
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const scopeOf = async (c: Context<AuthEnv>, raw: unknown, removing = false): Promise<{ ok: true; scope: string | null } | { ok: false }> => {
+    if (raw === undefined || raw === null || raw === '') return { ok: true, scope: null };
+    if (typeof raw !== 'string' || !UUID_RE.test(raw)) return { ok: false };
+    if (!removing && !(await teamRole(db, raw, c.get('user').id))) return { ok: false };
+    return { ok: true, scope: raw };
+  };
+
+  app.get('/api/me/connections', requireUser(db), async (c) => {
+    const scope = await scopeOf(c, c.req.query('team'));
+    if (!scope.ok) return c.json({ error: 'no such organization' }, 404);
+    const all = await listConnections(db, c.get('user').id, 'all');
+    const mine = new Set((await organizationsOf(db, c.get('user').id)).map((o) => o.id));
+    return c.json({
+      connections: all.filter((x) => x.teamId === scope.scope),
+      // For organizations you've left: they no longer work anywhere, listed to remove.
+      orphaned: all.filter((x) => x.teamId !== null && !mine.has(x.teamId)),
+      encryptionConfigured: isEncryptionConfigured(),
+    });
+  });
 
   app.post('/api/me/connections', requireUser(db), async (c) => {
-    const body = await c.req.json<{ slug?: string; label?: string; url?: string; credential?: string; username?: string }>();
+    const body = await c.req.json<{ slug?: string; label?: string; url?: string; credential?: string; username?: string; teamId?: string | null }>();
     if (!body.slug || !body.url) return c.json({ error: 'slug and url are required' }, 400);
-    const saved = await saveConnection(db, { userId: c.get('user').id, slug: body.slug, label: body.label, url: body.url, credential: body.credential, username: body.username });
+    const scope = await scopeOf(c, body.teamId);
+    if (!scope.ok) return c.json({ error: 'no such organization' }, 404);
+    const saved = await saveConnection(db, { userId: c.get('user').id, slug: body.slug, label: body.label, url: body.url, credential: body.credential, username: body.username, teamId: scope.scope });
     return saved.ok ? c.json(saved.server, 201) : c.json({ error: saved.error }, 400);
   });
 
   /** Removing a connection detaches it from every session it was in. */
-  app.delete('/api/me/connections/:slug', requireUser(db), async (c) =>
-    (await removeConnection(db, c.get('user').id, c.req.param('slug'))) ? c.json({ ok: true }) : c.notFound(),
-  );
+  app.delete('/api/me/connections/:slug', requireUser(db), async (c) => {
+    const scope = await scopeOf(c, c.req.query('team'), true);
+    if (!scope.ok) return c.notFound();
+    return (await removeConnection(db, c.get('user').id, c.req.param('slug'), scope.scope)) ? c.json({ ok: true }) : c.notFound();
+  });
 
   /* ---- connections by vendor (M18, ADR 0024) ---- */
 
   /** What can be connected here, by category, and whether you already have it. */
   app.get('/api/connections/catalogue', requireUser(db), async (c) => {
-    const mine = await listConnections(db, c.get('user').id);
+    // ADR 0043: "connected" means in the scope the page is showing.
+    const scope = await scopeOf(c, c.req.query('team'));
+    if (!scope.ok) return c.json({ error: 'no such organization' }, 404);
+    const mine = await listConnections(db, c.get('user').id, scope.scope);
     return c.json({
       categories: CATEGORY_NAMES,
       entries: offeredEntries().map((e) => {
@@ -755,14 +785,17 @@ export function createApp(options: CreateAppOptions = {}) {
   app.post('/api/connections/oauth/start', requireUser(db), async (c) => {
     if (!isEncryptionConfigured()) return c.json({ error: 'FABRIKKA_ENCRYPTION_KEY is not set, so tokens could not be stored' }, 503);
     const body = await c.req
-      .json<{ entry?: string; fields?: Record<string, string>; handoff?: boolean }>()
-      .catch(() => ({}) as { entry?: string; handoff?: boolean });
+      .json<{ entry?: string; fields?: Record<string, string>; handoff?: boolean; teamId?: string | null }>()
+      .catch(() => ({}) as { entry?: string; handoff?: boolean; teamId?: string | null });
+    // ADR 0043: the scope travels with the flow, from here to the callback.
+    const scope = await scopeOf(c, body.teamId);
+    if (!scope.ok) return c.json({ error: 'no such organization' }, 404);
     try {
       if (body.handoff === true) {
-        const handoffUrl = issueHandoff({ userId: c.get('user').id, entryId: String(body.entry ?? ''), fields: (body as { fields?: Record<string, string> }).fields, publicUrl: PUBLIC_URL });
+        const handoffUrl = issueHandoff({ userId: c.get('user').id, entryId: String(body.entry ?? ''), fields: (body as { fields?: Record<string, string> }).fields, publicUrl: PUBLIC_URL, teamId: scope.scope });
         return c.json({ handoffUrl });
       }
-      const authorizeUrl = await startFlow(db, { userId: c.get('user').id, entryId: String(body.entry ?? ''), fields: (body as { fields?: Record<string, string> }).fields, publicUrl: PUBLIC_URL });
+      const authorizeUrl = await startFlow(db, { userId: c.get('user').id, entryId: String(body.entry ?? ''), fields: (body as { fields?: Record<string, string> }).fields, publicUrl: PUBLIC_URL, teamId: scope.scope });
       return c.json({ authorizeUrl });
     } catch (err) {
       if (err instanceof OAuthError) return c.json({ error: err.message }, 400);
@@ -821,8 +854,9 @@ export function createApp(options: CreateAppOptions = {}) {
     if (error) return fail(error_description ?? error);
     if (!code || !state) return fail('the vendor sent no code back');
     try {
-      const entry = await completeFlow(db, { userId: user?.id ?? null, code, state, publicUrl: PUBLIC_URL });
-      return viaHandoff ? c.html(donePage(entry.name)) : c.redirect(`/integrations?connected=${encodeURIComponent(entry.id)}`);
+      const { entry, teamId } = await completeFlow(db, { userId: user?.id ?? null, code, state, publicUrl: PUBLIC_URL });
+      const back = `/integrations?connected=${encodeURIComponent(entry.id)}${teamId ? `&team=${encodeURIComponent(teamId)}` : ''}`;
+      return viaHandoff ? c.html(donePage(entry.name)) : c.redirect(back);
     } catch (err) {
       if (err instanceof OAuthError) return fail(err.message);
       throw err;
@@ -1596,8 +1630,8 @@ export function createApp(options: CreateAppOptions = {}) {
         hasCredential: t.hasCredential,
         overridden: mine.some((m) => m.slug === t.slug),
       })),
-      // M28: your connections not yet in this session, offered to attach.
-      available: (await listConnections(db, c.get('user').id)).filter((x) => !mine.some((m) => m.id === x.id)),
+      // M28: your connections not yet in this session, offered to attach. ADR 0043: only the room's scope.
+      available: (await listConnections(db, c.get('user').id, await roomScopeOf(db, s.id))).filter((x) => !mine.some((m) => m.id === x.id)),
       inSession: await slugsInSession(db, s.id),
       grants: await listGrants(db, s.id),
       encryptionConfigured: isEncryptionConfigured(),

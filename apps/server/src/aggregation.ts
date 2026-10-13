@@ -11,7 +11,7 @@
  *
  * HTTP only. See ADR 0014 for why stdio is not here.
  */
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { Database } from '@fabrikka/db';
 import { freshAccessToken } from './connections/oauth.ts';
@@ -39,7 +39,23 @@ export interface AttachedServer {
   label: string;
   url: string;
   hasCredential: boolean;
+  /** ADR 0043: a Personal connection attached in an organization's room before ADR 0043. */
+  fromPersonal?: boolean;
 }
+
+/**
+ * ADR 0043: a connection's scope. Null is Personal (rooms outside any
+ * organization); otherwise the organization (a `team` in the code, ADR 0042).
+ */
+export type Scope = string | null;
+
+/** The organization a room is in, or null: the scope its connections must have. */
+export async function roomScopeOf(db: Database, sessionId: string): Promise<Scope> {
+  const [row] = await db.select({ teamId: sessions.teamId }).from(sessions).where(eq(sessions.id, sessionId)).limit(1);
+  return row?.teamId ?? null;
+}
+
+const inScope = (teamId: Scope) => (teamId ? eq(mcpServers.teamId, teamId) : isNull(mcpServers.teamId));
 
 /**
  * A server a participant may use in a session: their own, or — where they have
@@ -132,6 +148,8 @@ export async function saveConnection(
      * tokens): the credential is then sent as `Basic base64(username:credential)`.
      */
     username?: string;
+    /** ADR 0043: which organization's rooms may use it; null or absent for Personal. */
+    teamId?: Scope;
   },
 ): Promise<{ ok: true; server: AttachedServer } | { ok: false; error: string }> {
   const username = opts.username?.trim();
@@ -153,9 +171,10 @@ export async function saveConnection(
       url: opts.url,
       sealedCredential: sealed,
       auth,
+      teamId: opts.teamId ?? null,
     })
     .onConflictDoUpdate({
-      target: [mcpServers.ownerId, mcpServers.slug],
+      target: [mcpServers.ownerId, mcpServers.teamId, mcpServers.slug],
       set: {
         label: opts.label?.trim() || slug,
         url: opts.url,
@@ -187,14 +206,24 @@ export async function attachServer(
     credential?: string;
   },
 ): Promise<AttachResult> {
+  // ADR 0043: only a connection for the room's organization (or Personal, in a room in none).
+  const scope = await roomScopeOf(db, opts.sessionId);
   let server: AttachedServer;
   if (opts.url) {
-    const saved = await saveConnection(db, { ...opts, url: opts.url });
+    const saved = await saveConnection(db, { ...opts, url: opts.url, teamId: scope });
     if (!saved.ok) return saved;
     server = saved.server;
   } else {
-    const existing = (await listConnections(db, opts.userId)).find((c) => c.slug === opts.slug.trim().toLowerCase());
-    if (!existing) return { ok: false, error: 'no connection with that slug — add it with a url first' };
+    const existing = (await listConnections(db, opts.userId, scope)).find((c) => c.slug === opts.slug.trim().toLowerCase());
+    if (!existing) {
+      const elsewhere = (await listConnections(db, opts.userId, 'all')).some((c) => c.slug === opts.slug.trim().toLowerCase());
+      return {
+        ok: false,
+        error: elsewhere
+          ? `your ${opts.slug} connection is for another organization — connect it for ${scope ? 'this one' : 'Personal'} first`
+          : 'no connection with that slug — add it with a url first',
+      };
+    }
     server = existing;
   }
 
@@ -206,11 +235,15 @@ export async function attachServer(
   return { ok: true, server };
 }
 
-/** Every connection a person has, and how many sessions each is attached to (M28). */
+/**
+ * A person's connections in one scope (ADR 0043), or 'all' of them, and how many
+ * sessions each is attached to (M28).
+ */
 export async function listConnections(
   db: Database,
   userId: string,
-): Promise<(AttachedServer & { sessions: number; entry: string | null; auth: string; status: string })[]> {
+  scope: Scope | 'all',
+): Promise<(AttachedServer & { sessions: number; entry: string | null; auth: string; status: string; teamId: string | null })[]> {
   const rows = await db
     .select({
       id: mcpServers.id,
@@ -221,10 +254,11 @@ export async function listConnections(
       entry: mcpServers.entry,
       auth: mcpServers.auth,
       status: mcpServers.status,
+      teamId: mcpServers.teamId,
       sessions: sql<number>`(select count(*) from ${sessionMcpServers} sms where sms.mcp_server_id = ${mcpServers.id})`,
     })
     .from(mcpServers)
-    .where(eq(mcpServers.ownerId, userId))
+    .where(scope === 'all' ? eq(mcpServers.ownerId, userId) : and(eq(mcpServers.ownerId, userId), inScope(scope)))
     .orderBy(mcpServers.slug);
   return rows.map((r) => ({
     id: r.id,
@@ -237,14 +271,15 @@ export async function listConnections(
     entry: r.entry,
     auth: r.auth,
     status: r.status,
+    teamId: r.teamId,
   }));
 }
 
 /** Remove a connection everywhere: it is detached from every session it was in. */
-export async function removeConnection(db: Database, userId: string, slug: string): Promise<boolean> {
+export async function removeConnection(db: Database, userId: string, slug: string, scope: Scope): Promise<boolean> {
   const done = await db
     .delete(mcpServers)
-    .where(and(eq(mcpServers.ownerId, userId), eq(mcpServers.slug, slug)))
+    .where(and(eq(mcpServers.ownerId, userId), eq(mcpServers.slug, slug), inScope(scope)))
     .returning({ id: mcpServers.id });
   return done.length > 0;
 }
@@ -255,19 +290,19 @@ export async function detachServer(
   userId: string,
   slug: string,
 ): Promise<boolean> {
+  // ADR 0043: a person may have one per organization; detach whichever is attached here.
   const rows = await db
     .select({ id: mcpServers.id })
     .from(mcpServers)
-    .where(and(eq(mcpServers.ownerId, userId), eq(mcpServers.slug, slug)))
-    .limit(1);
-  if (!rows[0]) return false;
+    .where(and(eq(mcpServers.ownerId, userId), eq(mcpServers.slug, slug)));
+  if (!rows.length) return false;
 
   const deleted = await db
     .delete(sessionMcpServers)
     .where(
       and(
         eq(sessionMcpServers.sessionId, sessionId),
-        eq(sessionMcpServers.mcpServerId, rows[0].id),
+        inArray(sessionMcpServers.mcpServerId, rows.map((r) => r.id)),
       ),
     )
     .returning({ id: sessionMcpServers.mcpServerId });
@@ -287,13 +322,22 @@ export async function serversForUser(
       label: mcpServers.label,
       url: mcpServers.url,
       sealed: mcpServers.sealedCredential,
+      fromPersonal: sessionMcpServers.fromPersonal,
+      teamId: mcpServers.teamId,
     })
     .from(sessionMcpServers)
     .innerJoin(mcpServers, eq(mcpServers.id, sessionMcpServers.mcpServerId))
+    .innerJoin(sessions, eq(sessions.id, sessionMcpServers.sessionId))
     .where(
       and(
         eq(sessionMcpServers.sessionId, sessionId),
         eq(mcpServers.ownerId, userId),
+        // ADR 0043: the room's scope (or an old Personal attachment, marked), and
+        // never an organization's connection once you've left it.
+        sql`(${mcpServers.teamId} is not distinct from ${sessions.teamId}
+             or (${mcpServers.teamId} is null and ${sessionMcpServers.fromPersonal}))`,
+        sql`(${mcpServers.teamId} is null or exists (
+             select 1 from ${teamMembers} tm where tm.team_id = ${mcpServers.teamId} and tm.user_id = ${userId}))`,
       ),
     );
 
@@ -303,6 +347,7 @@ export async function serversForUser(
     label: r.label,
     url: r.url,
     hasCredential: !!r.sealed,
+    ...(r.fromPersonal && r.teamId === null ? { fromPersonal: true } : {}),
   }));
 }
 

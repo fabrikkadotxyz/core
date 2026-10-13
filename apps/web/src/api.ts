@@ -203,40 +203,52 @@ export interface CatalogueItem {
   status: string | null;
 }
 
+export interface PersonalConnection {
+  id: string;
+  slug: string;
+  label: string;
+  url: string;
+  hasCredential: boolean;
+  sessions: number;
+  entry: string | null;
+  auth: string;
+  status: string;
+  /** ADR 0043: the organization whose rooms may use it; null for Personal. */
+  teamId: string | null;
+}
+
+/**
+ * Your connections (M28, M18). ADR 0043: each is for one organization's rooms
+ * (`team`, an organization id) or Personal (null): one per vendor per scope.
+ */
+const scopeQuery = (team: string | null) => (team ? `?team=${encodeURIComponent(team)}` : '');
 export const connections = {
-  list: () =>
+  list: (team: string | null) =>
     call<{
-      connections: {
-        id: string;
-        slug: string;
-        label: string;
-        url: string;
-        hasCredential: boolean;
-        sessions: number;
-        entry: string | null;
-        auth: string;
-        status: string;
-      }[];
+      connections: PersonalConnection[];
+      /** For organizations you've left: they no longer work anywhere. */
+      orphaned: PersonalConnection[];
       encryptionConfigured: boolean;
-    }>('/me/connections'),
-  /** M18: vendors this instance offers, by category. */
-  catalogue: () =>
+    }>(`/me/connections${scopeQuery(team)}`),
+  /** M18: vendors this instance offers, by category; `connected` in that scope. */
+  catalogue: (team: string | null) =>
     call<{
       categories: Record<string, string>;
       entries: CatalogueItem[];
       unavailable: { id: string; name: string; category: string; keywords: string[]; logo: VendorLogo | null; missing: string[] }[];
       encryptionConfigured: boolean;
-    }>('/connections/catalogue'),
+    }>(`/connections/catalogue${scopeQuery(team)}`),
   /** M18: begin signing in to a vendor; the browser then goes to `authorizeUrl`. */
-  startOAuth: (entry: string, fields?: Record<string, string>) =>
-    call<{ authorizeUrl: string }>('/connections/oauth/start', { method: 'POST', body: { entry, fields } }),
+  startOAuth: (entry: string, fields: Record<string, string> | undefined, teamId: string | null) =>
+    call<{ authorizeUrl: string }>('/connections/oauth/start', { method: 'POST', body: { entry, fields, teamId } }),
   /** The desktop app's variant: a link it opens in the default browser (ADR 0033). */
-  startHandoff: (entry: string, fields?: Record<string, string>) =>
-    call<{ handoffUrl: string }>('/connections/oauth/start', { method: 'POST', body: { entry, fields, handoff: true } }),
+  startHandoff: (entry: string, fields: Record<string, string> | undefined, teamId: string | null) =>
+    call<{ handoffUrl: string }>('/connections/oauth/start', { method: 'POST', body: { entry, fields, handoff: true, teamId } }),
   /** `username` set: Basic sign-in (an email and an API token), sent as base64(username:credential). */
-  save: (body: { slug: string; url: string; label?: string; credential?: string; username?: string }) =>
+  save: (body: { slug: string; url: string; label?: string; credential?: string; username?: string; teamId: string | null }) =>
     call<{ id: string }>('/me/connections', { method: 'POST', body }),
-  remove: (slug: string) => call<{ ok: true }>(`/me/connections/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
+  remove: (slug: string, team: string | null) =>
+    call<{ ok: true }>(`/me/connections/${encodeURIComponent(slug)}${scopeQuery(team)}`, { method: 'DELETE' }),
 };
 
 /** M30: the team's shared connections. Owners manage them; members see they exist. */
@@ -380,8 +392,9 @@ export const sessions = {
 
   integrations: (ref: SessionRef) =>
     call<{
-      mine: { id: string; slug: string; label: string; url: string; hasCredential: boolean }[];
-      /** M28: your saved connections not yet in this session. */
+      /** `fromPersonal`: ADR 0043, a Personal connection attached here before connections had organizations. */
+      mine: { id: string; slug: string; label: string; url: string; hasCredential: boolean; fromPersonal?: boolean }[];
+      /** M28: your saved connections not yet in this session (ADR 0043: only the room's organization's). */
       available: { id: string; slug: string; label: string; url: string; hasCredential: boolean }[];
       /** M30: the team's shared connections that apply to you here. */
       team: { slug: string; label: string; teamName: string; hasCredential: boolean; overridden: boolean }[];

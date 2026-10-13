@@ -1937,12 +1937,17 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
   // M18: which of my connections come from a catalogue entry with grant presets.
   const [presetSlugs, setPresetSlugs] = useState<Set<string>>(new Set());
 
+  // ADR 0043: the room's organization: only its connections attach here.
+  const [roomOrg, setRoomOrg] = useState<{ id: string; name: string } | null>(null);
+
   const load = useCallback(() => {
     sessions.integrations(ref_).then(setState).catch(() => {});
-    connections
-      .list()
-      .then(async (mine) => {
-        const cat = await connections.catalogue();
+    sessions
+      .team(ref_)
+      .then(async (org) => {
+        setRoomOrg(org);
+        const mine = await connections.list(org?.id ?? null);
+        const cat = await connections.catalogue(org?.id ?? null);
         const withPresets = new Set(cat.entries.filter((e) => e.presets).map((e) => e.id));
         setPresetSlugs(new Set(mine.connections.filter((c) => c.entry && withPresets.has(c.entry)).map((c) => c.slug)));
       })
@@ -1978,7 +1983,7 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
     <Panel title="Integrations">
       {state.available.length > 0 && (
         <div className="stack">
-          <p className="muted small">Your connections — attach one to this session:</p>
+          <p className="muted small">Your connections for {roomOrg ? roomOrg.name : 'Personal rooms'} — attach one to this session:</p>
           <ul className="participants">
             {state.available.map((a) => (
               <li key={a.id}>
@@ -2047,6 +2052,7 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
                 <span>{m.label}</span>
                 <span className="muted small">
                   {m.hasCredential ? 'credential set' : 'no credential'}
+                  {m.fromPersonal && ` · from Personal: add it for ${roomOrg?.name ?? 'this organization'}`}
                 </span>
                 {isOwner && presetSlugs.has(m.slug) && (
                   // M18: a shortcut over the per-tool grants, never a new permission model.

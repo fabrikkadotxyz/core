@@ -1,5 +1,5 @@
 /**
- * M48 acceptance: each organization has its own folders (ADR 0043).
+ * M48 acceptance: each organization has its own folders and connections (ADR 0043).
  *
  * A real host (the built client, as M31 runs it) is paired, and told the
  * account's organizations. Then:
@@ -9,7 +9,10 @@
  *   - the server keeps each grant's organization, and Add my agent refuses a
  *     folder from another scope;
  *   - a room moving to another organization stops its agent;
- *   - leaving an organization drops its folders from the server.
+ *   - leaving an organization drops its folders from the server;
+ *   - a personal connection is per organization too: one per vendor per
+ *     scope, offered and attached only in its organization's rooms, and listed
+ *     to remove once you leave.
  * The Folders window's look and old bindings (`from_personal`) are the manual test.
  *
  * Requires: the server on :9090, the test account (_setup.mjs), and the
@@ -144,6 +147,31 @@ try {
   check((await req(`${base}/team`, { method: 'PUT', body: { teamId: client.id }, jar: me })).status === 200, 'the room moves to Client');
   check(!!(await until(async () => !['connected', 'idle'].includes(await status()))), "ITS AGENT STOPS: Acme's folder doesn't serve a Client room");
 
+  /* ---------------------------------------------- connections, per organization */
+
+  const conn = (teamId) => req('/me/connections', { method: 'POST', body: { slug: 'm48gh', label: `GitHub ${teamId ?? 'personal'}`, url: 'https://example.com/mcp', teamId }, jar: me });
+  const forAcmeConn = await conn(acme.id);
+  const forMeConn = await conn(null);
+  check(forAcmeConn.status === 201 && forMeConn.status === 201 && forAcmeConn.json.id !== forMeConn.json.id, 'one vendor, two connections: one for Acme, one for Personal');
+  check((await conn(acme.id)).json?.id === forAcmeConn.json.id, 'connecting it again for Acme replaces that one, not the other');
+  check((await conn('00000000-0000-0000-0000-000000000000')).status === 404, "A CONNECTION FOR AN ORGANIZATION THAT ISN'T YOURS IS REFUSED");
+  const listed = (await req(`/me/connections?team=${acme.id}`, { jar: me })).json?.connections ?? [];
+  check(listed.some((c) => c.id === forAcmeConn.json.id) && !listed.some((c) => c.id === forMeConn.json.id), 'Integrations, For: Acme, lists only Acme\'s');
+
+  const acmeRoom = (await req('/sessions', { method: 'POST', body: { title: `Acme work ${stamp}`, teamId: acme.id }, jar: me })).json;
+  const ab = `/o/${acmeRoom.ownerSlug}/s/${acmeRoom.publicId}`;
+  const offered = (await req(`${ab}/integrations`, { jar: me })).json?.available ?? [];
+  check(offered.some((c) => c.id === forAcmeConn.json.id) && !offered.some((c) => c.id === forMeConn.json.id), 'an Acme room offers only Acme\'s connection to attach');
+  const attached = await req(`${ab}/integrations`, { method: 'POST', body: { slug: 'm48gh' }, jar: me });
+  check(attached.status === 201 && attached.json?.id === forAcmeConn.json.id, "attaching it there attaches Acme's, not the Personal one");
+  check((await req(`${ab}/integrations`, { jar: me })).json?.mine?.[0]?.id === forAcmeConn.json.id, '…and that is the one the room resolves');
+  const pb = `/o/${mine.ownerSlug}/s/${mine.publicId}`;
+  const personalAttach = await req(`${pb}/integrations`, { method: 'POST', body: { slug: 'm48gh' }, jar: me });
+  check(personalAttach.json?.id === forMeConn.json.id, 'a Personal room attaches the Personal one');
+  const clientRoom = (await req('/sessions', { method: 'POST', body: { title: `Client work ${stamp}`, teamId: client.id }, jar: me })).json;
+  const refused = await req(`/o/${clientRoom.ownerSlug}/s/${clientRoom.publicId}/integrations`, { method: 'POST', body: { slug: 'm48gh' }, jar: me });
+  check(refused.status === 400 && /another organization/.test(refused.json?.error ?? ''), 'A CLIENT ROOM REFUSES IT: there is none for Client, and it says so');
+
   /* ---------------------------------------------- leaving an organization */
 
   const inv = (await req(`/teams/${client.id}/invites`, { method: 'POST', body: {}, jar: me })).json;
@@ -154,6 +182,7 @@ try {
   check((await req(`/invites/${theirInv.token}/redeem`, { method: 'POST', body: {}, jar: me })).status === 200, 'the account joins a third organization');
   check(!!(await until(async () => (await state()).organizations.some((o) => o.id === theirs.id))), '…and the host learns it without restarting');
   check((await grant({ org: theirs.id })).status === 201, 'a folder is granted for it');
+  check((await conn(theirs.id)).status === 201, '…and a connection made for it');
   check(!!(await until(async () => (await req('/devices', { jar: me })).json.find((x) => x.id === dev.id)?.grants.some((g) => g.org === theirs.id))), '…and reported');
   const meId = (await req('/auth/me', { jar: me })).json?.user?.id ?? (await req('/auth/me', { jar: me })).json?.id;
   check((await req(`/teams/${theirs.id}/members/${meId}`, { method: 'DELETE', jar: other })).status === 200, 'their owner removes the account');
@@ -161,6 +190,9 @@ try {
     !!(await until(async () => !(await req('/devices', { jar: me })).json.find((x) => x.id === dev.id)?.grants.some((g) => g.org === theirs.id))),
     "THE FOLDER FOR AN ORGANIZATION YOU LEFT IS DROPPED BY THE SERVER",
   );
+  const left = (await req('/me/connections', { jar: me })).json;
+  check(left?.orphaned?.some((c) => c.teamId === theirs.id), "the connection for the organization you left is listed to remove");
+  check((await req(`/me/connections/m48gh?team=${theirs.id}`, { method: 'DELETE', jar: me })).status === 200, '…and removing it works');
   const onMachine = JSON.parse(readFileSync(join(home, 'host.json'), 'utf8')).grants.some((g) => g.org === theirs.id);
   check(onMachine, '…while it stays on the machine, for you to remove');
 } finally {

@@ -39,22 +39,34 @@ function resolved(): string {
 function apply(): void {
   const id = resolved();
   const root = document.documentElement;
-  let link = document.getElementById('theme-css') as HTMLLinkElement | null;
+  const link = document.getElementById('theme-css') as HTMLLinkElement | null;
   if (id === DEFAULT) {
     delete root.dataset.theme;
     link?.remove();
   } else {
     root.dataset.theme = id;
     const href = `/themes/${id}/theme.css`;
-    if (!link) {
-      link = document.createElement('link');
-      link.id = 'theme-css';
-      link.rel = 'stylesheet';
+    if (link && link.getAttribute('href') === href) {
+      // Already painted by index.html's script. Moving a stylesheet drops its
+      // styles until it's read again, which flashes the default theme, so move
+      // it only when another stylesheet comes after it (in development, Vite
+      // injects the app's styles once the page has loaded).
+      if (stylesheetAfter(link)) document.head.appendChild(link);
+    } else {
+      // A different theme: load the new one beside the old, and drop the old
+      // only once the new one has arrived, so there's no frame without either.
+      const next = document.createElement('link');
+      next.rel = 'stylesheet';
+      next.href = href;
+      if (link) {
+        link.id = 'theme-css-leaving';
+        const drop = () => link.remove();
+        next.addEventListener('load', drop, { once: true });
+        next.addEventListener('error', drop, { once: true });
+      }
+      next.id = 'theme-css';
+      document.head.appendChild(next);
     }
-    if (link.getAttribute('href') !== href) link.setAttribute('href', href);
-    // Last in <head>, so it comes after the app's stylesheet (in development,
-    // Vite injects that as <style> tags after the page loads).
-    document.head.appendChild(link);
   }
   try {
     localStorage.setItem(KEY, JSON.stringify({ choice, id }));
@@ -62,6 +74,13 @@ function apply(): void {
     // Private windows: the account still remembers the choice.
   }
   listeners.forEach((l) => l());
+}
+
+/** Whether any stylesheet comes after this one in the document, and so would win over it. */
+function stylesheetAfter(el: Element): boolean {
+  return [...document.querySelectorAll('link[rel="stylesheet"], style')].some(
+    (other) => other !== el && !!(el.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING),
+  );
 }
 
 /** Called once at start: apply the cached choice, and follow the system's mode. */

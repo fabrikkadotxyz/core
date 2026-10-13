@@ -188,7 +188,7 @@ function NewDirect({ onOpened }: { onOpened: (s: SessionSummary) => void }) {
   }
   return (
     <div className="side-picker">
-      {people.length === 0 && <p className="side-empty">Nobody shares a team with you yet.</p>}
+      {people.length === 0 && <p className="side-empty">Nobody shares an organization with you yet.</p>}
       {people.map((p) => (
         <button
           key={p.id}
@@ -242,7 +242,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         {teams.length > 0 ? (
           <Select
             tone="sidebar"
-            label="Team"
+            label="Organization"
             value={team?.id ?? ''}
             options={teams.map((t) => ({
               value: t.id,
@@ -257,7 +257,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             }}
           />
         ) : null}
-        {teams.length > 0 && otherTeamsNeedYou ? <span className="side-team-dot" role="status" aria-label="Another team needs you" title="Another team needs you" /> : null}
+        {teams.length > 0 && otherTeamsNeedYou ? <span className="side-team-dot" role="status" aria-label="Another organization needs you" title="Another organization needs you" /> : null}
         {teams.length > 0 ? null : (
           <strong className="side-brand">Fabrikka</strong>
         )}
@@ -269,8 +269,8 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
       </div>
 
       {team && (
-        <section className="side-section" aria-label="Team chats">
-          <h2>Team chats</h2>
+        <section className="side-section" aria-label="Organization chats">
+          <h2>Organization chats</h2>
           {teamChats.map((s) => (
             <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
           ))}
@@ -279,8 +279,8 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
       )}
 
       {team && (
-        <section className="side-section" aria-label="Team sessions">
-          <SectionHead title="Team sessions" label={`New session in ${team.name}`} onAdd={() => setCreating('team')} />
+        <section className="side-section" aria-label="Organization sessions">
+          <SectionHead title="Organization sessions" label={`New session in ${team.name}`} onAdd={() => setCreating('team')} />
           <NewSession teamId={team.id} open={creating === 'team'} onClose={() => setCreating(null)} onCreated={open} />
           {teamSessions.length === 0 && <p className="side-empty">No sessions in {team.name} yet.</p>}
           {teamSessions.slice(0, RECENT).map((s) => (
@@ -291,7 +291,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             className={({ isActive }) => (isActive ? 'side-item side-more on' : 'side-item side-more')}
             onClick={onNavigate}
           >
-            All team sessions{teamSessions.length > RECENT ? ` (${teamSessions.length})` : ''}
+            All organization sessions{teamSessions.length > RECENT ? ` (${teamSessions.length})` : ''}
           </NavLink>
         </section>
       )}
@@ -307,7 +307,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
       <section className="side-section" aria-label="Personal sessions">
         <SectionHead title="Personal sessions" label="New personal session" onAdd={() => setCreating('personal')} />
         <NewSession teamId={null} open={creating === 'personal'} onClose={() => setCreating(null)} onCreated={open} />
-        {personal.length === 0 && <p className="side-empty">Sessions in no team show here.</p>}
+        {personal.length === 0 && <p className="side-empty">Sessions in no organization show here.</p>}
         {personal.slice(0, 8).map((s) => (
           <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
         ))}
@@ -327,7 +327,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             onClick={onNavigate}
           >
             <span className="side-icon" aria-hidden>⚇</span>
-            <span className="side-label">Team integrations</span>
+            <span className="side-label">Organization integrations</span>
           </NavLink>
         )}
         <NavLink to="/integrations" className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>

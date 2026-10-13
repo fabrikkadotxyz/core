@@ -612,7 +612,7 @@ export function SessionPage() {
                   <span>{m.displayName}</span>
                   <span className="muted small">
                     {m.role}
-                    {m.viaTeam && <span title="Added from the team. Leaving the team ends this access."> · via team</span>}
+                    {m.viaTeam && <span title="Added from the organization. Leaving the organization ends this access."> · via organization</span>}
                   </span>
                   {isOwner && m.userId !== user?.id && kind !== 'chat' && (
                     <button
@@ -715,7 +715,7 @@ export function SessionPage() {
             <h1>
               {displayTitle}{' '}
               {kind === 'chat' ? null : view.visibility === 'team' ? (
-                <span title="Team-visible: everyone on the team can read along">👥</span>
+                <span title="Visible to the organization: everyone in the organization can read along">👥</span>
               ) : (
                 <span title="Private">🔒</span>
               )}
@@ -835,7 +835,7 @@ export function SessionPage() {
                 view.session.status === 'archived'
                   ? 'This session is archived'
                   : kind === 'chat'
-                    ? `Message #${view.session.title} — everyone on the team reads this, now and later`
+                    ? `Message #${view.session.title} — everyone in the organization reads this, now and later`
                     : kind === 'direct'
                       ? `Message ${peer ?? ''}…  @ to mention an agent`
                       : 'Message everyone…  @ to mention'
@@ -990,7 +990,7 @@ function TeamPanel({
   const change = async (teamId: string) => {
     setError(null);
     if (team && teamId !== team.id && !window.confirm(
-      'People added from the current team will lose access to this session. Continue?',
+      'People added from the current organization will lose access to this session. Continue?',
     )) return;
     try {
       setTeam(await sessions.setTeam(ref_, teamId || null));
@@ -1002,13 +1002,13 @@ function TeamPanel({
   };
 
   return (
-    <Panel title="Team">
+    <Panel title="Organization">
       {isOwner ? (
         <Select
-          label="Session team"
+          label="Session organization"
           value={team?.id ?? ''}
           options={[
-            { value: '', label: 'No team', description: 'Only people you add' },
+            { value: '', label: 'No organization', description: 'Only people you add' },
             ...mine.map((t) => ({ value: t.id, label: t.name, leading: <TeamInitial name={t.name} /> })),
           ]}
           onChange={(v) => change(v)}
@@ -1040,7 +1040,7 @@ function TeamPanel({
       {isOwner && team && (
         <>
           <p className="muted small">
-            {roster.length ? 'Add a teammate — no link needed:' : 'Everyone on the team is already here.'}
+            {roster.length ? 'Add a colleague — no link needed:' : 'Everyone in the organization is already here.'}
           </p>
           <ul className="participants">
             {roster.map((m) => (
@@ -2091,8 +2091,8 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
                     you use your own
                   </span>
                 ) : (
-                  <span className="badge-shared" title="Calls run as the team's account, not yours">
-                    team's · shared
+                  <span className="badge-shared" title="Calls run as the organization's account, not yours">
+                    organization's · shared
                   </span>
                 )}
                 <button
@@ -2115,7 +2115,7 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
           <h3 className="subhead">{s} — what this session allows</h3>
           <p className="hint">
             Nothing is permitted until you allow it, and a grant applies to everyone
-            in the session — each person uses their own credential, or the team's
+            in the session — each person uses their own credential, or the organization's
             shared one where they have none.
           </p>
           <ul className="participants">

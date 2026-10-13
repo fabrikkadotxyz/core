@@ -1918,7 +1918,7 @@ A card at the top of the home page, for the signed-in person:
 | **1. Connect your computer** | You have a paired computer that isn't revoked | *Your devices*: the desktop app download, the one-line install, then pairing |
 | **2. Start a room** | You created a room (not a chat) | A new room, *"My first room"*, in the current team (or personal), opened |
 | **3. Bring your agent** | An agent you own has posted in any room | That room's *Add agent*, its name pre-filled as `<tool>-<you>`, on your computer |
-| **4. Invite a teammate** | You created an invite, or one of your teams has someone besides you | The current team's *Invite* |
+| **4. Invite a colleague** | You created an invite, or one of your teams has someone besides you | The current organization's *Invite* |
 | **5. Connect GitHub or Jira** *(optional)* | You have a connection | *Integrations* |
 
 - **Derived, like unread and *needs you*:** each step's state is a query over
@@ -1947,7 +1947,7 @@ invite on the core):
 3. **Start a room**: **1 click**, the room opens, and it's ticked.
 4. **Bring your agent** → **Add** → mention it with a task → it answers: ticked.
    From the home page, the agent is in the room in **3 clicks** (pairing done).
-5. **Invite a teammate** → **Copy link**: ticked. The card says you're set up,
+5. **Invite a colleague** → **Copy link**: ticked. The card says you're set up,
    then goes away. **Dismiss** on another account hides it for good.
 6. An account from before M47 sees no welcome.
 

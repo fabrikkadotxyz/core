@@ -95,7 +95,7 @@ export function InvitePage() {
     return (
       <main className="centered">
         <div className="card">
-          <h1>{preview.kind === 'team' ? `Join the team “${preview.title}”` : preview.guest ? `View “${preview.title}”` : `Join “${preview.title}”`}</h1>
+          <h1>{preview.kind === 'team' ? `Join the organization “${preview.title}”` : preview.guest ? `View “${preview.title}”` : `Join “${preview.title}”`}</h1>
           {preview.guest && <p className="hint">You're invited as a guest: you can read this session and nothing else.</p>}
           <p className="muted">
             You're signed in as {user.email}.
@@ -109,7 +109,7 @@ export function InvitePage() {
           </p>
           {error && <p className="error">{error}</p>}
           <button onClick={join} disabled={busy}>
-            {busy ? 'Joining…' : preview.kind === 'team' ? 'Join team' : 'Join session'}
+            {busy ? 'Joining…' : preview.kind === 'team' ? 'Join organization' : 'Join session'}
           </button>
         </div>
       </main>
@@ -119,7 +119,7 @@ export function InvitePage() {
   return (
     <main className="centered">
       <form className="card" onSubmit={signup}>
-        <h1>{preview.kind === 'team' ? `Join the team “${preview.title}”` : preview.guest ? `View “${preview.title}”` : `Join “${preview.title}”`}</h1>
+        <h1>{preview.kind === 'team' ? `Join the organization “${preview.title}”` : preview.guest ? `View “${preview.title}”` : `Join “${preview.title}”`}</h1>
         {preview.guest && <p className="hint">You're invited as a guest: you can read this session and nothing else.</p>}
         <p className="muted">Create an account to {preview.guest ? 'view' : 'join'} this {preview.kind === 'team' ? 'team' : 'session'}.</p>
 

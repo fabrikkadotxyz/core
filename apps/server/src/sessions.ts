@@ -1080,7 +1080,7 @@ export async function setVisibility(
   if (visibility !== 'private' && visibility !== 'team') return { ok: false, error: 'visibility is private or team' };
   if (visibility === 'team') {
     const [row] = await db.select({ teamId: sessions.teamId }).from(sessions).where(eq(sessions.id, sessionId));
-    if (!row?.teamId) return { ok: false, error: 'put the session in a team before making it team-visible' };
+    if (!row?.teamId) return { ok: false, error: 'put the session in an organization before making it visible to the organization' };
   }
   await db.update(sessions).set({ visibility }).where(eq(sessions.id, sessionId));
   return { ok: true };

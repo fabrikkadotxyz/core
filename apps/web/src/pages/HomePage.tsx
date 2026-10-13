@@ -45,14 +45,14 @@ export function HomePage() {
         )}
 
         <p className="muted small">
-          Start a session with the <strong>+</strong> beside <em>Team sessions</em> or{' '}
+          Start a session with the <strong>+</strong> beside <em>Organization sessions</em> or{' '}
           <em>Personal sessions</em> in the sidebar.
         </p>
         {error && <p className="error">{error}</p>}
 
-        <h2>Teams</h2>
+        <h2>Organizations</h2>
         {myTeams.length === 0 && (
-          <p className="muted small">A team is the people you can add to a session without sending a link.</p>
+          <p className="muted small">An organization is the people you can add to a session without sending a link.</p>
         )}
         <form
           className="inline-form"
@@ -69,9 +69,9 @@ export function HomePage() {
             }
           }}
         >
-          <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="New team name" aria-label="New team name" />
+          <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="New organization name" aria-label="New organization name" />
           <button type="submit" disabled={!teamName.trim()}>
-            Create team
+            Create organization
           </button>
         </form>
       </main>

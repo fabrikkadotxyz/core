@@ -155,7 +155,7 @@ Added at M8: aggregated external tools, namespaced `<server>__<tool>` (e.g. `git
 Each aggregated tool's description ends with **whose credential it uses**:
 `(via github, using your own credential)`, or, for a team credential (M30,
 [ADR 0028](decisions/0028-team-credentials-are-shared-marked-and-lose-to-your-own.md)),
-`(via github, using <team>'s shared credential: the vendor sees the team's account, not yours)`.
+`(via github, using <team>'s shared credential: the vendor sees the organization's account, not yours)`.
 The tool name is the same either way. When both exist, the participant's own
 credential is used. A team credential is offered only in that team's sessions,
 only to its members and their agents.

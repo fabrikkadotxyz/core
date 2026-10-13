@@ -20,7 +20,7 @@ type State = Awaited<ReturnType<typeof teamConnections.list>>;
 export function TeamIntegrationsPage() {
   const { id = '' } = useParams();
   const { teams } = useWorkspace();
-  const teamName = teams.find((t) => t.id === id)?.name ?? 'This team';
+  const teamName = teams.find((t) => t.id === id)?.name ?? 'This organization';
   const [state, setState] = useState<State | null | 'missing' | 'failed'>(null);
   const [slug, setSlug] = useState('');
   const [url, setUrl] = useState('');
@@ -41,7 +41,7 @@ export function TeamIntegrationsPage() {
     return (
       <main className="centered">
         <div className="card">
-          <h1>Couldn't load this team</h1>
+          <h1>Couldn't load this organization</h1>
           <p className="muted">Check your connection and try again.</p>
           <button onClick={load}>Try again</button>
           <Link to="/">← Home</Link>
@@ -53,7 +53,7 @@ export function TeamIntegrationsPage() {
     return (
       <main className="centered">
         <div className="card">
-          <h1>No such team</h1>
+          <h1>No such organization</h1>
           <p className="muted">It doesn't exist, or you're not on it.</p>
           <Link to="/">← Home</Link>
         </div>
@@ -64,10 +64,10 @@ export function TeamIntegrationsPage() {
   return (
     <div className="page">
       <main className="column">
-        <h1>Team integrations</h1>
+        <h1>Organization integrations</h1>
         <p className="muted">
-          Connections {teamName} shares. Everyone on the team, and their agents, can use them in
-          the team's sessions. Calls run as the team's account, marked as shared, and anyone's own
+          Connections {teamName} shares. Everyone in the organization, and their agents, can use them in
+          the organization's sessions. Calls run as the organization's account, marked as shared, and anyone's own
           connection with the same name is used instead. Each session still chooses which tools to
           allow.
         </p>
@@ -79,12 +79,12 @@ export function TeamIntegrationsPage() {
           </p>
         )}
 
-        {state.connections.length === 0 && <p className="muted small">No team connections yet.</p>}
+        {state.connections.length === 0 && <p className="muted small">No organization connections yet.</p>}
         <ul className="session-list">
           {state.connections.map((c) => (
             <li key={c.id} className="team-member">
               <span>
-                <strong>{c.label}</strong> <span className="badge-shared">team's · shared</span>{' '}
+                <strong>{c.label}</strong> <span className="badge-shared">organization's · shared</span>{' '}
                 <span className="muted small">
                   {c.slug} · {c.url}
                 </span>
@@ -97,7 +97,7 @@ export function TeamIntegrationsPage() {
               {state.canManage && (
                 <button
                   className="link small danger"
-                  title="Removes it from every session of the team"
+                  title="Removes it from every session of the organization"
                   onClick={async () => {
                     await teamConnections.remove(id, c.slug).catch(() => {});
                     load();
@@ -112,7 +112,7 @@ export function TeamIntegrationsPage() {
 
         {state.canManage ? (
           <>
-            <h2>Add a team connection</h2>
+            <h2>Add an organization connection</h2>
             <form
               className="stack"
               onSubmit={async (e) => {
@@ -134,20 +134,20 @@ export function TeamIntegrationsPage() {
               <input
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                placeholder="the team's token"
+                placeholder="the organization's token"
                 type="password"
                 autoComplete="off"
                 aria-label="Token"
               />
               <button type="submit" disabled={!slug.trim() || !url.trim()}>
-                Save team connection
+                Save organization connection
               </button>
             </form>
             {error && <p className="error">{error}</p>}
 
             <h2>Recent uses</h2>
             <p className="muted small">
-              The vendor's log names the team's account. This names who acted. Tool names only,
+              The vendor's log names the organization's account. This names who acted. Tool names only,
               never what was sent.
             </p>
             <div className="row call-records">
@@ -189,10 +189,10 @@ export function TeamIntegrationsPage() {
           </>
         ) : (
           <>
-            <p className="muted small">Only team owners add or remove team connections.</p>
+            <p className="muted small">Only organization owners add or remove organization connections.</p>
             <p className="muted small">
-              Who used a team connection, and when, is kept for {state.callRecordDays} days, for the
-              team's owners.
+              Who used an organization connection, and when, is kept for {state.callRecordDays} days, for the
+              organization's owners.
             </p>
           </>
         )}

@@ -36,7 +36,7 @@ export function TeamPage() {
     return (
       <main className="centered">
         <div className="card">
-          <h1>Couldn't load this team</h1>
+          <h1>Couldn't load this organization</h1>
           <p className="muted">Check your connection and try again.</p>
           <button onClick={load}>Try again</button>
           <Link to="/">← Sessions</Link>
@@ -48,7 +48,7 @@ export function TeamPage() {
     return (
       <main className="centered">
         <div className="card">
-          <h1>No such team</h1>
+          <h1>No such organization</h1>
           <p className="muted">It doesn't exist, or you're not on it.</p>
           <Link to="/">← Sessions</Link>
         </div>
@@ -86,7 +86,7 @@ export function TeamPage() {
       <main className="column">
         <h1>{team.name}</h1>
         <p className="muted">
-          A team is the people a session owner can add without a link. Sessions in a team are
+          An organization is the people a session owner can add without a link. Sessions in an organization are
           still private until their owner adds someone.
         </p>
 
@@ -115,7 +115,7 @@ export function TeamPage() {
               <div className="fresh-invite">
                 <p className="hint">
                   <strong>Copy this now — it is shown only once.</strong> Whoever opens it can join
-                  the team, creating an account if they need one, until it's used or expires.
+                  the organization, creating an account if they need one, until it's used or expires.
                 </p>
                 <code className="endpoint">{inviteUrl}</code>
                 <button
@@ -139,7 +139,7 @@ export function TeamPage() {
 
         <p>
           <button className="link danger" onClick={() => user && remove(user.id, true)}>
-            Leave team
+            Leave organization
           </button>
         </p>
       </main>

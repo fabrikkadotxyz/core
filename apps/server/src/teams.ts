@@ -18,7 +18,7 @@ export class TeamError extends Error {}
 
 export async function createTeam(db: Database, userId: string, name: string): Promise<TeamSummary> {
   const trimmed = name.trim().slice(0, MAX_NAME);
-  if (!trimmed) throw new TeamError('a team name is required');
+  if (!trimmed) throw new TeamError('an organization name is required');
   return db.transaction(async (tx) => {
     const [team] = await tx.insert(teams).values({ name: trimmed, createdByUserId: userId }).returning();
     await tx.insert(teamMembers).values({ teamId: team!.id, userId, role: 'owner' });
@@ -161,8 +161,8 @@ export async function roster(db: Database, sessionId: string): Promise<TeamMembe
 /** Add a teammate from the roster. Refused for anyone not on the session's team. */
 export async function addFromRoster(db: Database, sessionId: string, userId: string): Promise<void> {
   const team = await sessionTeam(db, sessionId);
-  if (!team) throw new TeamError('this session is not in a team');
-  if (!(await teamRole(db, team.id, userId))) throw new TeamError('that person is not on this team');
+  if (!team) throw new TeamError('this session is not in an organization');
+  if (!(await teamRole(db, team.id, userId))) throw new TeamError('that person is not in this organization');
   const [user] = await db.select({ id: users.id, displayName: users.displayName }).from(users).where(eq(users.id, userId));
   await addMember(db, sessionId, user!, 'member', { viaTeamId: team.id });
 }

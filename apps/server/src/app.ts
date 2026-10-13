@@ -582,7 +582,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const trimmed = title?.trim();
     if (!trimmed) return c.json({ error: 'title is required' }, 400);
     // A team you aren't on is indistinguishable from one that doesn't exist.
-    if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such team' }, 404);
+    if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such organization' }, 404);
     const gated = await gateWrite(c, { teamId: teamId ?? null, ownerUserId: c.get('user').id }, 'room');
     if (gated) return gated;
 
@@ -847,7 +847,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const teamId = c.req.param('id');
     const role = await teamRole(db, teamId, c.get('user').id);
     if (!role) return c.notFound();
-    if (role !== 'owner') return c.json({ error: 'only team owners choose how long call records are kept' }, 403);
+    if (role !== 'owner') return c.json({ error: 'only organization owners choose how long call records are kept' }, 403);
     const body = await c.req.json<{ days?: unknown }>().catch(() => ({}) as { days?: unknown });
     const days = Number(body.days);
     if (!(CALL_RECORD_DAYS as readonly number[]).includes(days)) {
@@ -862,7 +862,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const teamId = c.req.param('id');
     const role = await teamRole(db, teamId, c.get('user').id);
     if (!role) return c.notFound();
-    if (role !== 'owner') return c.json({ error: 'only team owners can add team integrations' }, 403);
+    if (role !== 'owner') return c.json({ error: 'only organization owners can add organization integrations' }, 403);
     const gated = await gateWrite(c, { teamId, ownerUserId: c.get('user').id }, 'integration');
     if (gated) return gated;
     const body = await c.req.json<{ slug?: string; label?: string; url?: string; credential?: string }>();
@@ -875,7 +875,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const teamId = c.req.param('id');
     const role = await teamRole(db, teamId, c.get('user').id);
     if (!role) return c.notFound();
-    if (role !== 'owner') return c.json({ error: 'only team owners can remove team integrations' }, 403);
+    if (role !== 'owner') return c.json({ error: 'only organization owners can remove organization integrations' }, 403);
     return (await removeTeamConnection(db, teamId, c.req.param('slug'))) ? c.json({ ok: true }) : c.notFound();
   });
 
@@ -1142,7 +1142,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const s = await resolve(c);
     if (!s || s.role !== 'owner') return c.notFound();
     // A team chat's members are the team (ADR 0026): leave the team to leave it.
-    if (s.view.kind === 'chat') return c.json({ error: "a team chat's members are the team" }, 400);
+    if (s.view.kind === 'chat') return c.json({ error: "an organization chat's members are the organization" }, 400);
 
     const userId = c.req.param('userId');
     const members = await listMembers(db, s.id);
@@ -1326,7 +1326,7 @@ export function createApp(options: CreateAppOptions = {}) {
     // Chats (M29) don't take invites, roster adds, a team change or visibility.
     if ((s.view.kind ?? 'session') !== 'session') return c.json({ error: 'not available for chats' }, 400);
     const { teamId } = await c.req.json<{ teamId?: string | null }>();
-    if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such team' }, 404);
+    if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such organization' }, 404);
     await setSessionTeam(db, s.id, teamId ?? null);
     return c.json(await sessionTeam(db, s.id));
   });

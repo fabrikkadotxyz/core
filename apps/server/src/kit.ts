@@ -108,7 +108,7 @@ export function createKit(opts: {
 
     async createAccountWithOwnTeam(input) {
       const teamName = input.teamName.trim().slice(0, MAX_TEAM_NAME);
-      if (!teamName) return { ok: false, error: 'a team name is required' };
+      if (!teamName) return { ok: false, error: 'an organization name is required' };
       try {
         const created = await db.transaction(async (tx) => {
           // createUser runs its own checks (email shape, length, taken). Same

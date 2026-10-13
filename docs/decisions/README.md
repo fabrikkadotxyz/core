@@ -73,3 +73,4 @@ What we rejected and why.
 | [0038](0038-themes-are-css-packs-checked-by-the-server.md) | Themes are CSS packs: tokens are the contract, the server checks them | Proposed |
 | [0040](0040-email-goes-out-over-smtp.md) | Email goes out over SMTP, to any provider | Proposed |
 | [0041](0041-a-deployment-can-gate-accounts-and-team-writes.md) | A deployment can gate new accounts and a team's writes | Proposed |
+| [0042](0042-people-see-organization-the-code-says-team.md) | People see "organization"; the code still says "team" | Proposed |

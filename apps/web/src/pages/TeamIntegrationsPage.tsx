@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { teamConnections } from '../api.ts';
+import { teamConnections, ApiError } from '../api.ts';
 import { Select } from '../components/Select.tsx';
 
 /** M43: the only answers, so the privacy policy can name them all. */
@@ -21,7 +21,7 @@ export function TeamIntegrationsPage() {
   const { id = '' } = useParams();
   const { teams } = useWorkspace();
   const teamName = teams.find((t) => t.id === id)?.name ?? 'This team';
-  const [state, setState] = useState<State | null | 'missing'>(null);
+  const [state, setState] = useState<State | null | 'missing' | 'failed'>(null);
   const [slug, setSlug] = useState('');
   const [url, setUrl] = useState('');
   const [token, setToken] = useState('');
@@ -31,11 +31,24 @@ export function TeamIntegrationsPage() {
     teamConnections
       .list(id)
       .then(setState)
-      .catch(() => setState('missing'));
+      .catch((err) => setState(err instanceof ApiError && err.status === 404 ? 'missing' : 'failed'));
   }, [id]);
   useEffect(load, [load]);
 
   if (state === null) return <main className="centered">Loading…</main>;
+  // Only a 404 means the team isn't yours; anything else (offline, a server error) says so.
+  if (state === 'failed') {
+    return (
+      <main className="centered">
+        <div className="card">
+          <h1>Couldn't load this team</h1>
+          <p className="muted">Check your connection and try again.</p>
+          <button onClick={load}>Try again</button>
+          <Link to="/">← Home</Link>
+        </div>
+      </main>
+    );
+  }
   if (state === 'missing') {
     return (
       <main className="centered">

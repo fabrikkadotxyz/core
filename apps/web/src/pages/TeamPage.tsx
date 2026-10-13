@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { TeamDetail } from '@fabrikka/types';
-import { teams } from '../api.ts';
+import { teams, ApiError } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { useWorkspace } from '../shell/workspace.tsx';
 
@@ -17,7 +17,7 @@ export function TeamPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { refresh } = useWorkspace();
-  const [team, setTeam] = useState<TeamDetail | null | 'missing'>(null);
+  const [team, setTeam] = useState<TeamDetail | null | 'missing' | 'failed'>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,11 +26,24 @@ export function TeamPage() {
     teams
       .get(id)
       .then(setTeam)
-      .catch(() => setTeam('missing'));
+      .catch((err) => setTeam(err instanceof ApiError && err.status === 404 ? 'missing' : 'failed'));
   }, [id]);
   useEffect(load, [load]);
 
   if (team === null) return <main className="centered">Loading…</main>;
+  // Only a 404 means the team isn't yours; anything else (offline, a server error) says so.
+  if (team === 'failed') {
+    return (
+      <main className="centered">
+        <div className="card">
+          <h1>Couldn't load this team</h1>
+          <p className="muted">Check your connection and try again.</p>
+          <button onClick={load}>Try again</button>
+          <Link to="/">← Sessions</Link>
+        </div>
+      </main>
+    );
+  }
   if (team === 'missing') {
     return (
       <main className="centered">

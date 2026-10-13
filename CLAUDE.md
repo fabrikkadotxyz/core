@@ -30,7 +30,7 @@ Why this project in particular: Fabrikka's value is a *protocol surface* that ex
 | `docs/operations.md` | Running an instance: bootstrap, admin CLI, invites, backups |
 | `docs/themes.md` | **The contract theme authors depend on**: the pack format, the checks, the tokens |
 | `docs/mvp.md` | The road to MVP: what's missing, in what order, and the acceptance stories |
-| `docs/roadmap.md` | Milestones M0–M46 and their acceptance tests |
+| `docs/roadmap.md` | Milestones M0–M47 and their acceptance tests |
 | `docs/decisions/` | ADRs — one per architectural decision, immutable once accepted |
 
 Change `docs/protocol.md` with particular care: agents in the wild are bound to it.

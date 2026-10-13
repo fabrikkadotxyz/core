@@ -399,6 +399,19 @@ users  (additions)
 saved id the instance no longer offers is treated as the default when it's read,
 and is left as it is, so reinstalling the theme brings the choice back.
 
+
+### M47 — onboarding
+
+```
+users  (additions)
+  welcomed_at                     timestamptz  -- the welcome (pick a look) was shown; null = show it
+  getting_started_dismissed_at    timestamptz  -- the person dismissed Get started
+```
+
+**Two timestamps, and nothing else.** Whether each *Get started* step is done is
+derived from the records it describes (devices, rooms, agents, messages,
+invites, team members, connections), like unread. The migration sets
+`welcomed_at` for every existing account, so only new ones see the welcome.
 ### M25 — templates
 
 ```

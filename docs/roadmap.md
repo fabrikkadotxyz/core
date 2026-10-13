@@ -1885,6 +1885,71 @@ on is one-time.
 4. The other team, ungated, works as before, and shows its notice.
 5. Without the deployment (the core alone), none of this exists.
 
+## M47 — Onboarding: pick a look, then get started
+
+> Someone who signs up lands in an empty team with a `#general` chat and nothing
+> pointing anywhere. Fabrikka's moment is **your own agent doing work in a room**,
+> then a teammate seeing it. For the first users (developers who already run
+> Claude Code or Codex in a terminal) the one hard step is connecting their
+> computer, and it comes first. M17 covers people who arrive by invite; this
+> covers everyone's first sign-in, and the person who starts a team.
+
+### Welcome: pick a look (once per account)
+
+- **On first sign-in**, before anything else: *"Welcome to Fabrikka. Pick a
+  look."* with the theme cards from Appearance and **Match my system**,
+  preselected.
+- **Choosing previews it at once**, on this screen.
+- **Continue** saves the choice to the account (the same setting as Appearance,
+  M44) and goes on: **1 click** with the default, **2** to pick another.
+- **Shown once per account, not per device.** The account records that it was
+  shown (`users.welcomed_at`, `docs/data-model.md`).
+- **Says where to change it later:** *"Change it any time in Appearance."*
+- **Invitees see it too,** right after joining, before M17's *Bring your agent*.
+- **Accounts from before M47 are marked as welcomed** by the migration, so
+  nobody already using Fabrikka is stopped by it.
+
+### Get started: five steps on the team's home
+
+A card at the top of the home page, for the signed-in person:
+
+| Step | Done when (from the record, never stored) | One click opens |
+| --- | --- | --- |
+| **1. Connect your computer** | You have a paired computer that isn't revoked | *Your devices*: the desktop app download, the one-line install, then pairing |
+| **2. Start a room** | You created a room (not a chat) | *New room*, titled *"My first room"* |
+| **3. Bring your agent** | An agent you own has posted in any room | That room's *Add agent*, its name pre-filled as `<tool>-<you>`, on your computer |
+| **4. Invite a teammate** | You created an invite, or one of your teams has someone besides you | The current team's *Invite* |
+| **5. Connect GitHub or Jira** *(optional)* | You have a connection | *Integrations* |
+
+- **Derived, like unread and *needs you*:** each step's state is a query over
+  devices, rooms, agents, messages, invites, team members and connections. No
+  table tracks onboarding, so it can't drift from what really happened.
+- **The next step is highlighted**, and done steps are ticked. Step 3 needs
+  steps 1 and 2, and says so while they're open.
+- **It goes away:** when the four required steps are done, or **Dismiss**
+  (`users.getting_started_dismissed_at`). Dismissing is per account.
+- **Above a deployment's notice bar** (M46), when there is one, never covering it.
+- **API:** `GET /api/me/getting-started` → `{ welcomed, dismissed, steps: [{ id,
+  done }] }`; `POST /api/me/welcome { theme }`; `POST
+  /api/me/getting-started/dismiss`. Only about the signed-in person.
+
+Out of scope: emails nudging people back, sample rooms filled with fake
+content, and tours that highlight parts of the page.
+
+**Test.** From a new account on a fresh browser (a deployment's sign-up, or an
+invite on the core):
+1. The first page is the welcome. Pick *Terminal* → it previews → **Continue**:
+   **2 clicks**. Sign in on another browser: no welcome, and Terminal is the
+   theme.
+2. The home shows *Get started* with step 1 highlighted. **Connect your
+   computer** → install and pair: it ticks without reloading the page.
+3. **Start a room** → **Create**: **2 clicks**, ticked.
+4. **Bring your agent** → **Add** → mention it with a task → it answers: ticked.
+   From the home page, the agent is in the room in **3 clicks** (pairing done).
+5. **Invite a teammate** → **Copy link**: ticked. The card says you're set up,
+   then goes away. **Dismiss** on another account hides it for good.
+6. An account from before M47 sees no welcome.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

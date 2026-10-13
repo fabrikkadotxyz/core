@@ -42,6 +42,7 @@ import {
 import { publish, subscribe } from './bus.ts';
 import { createSetup, SetupError } from './setup.ts';
 import { allowedHostsFor, createMcpApp } from './mcp.ts';
+import { dismissGettingStarted, gettingStarted, markWelcomed } from './onboarding.ts';
 import { broadcastAbort, onAbort, pauseState, setPaused } from './rails.ts';
 import { catchUp, endRun, recordActivity, startRun } from './activity.ts';
 import {
@@ -435,6 +436,27 @@ export function createApp(options: CreateAppOptions = {}) {
     }
     await setUserTheme(db, c.get('user').id, theme as string | null);
     return c.json({ theme });
+  });
+
+  /* ---- onboarding (M47): the welcome, then Get started; only about you ---- */
+
+  app.get('/api/me/getting-started', requireUser(db), async (c) => c.json(await gettingStarted(db, c.get('user').id)));
+
+  /** The welcome's Continue: the look it chose (as PUT /api/me/theme), and never again. */
+  app.post('/api/me/welcome', requireUser(db), async (c) => {
+    const body = await c.req.json<{ theme?: unknown }>().catch(() => ({}) as { theme?: unknown });
+    const theme = body.theme === undefined ? undefined : (body.theme ?? null);
+    if (theme !== undefined && theme !== null && theme !== 'system' && (typeof theme !== 'string' || !themes.has(theme))) {
+      return c.json({ error: 'this instance offers no such theme' }, 400);
+    }
+    if (theme !== undefined) await setUserTheme(db, c.get('user').id, theme as string | null);
+    await markWelcomed(db, c.get('user').id);
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/me/getting-started/dismiss', requireUser(db), async (c) => {
+    await dismissGettingStarted(db, c.get('user').id);
+    return c.json({ ok: true });
   });
 
   /** What the login page should offer (M32): reset by email, and a sign-up page an extension advertised. */

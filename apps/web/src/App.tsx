@@ -16,6 +16,8 @@ import { AppShell } from './shell/AppShell.tsx';
 import { WorkspaceProvider } from './shell/workspace.tsx';
 import { SessionPage } from './pages/SessionPage.tsx';
 import { TeamPage } from './pages/TeamPage.tsx';
+import { WelcomePage } from './pages/WelcomePage.tsx';
+import { useOnboarding } from './onboarding.ts';
 
 export default function App() {
   return (
@@ -28,6 +30,8 @@ export default function App() {
         {/* M32: password reset by email, offered only with an email transport. */}
         <Route path="/reset" element={<ForgotPasswordPage />} />
         <Route path="/reset/:token" element={<ResetPasswordPage />} />
+        {/* M47: once per account, before anything else. Outside the shell: no sidebar yet. */}
+        <Route path="/welcome" element={<RequireAuth><WelcomePage /></RequireAuth>} />
         {/* M28: every signed-in page lives in one shell, beside one sidebar that
             stays mounted as you move between pages. */}
         <Route element={<Shell />}>
@@ -52,13 +56,25 @@ export default function App() {
 function Shell() {
   return (
     <RequireAuth>
-      <WorkspaceProvider>
-        <AppShell>
-          <Outlet />
-        </AppShell>
-      </WorkspaceProvider>
+      <RequireWelcomed>
+        <WorkspaceProvider>
+          <AppShell>
+            <Outlet />
+          </AppShell>
+        </WorkspaceProvider>
+      </RequireWelcomed>
     </RequireAuth>
   );
+}
+
+/** M47: an account that hasn't seen the welcome sees it first, then comes back here. */
+function RequireWelcomed({ children }: { children: ReactNode }) {
+  const { state, failed } = useOnboarding();
+  const location = useLocation();
+  if (!state && !failed) return <main className="centered">Loading…</main>;
+  // If the check itself fails, let them in: the welcome is a nicety, not a gate.
+  if (state && !state.welcomed) return <Navigate to="/welcome" replace state={{ from: location.pathname + location.search }} />;
+  return <>{children}</>;
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {

@@ -2248,3 +2248,33 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
 .room-notify { display: inline-flex; }
 .side-offer { margin: 8px 2px 4px; padding: 8px 10px; border-radius: var(--radius-control); background: var(--side-hover); color: var(--side-text); font-size: 0.8rem; }
 .side-offer p { margin: 0 0 6px; }
+
+/* ---- M47: the welcome, and Get started ---- */
+.welcome { padding-top: 48px; }
+.welcome-actions { display: flex; align-items: center; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
+.getting-started {
+  margin-bottom: 20px; padding: 14px 16px;
+  background: var(--grad-panel); border: var(--border-width) solid var(--surface-border);
+  border-radius: var(--radius); box-shadow: var(--shadow-soft);
+}
+.getting-started header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.getting-started h2 { margin: 0; }
+.getting-started ol { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.getting-started li {
+  display: flex; align-items: center; gap: 12px; padding: 8px 10px;
+  border-radius: 8px; border: 1px solid transparent;
+}
+.getting-started li.next { border-color: var(--accent); background: var(--bg); }
+.getting-started li.done .step-text strong { text-decoration: line-through; opacity: 0.6; }
+.step-mark {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 0.8rem; font-weight: 600; border: 1px solid var(--border); color: var(--text-muted, inherit);
+}
+.getting-started li.next .step-mark, .getting-started li.done .step-mark { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.step-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.step-action { flex: none; }
+.step-action a.button {
+  display: inline-block; text-decoration: none; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.7rem;
+  background: var(--accent); border: 1px solid var(--accent); color: var(--on-accent);
+}
+.step-action button { padding: 0.4rem 0.7rem; }

@@ -105,6 +105,23 @@ export const themes = {
   choose: (theme: string | null) => call<{ theme: string | null }>('/me/theme', { method: 'PUT', body: { theme } }),
 };
 
+/* -------------------------------------------------------- onboarding (M47) */
+
+export type GettingStartedStep = 'computer' | 'room' | 'agent' | 'invite' | 'integration';
+export interface GettingStarted {
+  welcomed: boolean;
+  dismissed: boolean;
+  steps: { id: GettingStartedStep; done: boolean; optional: boolean }[];
+  room: { ownerSlug: string; publicId: string } | null;
+}
+
+export const onboarding = {
+  get: () => call<GettingStarted>('/me/getting-started'),
+  /** The welcome's Continue: saves the look (as Appearance does) and is never shown again. */
+  welcome: (theme: string | null) => call<{ ok: true }>('/me/welcome', { method: 'POST', body: { theme } }),
+  dismiss: () => call<{ ok: true }>('/me/getting-started/dismiss', { method: 'POST', body: {} }),
+};
+
 /* ------------------------------------------------------------------- auth */
 
 export const auth = {

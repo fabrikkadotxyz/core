@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import type { WaitingItem } from '@fabrikka/types';
 import { sessions, teams } from '../api.ts';
 import { useWorkspace } from '../shell/workspace.tsx';
+import { GettingStarted } from '../components/GettingStarted.tsx';
 
 export function HomePage() {
   const { team, teams: myTeams, refresh, selectTeam } = useWorkspace();
@@ -22,6 +23,8 @@ export function HomePage() {
     <div className="page">
       <main className="column">
         <h1>{team ? team.name : 'Fabrikka'}</h1>
+
+        <GettingStarted />
 
         {waiting.length > 0 && (
           <section className="waiting" aria-label="Waiting for you">

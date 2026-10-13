@@ -70,15 +70,43 @@ function ThemeCard({ theme, on, onPick }: { theme: ThemeInfo; on: boolean; onPic
   );
 }
 
+/**
+ * The theme cards and "Match my system". Shared by Appearance and the welcome
+ * (M47); `selected` is a theme id, 'system', or null for the default.
+ */
+export function ThemePicker({ offered, selected, onPick }: { offered: ThemeInfo[]; selected: string | null; onPick: (id: string | null) => void }) {
+  const light = offered.find((t) => t.id === 'dusk');
+  const dark = offered.find((t) => t.id === 'dusk-night');
+  // An id the instance no longer offers shows as the default.
+  const showing = selected === 'system' ? 'system' : selected && offered.some((t) => t.id === selected) ? selected : 'dusk';
+  return (
+    <div className="theme-grid" role="group" aria-label="Themes">
+      {light && dark && (
+        <button type="button" className={`theme-card${showing === 'system' ? ' on' : ''}`} aria-pressed={showing === 'system'} onClick={() => onPick('system')}>
+          <span className="theme-preview theme-preview-split" aria-hidden>
+            <Preview swatches={light.swatches} />
+            <Preview swatches={dark.swatches} />
+          </span>
+          <span className="theme-card-text">
+            <strong>Match my system</strong>
+            <span className="muted small">Dusk in light mode, Dusk Night in dark mode.</span>
+          </span>
+        </button>
+      )}
+      {offered.map((t) => (
+        <ThemeCard key={t.id} theme={t} on={showing === t.id} onPick={() => onPick(t.id === 'dusk' ? null : t.id)} />
+      ))}
+    </div>
+  );
+}
+
 export function AppearancePage() {
-  const { offered, choice, showing } = useThemes();
+  const { offered, choice } = useThemes();
   const [error, setError] = useState<string | null>(null);
   const pick = (id: string | null) => {
     setError(null);
     chooseTheme(id).catch((err) => setError((err as Error).message));
   };
-  const light = offered?.find((t) => t.id === 'dusk');
-  const dark = offered?.find((t) => t.id === 'dusk-night');
 
   return (
     <main className="column">
@@ -94,23 +122,7 @@ export function AppearancePage() {
       {!offered ? (
         <p className="muted">Loading themes…</p>
       ) : (
-        <div className="theme-grid" role="group" aria-label="Themes">
-          {light && dark && (
-            <button type="button" className={`theme-card${choice === 'system' ? ' on' : ''}`} aria-pressed={choice === 'system'} onClick={() => pick('system')}>
-              <span className="theme-preview theme-preview-split" aria-hidden>
-                <Preview swatches={light.swatches} />
-                <Preview swatches={dark.swatches} />
-              </span>
-              <span className="theme-card-text">
-                <strong>Match my system</strong>
-                <span className="muted small">Dusk in light mode, Dusk Night in dark mode.</span>
-              </span>
-            </button>
-          )}
-          {offered.map((t) => (
-            <ThemeCard key={t.id} theme={t} on={choice !== 'system' && showing === t.id} onPick={() => pick(t.id === 'dusk' ? null : t.id)} />
-          ))}
-        </div>
+        <ThemePicker offered={offered} selected={choice} onPick={pick} />
       )}
       <DeviceNotifications />
     </main>

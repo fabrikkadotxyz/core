@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Select, TeamInitial } from '../components/Select.tsx';
 import { inDesktopApp, openFolders } from '../desktop.ts';
 import { AGENT_TOOLS, agentTool } from '@fabrikka/types';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
   ActivityEvent,
   AgentSummary,
@@ -291,6 +291,20 @@ export function SessionPage() {
   const [editToast, setEditToast] = useState<OutputEditSummary | null>(null);
   const openOutputRef = useRef<string | null>(panes.openOutput);
   openOutputRef.current = panes.openOutput;
+
+  // M47: Get started's "Bring your agent" opens here with ?add-agent: Setup open, picking started.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [startAdding] = useState(() => searchParams.has('add-agent'));
+  useEffect(() => {
+    if (!startAdding) return;
+    setPanes((prev) => ({ ...prev, setup: true }));
+    setSearchParams((p) => {
+      p.delete('add-agent');
+      return p;
+    }, { replace: true });
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const togglePane = (which: 'setup' | 'output') =>
     setPanes((prev) => ({ ...prev, [which]: !prev[which] }));
@@ -586,6 +600,7 @@ export function SessionPage() {
             onChanged={reload}
             isOwner={isOwner}
             myUserId={user?.id}
+            startAdding={startAdding}
           />
 
           {!isChat && <IntegrationsPanel ref_={ref} isOwner={isOwner} />}
@@ -1170,11 +1185,14 @@ function AgentsPanel({
   onChanged,
   isOwner,
   myUserId,
+  startAdding = false,
 }: {
   ref_: SessionRef;
   onChanged: () => void;
   isOwner: boolean;
   myUserId: string | undefined;
+  /** M47: arrived from Get started, so start "Add my agent" at once. */
+  startAdding?: boolean;
 }) {
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [tokens, setTokens] = useState<TokenSummary[]>([]);
@@ -1236,6 +1254,20 @@ function AgentsPanel({
   const caveat = effectiveTool ? agentTool(effectiveTool)?.caveat : undefined;
   const needsCaveatOk = !!caveat && !caveatOk;
 
+  const startPicking = () => {
+    setPicking(true);
+    devices.list().then((d) => {
+      setMyDevices(d);
+      const first = d.flatMap((x) => x.grants.filter((g) => g.usable).map((g) => `${x.id}|${g.id}`))[0];
+      setChoice(first ?? '');
+    }).catch(() => setMyDevices([]));
+  };
+  useEffect(() => {
+    if (startAdding) startPicking();
+    // Once, when the panel opens from Get started.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const addMine = async () => {
     const f = chosen;
     if (!f || needsCaveatOk) return;
@@ -1254,17 +1286,7 @@ function AgentsPanel({
     <Panel title="Agents">
       {/* The five-click path (CLAUDE.md): Setup → Add my agent → folder → Add. */}
       {!picking ? (
-        <button
-          className="primary"
-          onClick={() => {
-            setPicking(true);
-            devices.list().then((d) => {
-              setMyDevices(d);
-              const first = d.flatMap((x) => x.grants.filter((g) => g.usable).map((g) => `${x.id}|${g.id}`))[0];
-              setChoice(first ?? '');
-            }).catch(() => setMyDevices([]));
-          }}
-        >
+        <button className="primary" onClick={startPicking}>
           Add my agent
         </button>
       ) : (

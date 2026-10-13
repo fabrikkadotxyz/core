@@ -10,6 +10,7 @@ import {
 import type { AuthUser } from '@fabrikka/types';
 import { auth } from './api.ts';
 import { syncThemeFromAccount } from './themes.ts';
+import { resetOnboarding } from './onboarding.ts';
 
 interface AuthState {
   user: AuthUser | null;
@@ -45,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await auth.logout().catch(() => {});
+    resetOnboarding();
     setUser(null);
   }, []);
 

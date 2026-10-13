@@ -123,6 +123,12 @@ export async function chooseTheme(next: string | null): Promise<void> {
   }
 }
 
+/** Show a theme without saving it: the welcome (M47) saves on Continue. */
+export function previewTheme(next: string | null): void {
+  choice = next;
+  apply();
+}
+
 /** The picker's view: what's offered, what's chosen, and what's showing. */
 export function useThemes(): { offered: ThemeInfo[] | null; choice: string | null; showing: string } {
   const [, rerender] = useState(0);

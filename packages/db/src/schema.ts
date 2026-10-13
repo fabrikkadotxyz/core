@@ -55,6 +55,10 @@ export const users = pgTable('users', {
    * for the default. Not a foreign key: themes are folders, not rows.
    */
   theme: text('theme'),
+  /** M47: the welcome (pick a look) was shown. Null = show it on next sign-in. */
+  welcomedAt: timestamp('welcomed_at', { withTimezone: true }),
+  /** M47: the person dismissed Get started. Its steps are derived, never stored. */
+  gettingStartedDismissedAt: timestamp('getting_started_dismissed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

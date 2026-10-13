@@ -1916,7 +1916,7 @@ A card at the top of the home page, for the signed-in person:
 | Step | Done when (from the record, never stored) | One click opens |
 | --- | --- | --- |
 | **1. Connect your computer** | You have a paired computer that isn't revoked | *Your devices*: the desktop app download, the one-line install, then pairing |
-| **2. Start a room** | You created a room (not a chat) | *New room*, titled *"My first room"* |
+| **2. Start a room** | You created a room (not a chat) | A new room, *"My first room"*, in the current team (or personal), opened |
 | **3. Bring your agent** | An agent you own has posted in any room | That room's *Add agent*, its name pre-filled as `<tool>-<you>`, on your computer |
 | **4. Invite a teammate** | You created an invite, or one of your teams has someone besides you | The current team's *Invite* |
 | **5. Connect GitHub or Jira** *(optional)* | You have a connection | *Integrations* |
@@ -1930,7 +1930,8 @@ A card at the top of the home page, for the signed-in person:
   (`users.getting_started_dismissed_at`). Dismissing is per account.
 - **Above a deployment's notice bar** (M46), when there is one, never covering it.
 - **API:** `GET /api/me/getting-started` → `{ welcomed, dismissed, steps: [{ id,
-  done }] }`; `POST /api/me/welcome { theme }`; `POST
+  done, optional }], room }` (`room`: your newest active room, for step 3, or
+  null); `POST /api/me/welcome { theme }`; `POST
   /api/me/getting-started/dismiss`. Only about the signed-in person.
 
 Out of scope: emails nudging people back, sample rooms filled with fake
@@ -1943,7 +1944,7 @@ invite on the core):
    theme.
 2. The home shows *Get started* with step 1 highlighted. **Connect your
    computer** → install and pair: it ticks without reloading the page.
-3. **Start a room** → **Create**: **2 clicks**, ticked.
+3. **Start a room**: **1 click**, the room opens, and it's ticked.
 4. **Bring your agent** → **Add** → mention it with a task → it answers: ticked.
    From the home page, the agent is in the room in **3 clicks** (pairing done).
 5. **Invite a teammate** → **Copy link**: ticked. The card says you're set up,

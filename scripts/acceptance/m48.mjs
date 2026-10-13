@@ -197,6 +197,10 @@ try {
   check(onMachine, '…while it stays on the machine, for you to remove');
 } finally {
   host.kill('SIGTERM');
+  // Leave no paired computer behind on the test account.
+  for (const d of (await req('/devices', { jar: me })).json ?? []) {
+    if (!before.has(d.id)) await req(`/devices/${d.id}`, { method: 'DELETE', jar: me });
+  }
 }
 
 if (failures) {

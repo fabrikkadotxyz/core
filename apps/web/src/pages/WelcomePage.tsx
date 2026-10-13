@@ -14,8 +14,8 @@ export function WelcomePage() {
   const { offered } = useThemes();
   const navigate = useNavigate();
   const from = (useLocation().state as { from?: string } | null)?.from;
-  // Match my system, preselected.
-  const [picked, setPicked] = useState<string | null>('system');
+  // The default (Fabrikka), preselected: null is "no choice", which is the default.
+  const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

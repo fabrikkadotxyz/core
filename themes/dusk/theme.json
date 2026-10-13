@@ -2,7 +2,7 @@
   "contract": 1,
   "id": "dusk",
   "name": "Dusk",
-  "description": "The default: Dusk Blue, Powder Blue and Burnt Peach as soft gradients, with a dark sidebar.",
+  "description": "Dusk Blue, Powder Blue and Burnt Peach as soft gradients, with a dark sidebar. The light half of Match my system.",
   "author": "Fabrikka",
   "license": "AGPL-3.0-only",
   "scheme": "light",

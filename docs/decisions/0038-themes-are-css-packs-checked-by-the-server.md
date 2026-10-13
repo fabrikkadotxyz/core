@@ -90,6 +90,12 @@ nosniff` and the type fixed by extension.
   default, today's look), **Dusk Night** (today's dark palette), and four new
   ones that differ in more than colour: **Terminal**, **Paper**, **Brutal** and
   **Aurora**.
+- **Amended 2026-10-13 (the owner's decision):** a seventh built-in,
+  **Fabrikka** (the look of fabrikka.xyz), is now **the default**: what an
+  account that hasn't chosen sees, and what the sign-in page shows. Dusk stays
+  the app's own stylesheet, the base every theme's tokens fall back to, and is
+  chosen explicitly like any other theme. *Match my system* is unchanged
+  (Dusk, Dusk Night).
 - **The instance's own:** `FABRIKKA_THEMES_DIR`, `/data/themes` in the Docker
   image. The operator adds a theme by putting its folder there and restarting.
   The operator chooses which themes exist, and people choose among them.

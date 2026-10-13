@@ -20,7 +20,8 @@
     <script>
       try {
         var t = JSON.parse(localStorage.getItem('fabrikka.theme') || 'null');
-        var id = t && t.id;
+        // No choice yet (or none cached): the default, Fabrikka (ADR 0038, amended).
+        var id = t && t.choice ? t.id : 'fabrikka';
         if (t && t.choice === 'system') id = matchMedia('(prefers-color-scheme: dark)').matches ? 'dusk-night' : 'dusk';
         if (id && /^[a-z0-9-]{1,40}$/.test(id) && id !== 'dusk') {
           document.documentElement.dataset.theme = id;

@@ -28,7 +28,7 @@ const check = (cond, m) => {
 
 const list = await (await fetch(`${BASE}/api/themes`)).json();
 check(list.themes.map((t) => t.id).join().startsWith('dusk,dusk-night,terminal,paper,brutal,aurora,fabrikka'), 'the seven built-in themes are offered, in order, without signing in');
-check(list.default === 'dusk' && list.system.light === 'dusk' && list.system.dark === 'dusk-night', 'Dusk is the default; Match my system is Dusk and Dusk Night');
+check(list.default === 'fabrikka' && list.system.light === 'dusk' && list.system.dark === 'dusk-night', 'Fabrikka is the default; Match my system is Dusk and Dusk Night');
 check(list.themes.every((t) => (t.scheme === 'light' || t.scheme === 'dark') && t.swatches.length >= 2), 'each theme has a scheme and swatches for its card');
 check(list.themes.every((t) => !('files' in t)), 'the listing exposes no file paths');
 

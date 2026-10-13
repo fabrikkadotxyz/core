@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import type { ThemeInfo } from '../api.ts';
-import { chooseTheme, useThemes } from '../themes.ts';
+import { chooseTheme, DEFAULT_THEME, useThemes } from '../themes.ts';
 import { askPermission, permission, setShowsText, showsText } from '../notify.ts';
 
 /** M42: per device, because a shared screen and a laptop want different answers. */
@@ -77,8 +77,8 @@ function ThemeCard({ theme, on, onPick }: { theme: ThemeInfo; on: boolean; onPic
 export function ThemePicker({ offered, selected, onPick }: { offered: ThemeInfo[]; selected: string | null; onPick: (id: string | null) => void }) {
   const light = offered.find((t) => t.id === 'dusk');
   const dark = offered.find((t) => t.id === 'dusk-night');
-  // An id the instance no longer offers shows as the default.
-  const showing = selected === 'system' ? 'system' : selected && offered.some((t) => t.id === selected) ? selected : 'dusk';
+  // No choice, or an id the instance no longer offers, shows as the default.
+  const showing = selected === 'system' ? 'system' : selected && offered.some((t) => t.id === selected) ? selected : DEFAULT_THEME;
   return (
     <div className="theme-grid" role="group" aria-label="Themes">
       {light && dark && (
@@ -94,7 +94,7 @@ export function ThemePicker({ offered, selected, onPick }: { offered: ThemeInfo[
         </button>
       )}
       {offered.map((t) => (
-        <ThemeCard key={t.id} theme={t} on={showing === t.id} onPick={() => onPick(t.id === 'dusk' ? null : t.id)} />
+        <ThemeCard key={t.id} theme={t} on={showing === t.id} onPick={() => onPick(t.id === DEFAULT_THEME ? null : t.id)} />
       ))}
     </div>
   );
@@ -109,22 +109,24 @@ export function AppearancePage() {
   };
 
   return (
-    <main className="column">
-      <h1>Appearance</h1>
-      <p className="muted">
-        Your theme follows your account to every browser and the desktop app. Anyone can make one:{' '}
-        <a href="https://github.com/fabrikkadotxyz/core/blob/main/docs/themes.md" target="_blank" rel="noreferrer noopener">
-          how themes work
-        </a>
-        .
-      </p>
-      {error && <p className="error">{error}</p>}
-      {!offered ? (
-        <p className="muted">Loading themes…</p>
-      ) : (
-        <ThemePicker offered={offered} selected={choice} onPick={pick} />
-      )}
-      <DeviceNotifications />
-    </main>
+    <div className="page">
+      <main className="column">
+        <h1>Appearance</h1>
+        <p className="muted">
+          Your theme follows your account to every browser and the desktop app. Anyone can make one:{' '}
+          <a href="https://github.com/fabrikkadotxyz/core/blob/main/docs/themes.md" target="_blank" rel="noreferrer noopener">
+            how themes work
+          </a>
+          .
+        </p>
+        {error && <p className="error">{error}</p>}
+        {!offered ? (
+          <p className="muted">Loading themes…</p>
+        ) : (
+          <ThemePicker offered={offered} selected={choice} onPick={pick} />
+        )}
+        <DeviceNotifications />
+      </main>
+    </div>
   );
 }

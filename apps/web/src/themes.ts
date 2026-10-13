@@ -4,13 +4,18 @@
  * A theme is the chosen pack's theme.css, loaded after the app's own stylesheet.
  * The choice belongs to the account (/api/me/theme). It's also cached on the
  * device, so index.html's inline script can paint it before the app loads.
- * Dusk is the app's own stylesheet, so choosing it loads nothing.
+ * Dusk is the app's own stylesheet (the base), so choosing it loads nothing.
+ * The default, for an account that hasn't chosen, is Fabrikka (ADR 0038, amended).
  */
 import { useEffect, useState } from 'react';
 import { themes as themesApi, type ThemeInfo } from './api.ts';
 
 const KEY = 'fabrikka.theme';
-const DEFAULT = 'dusk';
+/** The app's own stylesheet: every theme's tokens fall back to it. */
+const BASE = 'dusk';
+/** What an account that hasn't chosen sees. index.html paints it before the app loads. */
+export const DEFAULT_THEME = 'fabrikka';
+const DEFAULT = DEFAULT_THEME;
 const SYSTEM = { light: 'dusk', dark: 'dusk-night' };
 const dark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -40,7 +45,7 @@ function apply(): void {
   const id = resolved();
   const root = document.documentElement;
   const link = document.getElementById('theme-css') as HTMLLinkElement | null;
-  if (id === DEFAULT) {
+  if (id === BASE) {
     delete root.dataset.theme;
     link?.remove();
   } else {

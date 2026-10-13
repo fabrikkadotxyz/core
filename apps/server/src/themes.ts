@@ -10,7 +10,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative, resolve, sep } from 'node:path';
 
 export const THEME_CONTRACT = 1;
-export const DEFAULT_THEME = 'dusk';
+export const DEFAULT_THEME = 'fabrikka';
 /** What *Match my system* resolves to. */
 export const SYSTEM_THEMES = { light: 'dusk', dark: 'dusk-night' } as const;
 

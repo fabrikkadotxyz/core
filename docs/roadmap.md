@@ -1897,8 +1897,8 @@ on is one-time.
 ### Welcome: pick a look (once per account)
 
 - **On first sign-in**, before anything else: *"Welcome to Fabrikka. Pick a
-  look."* with the theme cards from Appearance and **Match my system**,
-  preselected.
+  look."* with the theme cards from Appearance and the default, **Fabrikka**,
+  preselected (2026-10-13: was *Match my system*).
 - **Choosing previews it at once**, on this screen.
 - **Continue** saves the choice to the account (the same setting as Appearance,
   M44) and goes on: **1 click** with the default, **2** to pick another.

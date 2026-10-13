@@ -16,13 +16,13 @@ Dusk in light mode and Dusk Night in dark mode.
 
 | Theme | Scheme | What it's like |
 | --- | --- | --- |
-| **Dusk** (default) | light | The palette as gradients: soft cards, a dark sidebar, a banner for each page's title |
+| **Dusk** | light | The palette as gradients: soft cards, a dark sidebar, a banner for each page's title |
 | **Dusk Night** | dark | The same palette, dark |
 | **Terminal** | dark | A terminal multiplexer: monospace everywhere, square boxes with titles set into their borders, lavender on near-black |
 | **Paper** | light | An editorial page: cream paper, serif type, ink-red accents, hairline rules, no shadows |
 | **Brutal** | light | Thick black borders, hard offset shadows, flat primary colours, uppercase headings |
 | **Aurora** | dark | Frosted glass on a night sky of teal, violet and pink light; rounded, glowing |
-| **Fabrikka** | dark | The look of fabrikka.xyz: black ground, hairline borders, Geist type, small uppercase mono labels, white buttons, a dusk-blue sidebar. Ships Geist and Geist Mono (SIL OFL) |
+| **Fabrikka** (default) | dark | The look of fabrikka.xyz: black ground, hairline borders, Geist type, small uppercase mono labels, white buttons, a dusk-blue sidebar. Ships Geist and Geist Mono (SIL OFL) |
 
 ## A theme is a folder
 
@@ -111,8 +111,9 @@ warning.
 
 ## The tokens (contract 1)
 
-Every token has a value in the default theme (Dusk, in
-`apps/web/src/styles.css`), so a theme sets only what it changes.
+Every token has a value in the base theme (Dusk, in
+`apps/web/src/styles.css`), so a theme sets only what it changes. The base
+isn't the default: an account that hasn't chosen gets **Fabrikka**.
 
 ### Colour
 

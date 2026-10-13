@@ -247,8 +247,10 @@ room attaches, and resolves at run time, only connections in its scope, and an
 organization's stop resolving the moment you leave it. So a credential you set
 up for an employer can't be used in a client's room by a slip of the picker,
 and two organizations can have two accounts at the same vendor. Folders on
-your computer follow the same rule, checked by the server and again by the
-host. Connections attached before ADR 0043 in an organization's room keep
+your computer follow it one way: an organization's room gets only that
+organization's folders (checked by the server and again by the host), while
+your personal rooms may use any of yours, which lets whoever you invite there
+reach them through your agent. Connections attached before ADR 0043 in an organization's room keep
 working, marked *from Personal* until redone.
 
 ### Team credentials (M30)

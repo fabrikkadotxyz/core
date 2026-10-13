@@ -203,10 +203,11 @@ export class Host {
       this.record({ ...where, event: 'refused', detail });
     };
     if (!grant) return refuse('that folder is no longer granted on this computer');
-    // ADR 0043: checked here too, so the server can't steer a folder into another organization's room.
+    // ADR 0043: checked here too, so the server can't steer a folder into another
+    // organization's room. A personal room may use any of this computer's folders.
     const folderOrg = grant.org ?? null;
     const roomOrg = b.session.org ?? null;
-    if (folderOrg !== roomOrg && !(folderOrg === null && b.fromPersonal)) {
+    if (roomOrg !== null && folderOrg !== roomOrg && !(folderOrg === null && b.fromPersonal)) {
       return refuse(`this folder is for ${this.scopeName(folderOrg)}, not this room's organization`);
     }
     if (!existsSync(grant.path)) return refuse(`${grant.path} no longer exists`);

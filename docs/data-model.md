@@ -525,9 +525,9 @@ session_agent_hosts                       -- "this session agent runs on that de
 ```
 
 **A folder is for one organization, or Personal** (ADR 0043). `device_grants.team_id`
-is the host's choice, kept only while its owner is in that organization; a
-binding is sent to the host only when its grant's scope is the room's (or it's
-an old Personal binding, `from_personal`). Deleting an organization deletes its
+is the host's choice, kept only while its owner is in that organization. An
+organization's room may bind only that organization's grants (or an old
+Personal binding, `from_personal`); a room in no organization may bind any. Deleting an organization deletes its
 grant rows rather than making them Personal.
 
 **A binding's token is re-minted on every host connection** and the previous one

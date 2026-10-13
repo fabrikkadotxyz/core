@@ -1237,7 +1237,10 @@ function AgentsPanel({
     }
   };
 
-  const inScope = (g: DeviceSummary['grants'][number]) => (g.org ?? null) === (roomOrg?.id ?? null);
+  // An organization's room: only its folders. A personal room: any of yours (ADR 0043).
+  const inScope = (g: DeviceSummary['grants'][number]) => !roomOrg || (g.org ?? null) === roomOrg.id;
+  const { teams: myOrgs } = useWorkspace();
+  const orgLabel = (org: string | null) => (org ? (myOrgs.find((t) => t.id === org)?.name ?? 'an organization') : 'Personal');
   const scopeName = roomOrg ? roomOrg.name : 'Personal rooms';
   const elsewhere = (myDevices ?? []).some((d) => d.grants.some((g) => g.usable && !inScope(g)));
   const folders = (myDevices ?? []).flatMap((d) =>
@@ -1247,6 +1250,7 @@ function AgentsPanel({
       grantId: g.id,
       device: d.name,
       label: g.label,
+      org: g.org ?? null,
       online: d.online,
       // M37: the agent tools that computer offers (its own choice), known to the registry.
       tools: g.providers.filter((p) => agentTool(p)),
@@ -1328,7 +1332,12 @@ function AgentsPanel({
                 <label key={f.key} className="check">
                   <input type="radio" name="folder" checked={choice === f.key} onChange={() => setChoice(f.key)} />
                   <span>
-                    📁 {f.label} <span className="muted small">on {f.device}{f.online ? '' : ' (offline)'}</span>
+                    📁 {f.label}{' '}
+                    <span className="muted small">
+                      on {f.device}
+                      {f.online ? '' : ' (offline)'}
+                      {!roomOrg && ` · for ${orgLabel(f.org)}`}
+                    </span>
                   </span>
                 </label>
               ))}

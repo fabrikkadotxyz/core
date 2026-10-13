@@ -6,8 +6,8 @@
  *   - a folder is granted for an organization, and the same path for Personal;
  *     the same path twice for one scope, or an organization that isn't yours,
  *     is refused on the machine;
- *   - the server keeps each grant's organization, and Add my agent refuses a
- *     folder from another scope;
+ *   - the server keeps each grant's organization; an organization's room
+ *     refuses any other folder, while a personal room takes any of yours;
  *   - a room moving to another organization stops its agent;
  *   - leaving an organization drops its folders from the server;
  *   - a personal connection is per organization too: one per vendor per
@@ -139,8 +139,12 @@ try {
   check(!!(await until(async () => ['connected', 'idle'].includes(await status()))), '…and the host connects the agent');
 
   const mine = (await req('/sessions', { method: 'POST', body: { title: `Personal room ${stamp}` }, jar: me })).json;
-  const wrong2 = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: acmeGrant.id }, jar: me });
-  check(wrong2.status === 400, "ACME'S FOLDER IS REFUSED IN A PERSONAL ROOM");
+  // One way only: your personal rooms may use any of your folders.
+  const inMine = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: acmeGrant.id }, jar: me });
+  check(inMine.status === 201, "…but a personal room may use Acme's folder");
+  const mineStatus = () =>
+    req(`/o/${mine.ownerSlug}/s/${mine.publicId}`, { jar: me }).then((r) => r.json?.participants.find((p) => p.displayName === inMine.json?.agent?.displayName)?.status);
+  check(!!(await until(async () => ['connected', 'idle'].includes(await mineStatus()))), '…and the host runs it there');
 
   /* ---------------------------------------------- the room moves */
 

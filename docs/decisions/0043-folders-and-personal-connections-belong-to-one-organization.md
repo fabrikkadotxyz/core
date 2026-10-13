@@ -46,11 +46,18 @@ move something, remove it and add it again.
 - **The host reports it:** the `grants` frame gains `org` per grant. The
   server stores it (`device_grants.team_id`), and ignores a grant scoped to
   an organization you're not in (as if it weren't sent).
-- **"Add my agent"** lists only the room's scope. `bindAgent` refuses a grant
-  from another scope: *"this folder is for <org>, not this room"*.
+- **One way only (amended 2026-10-13, the owner's decision): a personal room
+  may use any of your folders; an organization's room only that organization's.**
+  Your personal rooms are your own workspace, and you're in every organization
+  whose folders you hold. The other direction is what this ADR is for: no
+  Personal folder, and no other organization's, in an organization's room.
+- **"Add my agent"** lists what the room may use: in an organization's room,
+  that organization's folders; in a personal room, all of yours, each marked
+  with its organization. `bindAgent` refuses the rest: *"this folder is for
+  <org>, not this room"*.
 - **The machine checks too.** A binding now says its room's scope
-  (`session.org`). The host refuses to start a run whose grant is scoped
-  elsewhere. The server can't steer a folder into another organization's
+  (`session.org`). The host refuses to start a run in an organization's room
+  whose grant is scoped elsewhere. The server can't steer a folder into another organization's
   room, even by mistake.
 - **Leaving an organization** drops its grants on the server (as if not
   sent) and the bindings that use them, at the next `grants` frame; the
@@ -87,6 +94,10 @@ scope. New ones follow the rule.
 
 ## Consequences
 
+- **A personal room can reach an organization's folder.** Anyone you've let
+  into that room (a link invitee, a guest) can ask your agent about that
+  organization's code. Bringing an organization's folder into a personal room
+  is the room owner's own call; an organization's rooms never get it.
 - Two organizations means adding a folder, and connecting a vendor, twice.
   That's the point: each is a decision about which organization gets what.
 - The host protocol changes (`docs/protocol.md`): a new server frame, a new

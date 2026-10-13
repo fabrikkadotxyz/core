@@ -1963,8 +1963,9 @@ invite on the core):
 - **The Folders window asks "For":** *Personal*, or one of your
   organizations, sent to the host by the server. The same folder can be added
   once per organization, each with its own policy.
-- **"Add my agent" offers only the room's folders;** the server refuses
-  another organization's, and the host refuses to run one even if asked.
+- **An organization's room offers only its folders;** the server refuses any
+  other, and the host refuses to run one even if asked. **A personal room
+  offers all of yours,** each marked with its organization.
 - **Leaving an organization** stops its folders being offered or run; a room
   changing organization re-checks its agents.
 - **Existing folders are Personal.** One already bound in an organization's
@@ -1984,7 +1985,8 @@ invite on the core):
 1. Folders window → **For: Acme** → Add folder… → pick the repo: **3 clicks**.
    Add the same repo **For: Client**, as *Read only*. Both are listed, tagged.
 2. In an Acme room, **Add my agent** offers only the Acme folder → **Add**:
-   the agent answers a mention. In a Client room, only the Client one.
+   the agent answers a mention. In a Client room, only the Client one. In a
+   personal room, all of them, marked *Acme* and *Client*.
 3. Move the Acme room to Client (room settings → Organization): the agent
    goes offline, and *Add my agent* there offers only the Client folder.
 4. Integrations → **For: Client** → Connect GitHub with a second account. In a

@@ -42,6 +42,7 @@ import { OutputsPanel, timeAgo, type OutputTab } from '../outputs/Outputs.tsx';
 import { webKind } from '../outputs/kinds/registry.ts';
 import { CatchUpCard, hasNews } from './CatchUpCard.tsx';
 import { useWorkspace } from '../shell/workspace.tsx';
+import { readWarm, writeWarm } from '../warm.ts';
 import type { NotifySetting } from '@fabrikka/types';
 
 const NOTIFY_OPTIONS: { value: NotifySetting; label: string; description: string }[] = [
@@ -255,14 +256,26 @@ function RailHandle({
   );
 }
 
+/** ADR 0044: how much of the last room a tab keeps for its next reload. */
+const WARM_MESSAGES = 100;
+interface WarmRoom {
+  view: SessionView;
+  messages: Message[];
+}
+
 export function SessionPage() {
   const { owner = '', session = '' } = useParams();
   const ref = useMemo<SessionRef>(() => ({ owner, session }), [owner, session]);
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [view, setView] = useState<SessionView | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  // ADR 0044: a reload draws the room this tab last showed, then refreshes it.
+  const [warm] = useState(() => {
+    const w = readWarm<WarmRoom>('room');
+    return w && w.view.session.ownerSlug === owner && w.view.session.publicId === session ? w : null;
+  });
+  const [view, setView] = useState<SessionView | null>(warm?.view ?? null);
+  const [messages, setMessages] = useState<Message[]>(warm?.messages ?? []);
   const [notFound, setNotFound] = useState(false);
   const [connected, setConnected] = useState(false);
   const [blocked, setBlocked] = useState<
@@ -369,6 +382,13 @@ export function SessionPage() {
     reload();
     sessions.messages(ref).then(setMessages).catch(() => {});
   }, [ref, reload]);
+
+  // Keep the copy a reload paints from, once the view and the messages are this room's.
+  useEffect(() => {
+    if (!view || view.session.ownerSlug !== owner || view.session.publicId !== session) return;
+    if (messages.some((m) => m.sessionId !== view.session.id)) return;
+    writeWarm('room', { view, messages: messages.slice(-WARM_MESSAGES) } satisfies WarmRoom);
+  }, [view, messages, owner, session]);
 
   // M24: show what changed since the last visit; with nothing new, just mark the
   // visit. Leaving marks it too — you were here, you saw the timeline.

@@ -571,6 +571,7 @@ theme is CSS that every person on the instance may load.
 - MCP endpoints are HTTPS only; session tokens never appear in URLs or query strings.
 - External MCP credentials are encrypted at rest and never returned by any read API.
 - The bridge holds credentials for exactly one session at a time.
+- **The web app keeps a copy of what a tab last showed** (ADR 0044) in that tab's `sessionStorage`: who you are, your organizations and rooms, and the last room's details and latest 100 messages. It's for painting a reload at once, never for deciding what's allowed. The server checks every action as before. It's gone when the tab closes, and dropped on sign-out or when the server says you're signed out.
 
 ## Security checks that gate release
 

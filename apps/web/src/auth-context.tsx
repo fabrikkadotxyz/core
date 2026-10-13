@@ -11,6 +11,7 @@ import type { AuthUser } from '@fabrikka/types';
 import { auth } from './api.ts';
 import { syncThemeFromAccount } from './themes.ts';
 import { resetOnboarding } from './onboarding.ts';
+import { clearWarm, readWarm, writeWarm } from './warm.ts';
 
 interface AuthState {
   user: AuthUser | null;
@@ -23,8 +24,15 @@ interface AuthState {
 const Ctx = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  // ADR 0044: a reload trusts who this tab last saw, for drawing only, until /auth/me answers.
+  const [user, setUserState] = useState<AuthUser | null>(() => readWarm<AuthUser>('me'));
+  const [loading, setLoading] = useState(() => user === null);
+
+  const setUser = useCallback((next: AuthUser | null) => {
+    if (next) writeWarm('me', next);
+    else clearWarm();
+    setUserState(next);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await auth.logout().catch(() => {});
     resetOnboarding();
     setUser(null);
-  }, []);
+  }, [setUser]);
 
   const value = useMemo(
     () => ({ user, loading, setUser, signOut }),

@@ -364,7 +364,7 @@ are ignored, with a warning in the log.
 
 ### Themes
 
-Six themes are built in. To offer another, put its folder in the theme
+Seven themes are built in. To offer another, put its folder in the theme
 directory and restart: `/data/themes/<id>/` in the Docker image, or
 `FABRIKKA_THEMES_DIR` from a checkout. The log lists what's offered and what
 was skipped, and why. Making one, and the rules a theme must follow:
@@ -567,6 +567,15 @@ the app's own address, not the proxy's, so counting hops would pick the wrong
 entry. The image sets `FABRIKKA_CLIENT_IP_HEADER=Fly-Client-IP` there, and
 `PUBLIC_URL` to `https://<app>.fly.dev` unless you set it. Set this only for a
 header your platform guarantees: any other header is whatever the client wrote.
+
+## Caching and compression
+
+The server sets caching itself (ADR 0044), so a proxy or CDN in front needs no
+rules: the app's files under `/assets/` are cached for a year (their names
+change with each build), `index.html` is checked on every load, and a
+theme's fonts and images are kept for a day. Text (the app, `index.html`,
+theme CSS, the API's JSON) is gzipped when the browser accepts it. A proxy
+that compresses too leaves it alone: it's already encoded.
 
 ## Ports
 

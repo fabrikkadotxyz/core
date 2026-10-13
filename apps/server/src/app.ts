@@ -15,8 +15,10 @@ import { relative, resolve as resolvePath } from 'node:path';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createNodeWebSocket } from '@hono/node-ws';
-import { Hono, type Context } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
+import { compress } from 'hono/compress';
 import { cors } from 'hono/cors';
+import { etag } from 'hono/etag';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { createClient, isEncryptionConfigured, runMigrations, type Database } from '@fabrikka/db';
 import type {
@@ -277,6 +279,17 @@ export function createApp(options: CreateAppOptions = {}) {
    * same-origin in dev as well as production. CORS stays for direct-origin calls
    * during development and must allow credentials, since auth is cookie-based.
    */
+  /*
+   * ADR 0044: text goes out gzipped when the browser takes it. Never a
+   * WebSocket's upgrade; server-sent events are excluded by type. /mcp and the
+   * bridge's endpoints are left alone: agents, small messages.
+   */
+  const gzip = compress({ encoding: 'gzip' });
+  const compressText: MiddlewareHandler = (c, next) => (c.req.header('upgrade') ? next() : gzip(c, next));
+  /** A validator, so an unchanged file is a 304. Weak: the same file gzipped is the same file. */
+  const validate = etag({ weak: true });
+  app.use('/api/*', compressText);
+
   app.use(
     '/api/*',
     cors({ origin: ['http://localhost:5173'], credentials: true }),
@@ -411,8 +424,12 @@ export function createApp(options: CreateAppOptions = {}) {
     c.json({ themes: [...themes.values()].map(publicTheme), default: DEFAULT_THEME, system: SYSTEM_THEMES }),
   );
 
-  /** Only files the start-up check accepted, typed by extension. */
-  app.get('/themes/:id/*', async (c) => {
+  /**
+   * Only files the start-up check accepted, typed by extension. ADR 0044:
+   * theme.css is checked on every load, so a change shows on the next reload;
+   * fonts and images may be kept for a day (rename one to replace it).
+   */
+  app.get('/themes/:id/*', compressText, validate, async (c) => {
     const id = c.req.param('id');
     const path = decodeURIComponent(c.req.path.slice(`/themes/${id}/`.length));
     const file = themeFile(themes, id, path);
@@ -421,7 +438,7 @@ export function createApp(options: CreateAppOptions = {}) {
     return c.body(body, 200, {
       'content-type': file.type,
       'x-content-type-options': 'nosniff',
-      'cache-control': 'no-cache',
+      'cache-control': path.endsWith('.css') ? 'no-cache' : 'public, max-age=86400',
     });
   });
 
@@ -2735,7 +2752,18 @@ export function createApp(options: CreateAppOptions = {}) {
   const WEB_DIST = resolvePath(import.meta.dirname, '../../web/dist');
 
   if (existsSync(WEB_DIST)) {
-    app.use('/assets/*', serveStatic({ root: relative(process.cwd(), WEB_DIST) }));
+    // ADR 0044: a build names its files by their content, so they never change.
+    app.use(
+      '/assets/*',
+      compressText,
+      async (c, next) => {
+        await next();
+        if (c.res.status === 200) c.header('cache-control', 'public, max-age=31536000, immutable');
+      },
+      serveStatic({ root: relative(process.cwd(), WEB_DIST) }),
+    );
+    // A file an old build named, or none did: a 404, not the page (and never cached for a year).
+    app.get('/assets/*', (c) => c.notFound());
     // The icons and manifest at the site root (brand/README.md). Named one by one,
     // so nothing else in the build becomes reachable by accident.
     for (const file of ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'site.webmanifest']) {
@@ -2744,11 +2772,13 @@ export function createApp(options: CreateAppOptions = {}) {
 
     // SPA fallback: every non-API path returns index.html so client-side routes
     // like /o/fede/s/demo work on a hard refresh.
-    app.get('*', async (c) => {
+    // ADR 0044: checked on every load, so a deploy shows at once; a 304 when unchanged.
+    app.get('*', compressText, validate, async (c) => {
       if (c.req.path.startsWith('/api') || c.req.path.startsWith('/mcp') || c.req.path.startsWith('/themes/')) {
         return c.notFound();
       }
       const html = await readFile(resolvePath(WEB_DIST, 'index.html'), 'utf8');
+      c.header('cache-control', 'no-cache');
       return c.html(html);
     });
 

@@ -4,8 +4,11 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { onboarding, type GettingStarted } from './api.ts';
+import { readWarm, writeWarm } from './warm.ts';
 
-let current: GettingStarted | null = null;
+// ADR 0044: a reload starts from what this tab last knew, and refreshes it.
+let current: GettingStarted | null = readWarm<GettingStarted>('onboarding');
+let fresh = false;
 let failed = false;
 let loading: Promise<GettingStarted> | null = null;
 const listeners = new Set<() => void>();
@@ -13,6 +16,7 @@ const listeners = new Set<() => void>();
 function publish(g: GettingStarted | null, didFail = false) {
   current = g;
   failed = didFail;
+  writeWarm('onboarding', g);
   listeners.forEach((l) => l());
 }
 
@@ -20,6 +24,7 @@ export function refreshOnboarding(): Promise<GettingStarted> {
   loading ??= onboarding
     .get()
     .then((g) => {
+      fresh = true;
       publish(g);
       return g;
     })
@@ -40,6 +45,7 @@ export function markWelcomedLocally(): void {
 
 /** Forget it on sign-out, so the next account starts fresh. */
 export function resetOnboarding(): void {
+  fresh = false;
   publish(null);
 }
 
@@ -48,7 +54,7 @@ export function useOnboarding(): { state: GettingStarted | null; failed: boolean
   useEffect(() => {
     const l = () => rerender((n) => n + 1);
     listeners.add(l);
-    if (!current) refreshOnboarding().catch(() => {});
+    if (!fresh) refreshOnboarding().catch(() => {});
     return () => void listeners.delete(l);
   }, []);
   return { state: current, failed, refresh: useCallback(() => refreshOnboarding(), []) };

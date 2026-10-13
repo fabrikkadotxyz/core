@@ -64,6 +64,22 @@ check(/document\.write\('<link id="theme-css"/.test(html), '…with a render-blo
 const app = readFileSync('apps/web/src/styles.css', 'utf8');
 check(!/\[data-theme="dark"\]/.test(app), "the dark palette lives in the Dusk Night pack, not in the app's stylesheet");
 
+/* ------------------------------------------------ 5. a reload downloads little (ADR 0044) */
+
+const page = await fetch(`${BASE}/`, { headers: { 'accept-encoding': 'gzip' } });
+check(page.headers.get('cache-control') === 'no-cache' && page.headers.get('etag'), 'index.html is checked on every load, with a validator');
+check((await fetch(`${BASE}/`, { headers: { 'if-none-match': page.headers.get('etag') ?? '' } })).status === 304, '…and an unchanged one is a 304');
+check(page.headers.get('content-encoding') === 'gzip', '…and gzipped');
+const entry = /src="(\/assets\/[^"]+\.js)"/.exec(html)?.[1];
+const bundle = entry ? await fetch(`${BASE}${entry}`, { headers: { 'accept-encoding': 'gzip' } }) : null;
+check(bundle?.headers.get('cache-control')?.includes('immutable'), "the app's hashed files are kept for a year");
+check(bundle?.headers.get('content-encoding') === 'gzip', '…and gzipped');
+check((await fetch(`${BASE}/assets/no-such-file.js`)).status === 404, 'a file no build named is a 404, not the page');
+const themeCss = await fetch(`${BASE}/themes/fabrikka/theme.css`);
+check(themeCss.headers.get('cache-control') === 'no-cache' && themeCss.headers.get('etag'), 'theme.css is checked on every load, with a validator');
+const font = await fetch(`${BASE}/themes/fabrikka/fonts/Geist-Variable.woff2`);
+check(font.headers.get('cache-control') === 'public, max-age=86400', "a theme's font is kept for a day");
+
 if (failures) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);

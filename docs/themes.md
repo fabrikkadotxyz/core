@@ -96,6 +96,11 @@ rule, logging why. A theme may not:
 - ship any other kind of file. **No SVG**, because an SVG opened from the
   instance can run script.
 
+**Caching (ADR 0044):** browsers check `theme.css` on every load, so a change
+shows on the next reload. Fonts and images may be kept for a day. **When you
+change a font or image, give it a new file name**, or some people will see the
+old one until tomorrow.
+
 ## Installing one on an instance
 
 Put the folder in the instance's theme directory, then restart:

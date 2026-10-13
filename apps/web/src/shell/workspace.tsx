@@ -8,6 +8,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import type { PersonEvent, SessionSummary, TeamSummary } from '@fabrikka/types';
 import { sessions as sessionsApi, teams as teamsApi } from '../api.ts';
 import { showNotification, showTotal } from '../notify.ts';
+import { readWarm, writeWarm } from '../warm.ts';
 
 const TEAM_KEY = 'fabrikka.team';
 
@@ -37,10 +38,12 @@ function stored(): string | null {
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [teams, setTeams] = useState<TeamSummary[]>([]);
+  // ADR 0044: a reload draws the sidebar this tab last showed, then refreshes it.
+  const [warm] = useState(() => readWarm<{ teams: TeamSummary[]; sessions: SessionSummary[] }>('workspace'));
+  const [sessions, setSessions] = useState<SessionSummary[]>(warm?.sessions ?? []);
+  const [teams, setTeams] = useState<TeamSummary[]>(warm?.teams ?? []);
   const [teamId, setTeamId] = useState<string | null>(stored);
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(warm !== null);
 
   const refresh = useCallback(() => {
     // Teams first: listing them makes sure each has its #general (M29).
@@ -49,12 +52,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const s = await sessionsApi.list();
       setTeams(t);
       setSessions(s);
+      writeWarm('workspace', { teams: t, sessions: s });
     })()
       .catch(() => {})
       .finally(() => setLoaded(true));
   }, []);
 
-  useEffect(refresh, [refresh]);
+  // No refresh on mount here: the shell refreshes on every page it shows, the first included.
 
   /*
    * M42 (ADR 0037): one stream per person. Counts change in place; a room we

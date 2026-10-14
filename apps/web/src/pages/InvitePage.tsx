@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { auth, invites, type InviteDestination } from '../api.ts';
+import { AuthStage, Eyebrow } from '../components/AuthStage.tsx';
 import { useAuth } from '../auth-context.tsx';
 
 export function InvitePage() {
@@ -35,19 +36,20 @@ export function InvitePage() {
       .catch(() => setPreview('invalid'));
   }, [token]);
 
-  if (preview === null || loading) return <main className="centered">Loading…</main>;
+  if (preview === null || loading) return <AuthStage />;
 
   if (preview === 'invalid') {
     return (
-      <main className="centered">
+      <AuthStage>
         <div className="card">
+          <Eyebrow>Invitation</Eyebrow>
           <h1>This invite can't be used</h1>
           <p className="muted">
             It may have already been redeemed, been revoked, or expired. Invites
             are single-use and expire after 7 days — ask for a fresh link.
           </p>
         </div>
-      </main>
+      </AuthStage>
     );
   }
 
@@ -93,8 +95,9 @@ export function InvitePage() {
 
   if (user) {
     return (
-      <main className="centered">
+      <AuthStage>
         <div className="card">
+          <Eyebrow>Invitation</Eyebrow>
           <h1>{preview.kind === 'team' ? `Join the organization “${preview.title}”` : preview.guest ? `View “${preview.title}”` : `Join “${preview.title}”`}</h1>
           {preview.guest && <p className="hint">You're invited as a guest: you can read this session and nothing else.</p>}
           <p className="muted">
@@ -112,13 +115,14 @@ export function InvitePage() {
             {busy ? 'Joining…' : preview.kind === 'team' ? 'Join organization' : 'Join session'}
           </button>
         </div>
-      </main>
+      </AuthStage>
     );
   }
 
   return (
-    <main className="centered">
+    <AuthStage>
       <form className="card" onSubmit={signup}>
+        <Eyebrow>Invitation</Eyebrow>
         <h1>{preview.kind === 'team' ? `Join the organization “${preview.title}”` : preview.guest ? `View “${preview.title}”` : `Join “${preview.title}”`}</h1>
         {preview.guest && <p className="hint">You're invited as a guest: you can read this session and nothing else.</p>}
         <p className="muted">Create an account to {preview.guest ? 'view' : 'join'} this {preview.kind === 'team' ? 'team' : 'session'}.</p>
@@ -166,6 +170,6 @@ export function InvitePage() {
           {busy ? 'Creating…' : 'Create account and join'}
         </button>
       </form>
-    </main>
+    </AuthStage>
   );
 }

@@ -210,3 +210,56 @@ a { color: var(--f-powder); }
 .sidebar .link { color: var(--f-powder); }
 .theme-card.on { box-shadow: 0 0 0 1px #ffffff; border-color: #ffffff; }
 ::selection { background: var(--f-dusk); color: #ffffff; }
+
+/* The stage outside the app (sign-in, sign-up, setup, an invite): the room
+   mock's light, dusk blue rising from below, and the landing's form details. */
+.auth::before { opacity: 0.9; background-size: 64px 64px; }
+.auth::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 65% at 12% 108%, rgba(61, 90, 128, 0.7) 0%, rgba(61, 90, 128, 0) 70%),
+    radial-gradient(45% 50% at 88% -8%, rgba(152, 193, 217, 0.18) 0%, rgba(152, 193, 217, 0) 70%);
+  animation: auth-light 9s ease-in-out infinite alternate;
+}
+@keyframes auth-light { from { opacity: 0.75; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .auth::after { animation: none; } }
+.auth-logo { color: var(--f-cyan); }
+.auth-wordmark { font-weight: 500; }
+.auth-tagline em { color: var(--f-powder); -webkit-text-fill-color: var(--f-powder); font-weight: 300; }
+.auth .card {
+  background: rgba(10, 10, 12, 0.78);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: var(--f-line-2);
+}
+.auth .card h1 { font-weight: 300; }
+.auth .card label {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--f-muted);
+}
+.auth .card input {
+  padding: 0.8rem 0.9rem;
+  font-size: 0.95rem;
+  background: var(--f-panel-2);
+  border-color: var(--f-line-2);
+}
+.auth .card input:hover { border-color: var(--f-line-3); }
+.auth .card input::placeholder { color: var(--f-muted); opacity: 0.7; }
+.auth .card button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 18px;
+}
+.auth .card button[type="submit"]::after { content: '›'; font-size: 16px; line-height: 1; margin-top: -2px; }
+.auth .card a { color: var(--f-powder); }

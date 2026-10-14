@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { auth } from '../api.ts';
+import { AuthStage, Eyebrow } from '../components/AuthStage.tsx';
 
 /** /reset — enter your email, get a link. */
 export function ForgotPasswordPage() {
@@ -20,21 +21,24 @@ export function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <main className="centered">
+      <AuthStage>
         <div className="card">
+          <Eyebrow>Password</Eyebrow>
           <h1>Check your email</h1>
           <p className="muted">
             If <strong>{email}</strong> has an account, a link to choose a new password is on its way.
             It works once, for one hour.
           </p>
-          <Link to="/login">← Sign in</Link>
+          <p className="hint">
+            <Link to="/login">← Sign in</Link>
+          </p>
         </div>
-      </main>
+      </AuthStage>
     );
   }
 
   return (
-    <main className="centered">
+    <AuthStage>
       <form
         className="card"
         onSubmit={async (e) => {
@@ -51,6 +55,7 @@ export function ForgotPasswordPage() {
           }
         }}
       >
+        <Eyebrow>Password</Eyebrow>
         <h1>Forgot password</h1>
         <p className="muted">We'll email you a link to choose a new one.</p>
         <label>
@@ -65,7 +70,7 @@ export function ForgotPasswordPage() {
           <Link to="/login">← Sign in</Link>
         </p>
       </form>
-    </main>
+    </AuthStage>
   );
 }
 
@@ -85,18 +90,21 @@ export function ResetPasswordPage() {
 
   if (done) {
     return (
-      <main className="centered">
+      <AuthStage>
         <div className="card">
+          <Eyebrow>Password</Eyebrow>
           <h1>Password changed</h1>
           <p className="muted">You've been signed out everywhere else. Sign in with your new password.</p>
-          <Link to="/login">Sign in</Link>
+          <p className="hint">
+            <Link to="/login">Sign in →</Link>
+          </p>
         </div>
-      </main>
+      </AuthStage>
     );
   }
 
   return (
-    <main className="centered">
+    <AuthStage>
       <form
         className="card"
         onSubmit={async (e) => {
@@ -113,6 +121,7 @@ export function ResetPasswordPage() {
           }
         }}
       >
+        <Eyebrow>Password</Eyebrow>
         <h1>Choose a new password</h1>
         <label>
           New password
@@ -136,6 +145,6 @@ export function ResetPasswordPage() {
           {busy ? 'Saving…' : 'Save'}
         </button>
       </form>
-    </main>
+    </AuthStage>
   );
 }

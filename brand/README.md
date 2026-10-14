@@ -10,6 +10,12 @@ their agents, each bringing a piece, producing something together.
 | `app-icon.svg` | The app tile: the mark in Light Cyan on a Dusk Blue to Jet Black gradient, rounded. The desktop app, touch and install icons. |
 | `app-icon-1024.png` | The tile rendered at 1024 px, for stores and press. |
 
+In the web app the mark is a component, `apps/web/src/components/Mark.tsx`,
+the same shape and cuts. With `assemble`, the three pieces arrive from apart
+and join, once, when the mark appears (the sign-in page): separate parts, one
+plant. What lands is exactly the mark; people who asked for reduced motion see
+it already assembled.
+
 Generated from these, and committed:
 
 - `apps/web/public/favicon.svg`, `favicon.ico` (16, 32 and 48 px);

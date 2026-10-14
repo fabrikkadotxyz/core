@@ -2281,3 +2281,151 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
 
 /* ---- ADR 0043: which organization a personal connection is for ---- */
 .integrations-for { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; }
+
+/* ---- The stage (2026-10-14): sign-in, reset, setup, an invite ----
+ * One stage for every page outside the app: the brand on one side, the card
+ * on the other, over a hairline grid that fades from the centre; stacked on a
+ * phone. Tokens only, so every theme stands on it; Fabrikka's theme.css adds
+ * its light (docs/themes.md, "Going further than tokens"). The sign-up pages
+ * of a deployment build on the same class names, so they match.
+ */
+.auth {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  justify-items: stretch;
+  align-items: center;
+  column-gap: clamp(2rem, 6vw, 6rem);
+  padding: clamp(1rem, 4vw, 3rem) max(clamp(1rem, 4vw, 3rem), calc((100% - 1120px) / 2));
+}
+.auth::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: center top;
+  opacity: 0.55;
+  -webkit-mask-image: radial-gradient(ellipse 75% 80% at 50% 45%, #000 0%, transparent 100%);
+  mask-image: radial-gradient(ellipse 75% 80% at 50% 45%, #000 0%, transparent 100%);
+}
+.auth-brand {
+  justify-self: end;
+  width: min(100%, 30rem);
+  display: flex;
+  flex-direction: column;
+  gap: 2.25rem;
+  color: var(--text);
+}
+.auth-panel {
+  justify-self: start;
+  width: 100%;
+  display: flex;
+  justify-content: flex-start;
+}
+.auth-logo { display: flex; align-items: center; gap: 0.9rem; }
+.auth-wordmark {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.auth-tagline {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 3.4vw, 3.1rem);
+  font-weight: var(--heading-weight);
+  letter-spacing: var(--heading-tracking);
+  line-height: 1.06;
+  text-wrap: balance;
+  background: var(--title-ink);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.auth-tagline em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--muted);
+  -webkit-text-fill-color: var(--muted);
+}
+
+.auth .card {
+  width: min(26rem, 100%);
+  padding: 2rem;
+  gap: 0.9rem;
+}
+.auth .card h1 { font-size: 1.6rem; line-height: 1.1; }
+.auth .card .eyebrow + h1 { margin-top: -0.2rem; }
+.auth .card label { gap: 0.4rem; }
+.auth .card input { padding: 0.7rem 0.85rem; }
+.auth .card button { padding: 0.75rem 1rem; }
+
+/* The small mono line above a card's title: what kind of page this is. */
+.eyebrow {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.eyebrow::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--attention);
+  box-shadow: 0 0 10px var(--attention);
+}
+
+/* The mark (components/Mark.tsx). With .mark-assemble, its three pieces arrive and join. */
+.mark { display: block; overflow: visible; }
+.mark-assemble .mark-piece {
+  animation: mark-land 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.mark-assemble .mark-piece-a { --from: translate(-120px, 30px); }
+.mark-assemble .mark-piece-b { --from: translate(0, -130px); animation-delay: 140ms; }
+.mark-assemble .mark-piece-c { --from: translate(120px, 30px); animation-delay: 280ms; }
+@keyframes mark-land {
+  from { transform: var(--from); opacity: 0; }
+  55% { opacity: 1; }
+  to { transform: none; opacity: 1; }
+}
+.auth .card, .auth-tagline {
+  animation: auth-rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.auth .card { animation-delay: 160ms; }
+.auth-tagline { animation-delay: 320ms; }
+@keyframes auth-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mark-assemble .mark-piece, .auth .card, .auth-tagline { animation: none; }
+}
+
+@media (max-width: 880px) {
+  .auth {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    row-gap: 2rem;
+    padding: 1.5rem 1rem 2.5rem;
+  }
+  .auth-brand, .auth-panel { justify-self: center; }
+  .auth-brand { align-items: center; text-align: center; gap: 1.1rem; width: min(100%, 26rem); }
+  .auth-logo .mark { width: 40px; height: 40px; }
+  .auth-wordmark { font-size: 1.25rem; }
+  .auth-tagline { font-size: clamp(1.35rem, 6vw, 1.8rem); }
+  .auth-panel { justify-content: center; }
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
+import { AuthStage, Eyebrow } from '../components/AuthStage.tsx';
 
 export function LoginPage() {
   const { user, loading, setUser } = useAuth();
@@ -20,7 +21,7 @@ export function LoginPage() {
     auth.setupNeeded().then((r) => setNeedsSetup(r.needed)).catch(() => {});
   }, []);
 
-  if (loading) return <main className="centered">Loading…</main>;
+  if (loading) return <AuthStage />;
   if (needsSetup && !user) return <Navigate to="/setup" replace />;
   if (user) {
     const from = (location.state as { from?: string } | null)?.from;
@@ -45,9 +46,10 @@ export function LoginPage() {
   };
 
   return (
-    <main className="centered">
+    <AuthStage>
       <form className="card" onSubmit={submit}>
-        <h1>Fabrikka</h1>
+        <Eyebrow>Sign in</Eyebrow>
+        <h1>Welcome back</h1>
         <p className="muted">Sign in to your sessions.</p>
 
         <label>
@@ -103,6 +105,6 @@ export function LoginPage() {
           </p>
         )}
       </form>
-    </main>
+    </AuthStage>
   );
 }

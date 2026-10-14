@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { auth } from '../api.ts';
+import { AuthStage, Eyebrow } from '../components/AuthStage.tsx';
 import { useAuth } from '../auth-context.tsx';
 
 export function SetupPage() {
@@ -22,7 +23,7 @@ export function SetupPage() {
     auth.setupNeeded().then((r) => setNeeded(r.needed)).catch(() => setNeeded(false));
   }, []);
 
-  if (loading || needed === null) return <main className="centered">Loading…</main>;
+  if (loading || needed === null) return <AuthStage />;
   if (user || !needed) return <Navigate to="/" replace />;
 
   const submit = async (e: React.FormEvent) => {
@@ -41,8 +42,9 @@ export function SetupPage() {
   };
 
   return (
-    <main className="centered">
+    <AuthStage>
       <form className="card" onSubmit={submit}>
+        <Eyebrow>First run</Eyebrow>
         <h1>Set up Fabrikka</h1>
         <p className="muted">
           Create the owner of this instance. The setup code is in your deploy platform's environment settings
@@ -86,6 +88,6 @@ export function SetupPage() {
           {busy ? 'Creating…' : 'Create owner'}
         </button>
       </form>
-    </main>
+    </AuthStage>
   );
 }

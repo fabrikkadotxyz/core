@@ -202,6 +202,15 @@ hard shadows. **Those selectors aren't a contract.** They may change in any
 release. Fabrikka keeps its built-in themes working, and others may need an
 update. If you need something often, ask for a token.
 
+The pages outside the app (sign-in, password reset, setup, an invite, and a
+deployment's sign-up) stand on one stage, `main.auth`: the brand on one side
+(`.auth-brand`: the mark, `.mark`, assembling itself; the name; the tagline,
+`.auth-tagline`), the card (`.card`, with an `.eyebrow` above its title) on the
+other, over a hairline grid in `--border`. Fabrikka's theme adds its dusk light
+there (`.auth::after`) and the landing's mono labels. A deployment's own pages
+reuse these class names and load the theme the same way, so a theme's rules for
+the stage reach them too.
+
 ## Changing the contract
 
 Adding a token is backward compatible. Removing or renaming one, or changing

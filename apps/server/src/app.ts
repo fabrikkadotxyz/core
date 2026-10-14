@@ -51,6 +51,7 @@ import {
   attachServer,
   listConnections,
   roomScopeOf,
+  usableConnections,
   removeConnection,
   saveConnection,
   detachServer,
@@ -730,8 +731,11 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!scope.ok) return c.json({ error: 'no such organization' }, 404);
     const all = await listConnections(db, c.get('user').id, 'all');
     const mine = new Set((await organizationsOf(db, c.get('user').id)).map((o) => o.id));
+    // ADR 0043 (amended 2026-10-14): no `team` lists every connection you can
+    // still use, each with its scope; `?team=` exactly that organization's.
+    const asked = c.req.query('team');
     return c.json({
-      connections: all.filter((x) => x.teamId === scope.scope),
+      connections: all.filter((x) => (asked === undefined ? x.teamId === null || mine.has(x.teamId) : x.teamId === scope.scope)),
       // For organizations you've left: they no longer work anywhere, listed to remove.
       orphaned: all.filter((x) => x.teamId !== null && !mine.has(x.teamId)),
       encryptionConfigured: isEncryptionConfigured(),
@@ -866,13 +870,13 @@ export function createApp(options: CreateAppOptions = {}) {
       return c.json({ error: 'not authenticated' }, 401);
     }
     const fail = (message: string) =>
-      viaHandoff ? c.html(failedPage(message), 400) : c.redirect(`/integrations?error=${encodeURIComponent(message)}`);
+      viaHandoff ? c.html(failedPage(message), 400) : c.redirect(`/settings/integrations?error=${encodeURIComponent(message)}`);
 
     if (error) return fail(error_description ?? error);
     if (!code || !state) return fail('the vendor sent no code back');
     try {
       const { entry, teamId } = await completeFlow(db, { userId: user?.id ?? null, code, state, publicUrl: PUBLIC_URL });
-      const back = `/integrations?connected=${encodeURIComponent(entry.id)}${teamId ? `&team=${encodeURIComponent(teamId)}` : ''}`;
+      const back = `/settings/integrations?connected=${encodeURIComponent(entry.id)}${teamId ? `&team=${encodeURIComponent(teamId)}` : ''}`;
       return viaHandoff ? c.html(donePage(entry.name)) : c.redirect(back);
     } catch (err) {
       if (err instanceof OAuthError) return fail(err.message);
@@ -1647,8 +1651,9 @@ export function createApp(options: CreateAppOptions = {}) {
         hasCredential: t.hasCredential,
         overridden: mine.some((m) => m.slug === t.slug),
       })),
-      // M28: your connections not yet in this session, offered to attach. ADR 0043: only the room's scope.
-      available: (await listConnections(db, c.get('user').id, await roomScopeOf(db, s.id))).filter((x) => !mine.some((m) => m.id === x.id)),
+      // M28: your connections not yet in this session, offered to attach. ADR 0043 (amended):
+      // the room's organization's and your all-rooms ones, one per vendor.
+      available: (await usableConnections(db, c.get('user').id, await roomScopeOf(db, s.id))).filter((x) => !mine.some((m) => m.id === x.id)),
       inSession: await slugsInSession(db, s.id),
       grants: await listGrants(db, s.id),
       encryptionConfigured: isEncryptionConfigured(),

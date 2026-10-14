@@ -6,6 +6,7 @@
  * `kinds/` (ADR 0023). Nothing here knows which kinds exist.
  */
 import { Suspense, useEffect, useRef, useState } from 'react';
+import { typingAttrs } from '../typing.ts';
 import type { Output, OutputEditSummary, Participant } from '@fabrikka/types';
 import { sessions, type SessionRef } from '../api.ts';
 import type { OutputTab } from './Outputs.tsx';
@@ -167,6 +168,7 @@ export default function OutputView({
                 value={draft.body}
                 placeholder="Your comment…"
                 aria-label="Comment"
+                {...typingAttrs()}
                 onChange={(e) => setDraft({ ...draft, body: e.target.value })}
               />
               <div className="row">

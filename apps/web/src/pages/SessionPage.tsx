@@ -38,6 +38,7 @@ import {
 } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { MentionComposer, MentionText } from '../mentions.tsx';
+import { typingAttrs } from '../typing.ts';
 import { OutputsPanel, timeAgo, type OutputTab } from '../outputs/Outputs.tsx';
 import { webKind } from '../outputs/kinds/registry.ts';
 import { CatchUpCard, hasNews } from './CatchUpCard.tsx';
@@ -1326,7 +1327,7 @@ function AgentsPanel({
             <p className="muted small">
               {myDevices.length === 0 ? (
                 <>
-                  Run your agent on your own computer: connect it once from <Link to="/devices">Your devices</Link>{' '}
+                  Run your agent on your own computer: connect it once from <Link to="/settings/devices">Your devices</Link>{' '}
                   (one command to paste), then grant a folder there.
                 </>
               ) : (
@@ -1709,6 +1710,7 @@ function ContextPanel({ ref_ }: { ref_: SessionRef }) {
           value={objective}
           rows={2}
           placeholder="What is this session for?"
+          {...typingAttrs()}
           onChange={(e) => setObjective(e.target.value)}
           onBlur={() => {
             if (objective !== (context.objective ?? '')) void apply({ objective });
@@ -1975,7 +1977,7 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
       .team(ref_)
       .then(async (org) => {
         setRoomOrg(org);
-        const mine = await connections.list(org?.id ?? null);
+        const mine = await connections.list(null);
         const cat = await connections.catalogue(org?.id ?? null);
         const withPresets = new Set(cat.entries.filter((e) => e.presets).map((e) => e.id));
         setPresetSlugs(new Set(mine.connections.filter((c) => c.entry && withPresets.has(c.entry)).map((c) => c.slug)));
@@ -2017,7 +2019,10 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
             {state.available.map((a) => (
               <li key={a.id}>
                 <span>{a.label}</span>
-                <span className="muted small">{a.slug}</span>
+                <span className="muted small">
+                  {a.slug}
+                  {roomOrg && (a.teamId ? ` · for ${roomOrg.name}` : ' · all your rooms')}
+                </span>
                 <button
                   className="link small"
                   onClick={async () => {
@@ -2081,7 +2086,6 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
                 <span>{m.label}</span>
                 <span className="muted small">
                   {m.hasCredential ? 'credential set' : 'no credential'}
-                  {m.fromPersonal && ` · from Personal: add it for ${roomOrg?.name ?? 'this organization'}`}
                 </span>
                 {isOwner && presetSlugs.has(m.slug) && (
                   // M18: a shortcut over the per-tool grants, never a new permission model.

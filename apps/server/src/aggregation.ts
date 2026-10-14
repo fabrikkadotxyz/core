@@ -39,8 +39,6 @@ export interface AttachedServer {
   label: string;
   url: string;
   hasCredential: boolean;
-  /** ADR 0043: a Personal connection attached in an organization's room before ADR 0043. */
-  fromPersonal?: boolean;
 }
 
 /**
@@ -56,6 +54,25 @@ export async function roomScopeOf(db: Database, sessionId: string): Promise<Scop
 }
 
 const inScope = (teamId: Scope) => (teamId ? eq(mcpServers.teamId, teamId) : isNull(mcpServers.teamId));
+
+/**
+ * ADR 0043 (amended 2026-10-14): what a room may use. An organization's room:
+ * that organization's connections and your all-rooms ones (team_id null), one
+ * per vendor with the organization's winning; a room in none: all-rooms ones.
+ */
+export async function usableConnections(
+  db: Database,
+  userId: string,
+  scope: Scope,
+): Promise<Awaited<ReturnType<typeof listConnections>>> {
+  const all = (await listConnections(db, userId, 'all')).filter((c) => c.teamId === null || c.teamId === scope);
+  const bySlug = new Map<string, (typeof all)[number]>();
+  for (const c of all) {
+    const have = bySlug.get(c.slug);
+    if (!have || (have.teamId === null && c.teamId !== null)) bySlug.set(c.slug, c);
+  }
+  return [...bySlug.values()];
+}
 
 /**
  * A server a participant may use in a session: their own, or — where they have
@@ -206,7 +223,7 @@ export async function attachServer(
     credential?: string;
   },
 ): Promise<AttachResult> {
-  // ADR 0043: only a connection for the room's organization (or Personal, in a room in none).
+  // ADR 0043 (amended): the room's organization's connection, else your all-rooms one.
   const scope = await roomScopeOf(db, opts.sessionId);
   let server: AttachedServer;
   if (opts.url) {
@@ -214,13 +231,13 @@ export async function attachServer(
     if (!saved.ok) return saved;
     server = saved.server;
   } else {
-    const existing = (await listConnections(db, opts.userId, scope)).find((c) => c.slug === opts.slug.trim().toLowerCase());
+    const existing = (await usableConnections(db, opts.userId, scope)).find((c) => c.slug === opts.slug.trim().toLowerCase());
     if (!existing) {
       const elsewhere = (await listConnections(db, opts.userId, 'all')).some((c) => c.slug === opts.slug.trim().toLowerCase());
       return {
         ok: false,
         error: elsewhere
-          ? `your ${opts.slug} connection is for another organization — connect it for ${scope ? 'this one' : 'Personal'} first`
+          ? `your ${opts.slug} connection is for another organization only — connect it for all your rooms, or for ${scope ? 'this one' : 'Personal'}`
           : 'no connection with that slug — add it with a url first',
       };
     }
@@ -322,7 +339,6 @@ export async function serversForUser(
       label: mcpServers.label,
       url: mcpServers.url,
       sealed: mcpServers.sealedCredential,
-      fromPersonal: sessionMcpServers.fromPersonal,
       teamId: mcpServers.teamId,
     })
     .from(sessionMcpServers)
@@ -332,22 +348,26 @@ export async function serversForUser(
       and(
         eq(sessionMcpServers.sessionId, sessionId),
         eq(mcpServers.ownerId, userId),
-        // ADR 0043: the room's scope (or an old Personal attachment, marked), and
-        // never an organization's connection once you've left it.
-        sql`(${mcpServers.teamId} is not distinct from ${sessions.teamId}
-             or (${mcpServers.teamId} is null and ${sessionMcpServers.fromPersonal}))`,
+        // ADR 0043 (amended 2026-10-14): an all-rooms connection, or the room's
+        // organization's; never an organization's once you've left it.
+        sql`(${mcpServers.teamId} is null or ${mcpServers.teamId} = ${sessions.teamId})`,
         sql`(${mcpServers.teamId} is null or exists (
              select 1 from ${teamMembers} tm where tm.team_id = ${mcpServers.teamId} and tm.user_id = ${userId}))`,
       ),
     );
 
-  return rows.map((r) => ({
+  // One per vendor: the organization's beats the all-rooms one.
+  const bySlug = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    const have = bySlug.get(r.slug);
+    if (!have || (have.teamId === null && r.teamId !== null)) bySlug.set(r.slug, r);
+  }
+  return [...bySlug.values()].map((r) => ({
     id: r.id,
     slug: r.slug,
     label: r.label,
     url: r.url,
     hasCredential: !!r.sealed,
-    ...(r.fromPersonal && r.teamId === null ? { fromPersonal: true } : {}),
   }));
 }
 

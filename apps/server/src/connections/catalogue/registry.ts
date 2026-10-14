@@ -7,21 +7,24 @@
  * acceptance check uses that for a local fake vendor.
  */
 import { confluence, jira } from './atlassian.ts';
+import { clickup } from './clickup.ts';
 import { github } from './github.ts';
+import { gitlab } from './gitlab.ts';
 import { grafana } from './grafana.ts';
 import { linear } from './linear.ts';
+import { notion } from './notion.ts';
 import { sentry } from './sentry.ts';
 import type { CatalogueEntry } from './types.ts';
 
 // One line per vendor, added once it has been connected for real.
-const BUILT_IN: CatalogueEntry[] = [github, jira, confluence];
+const BUILT_IN: CatalogueEntry[] = [github, jira, confluence, linear, sentry, notion, clickup, gitlab];
 
 /**
  * Written from a real probe, not yet connected for real. Offered only where
  * FABRIKKA_PREPARED_VENDORS names them, so the owner can connect one and
  * verify it before it joins BUILT_IN (docs/operations.md, "A prepared vendor").
  */
-const PREPARED: CatalogueEntry[] = [linear, sentry, grafana];
+const PREPARED: CatalogueEntry[] = [grafana];
 
 function preparedOffered(): CatalogueEntry[] {
   const ids = (process.env.FABRIKKA_PREPARED_VENDORS ?? '')

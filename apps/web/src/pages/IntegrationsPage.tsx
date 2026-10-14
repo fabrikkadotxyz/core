@@ -1,5 +1,5 @@
 /**
- * Personal integrations (M28, M18): your own connections, outside any session.
+ * Personal integrations (M28, M18), a Settings tab: your own connections, outside any session.
  *
  * A connection is yours — your account, your token, sealed at rest and never
  * shown again (ADRs 0004, 0014). Listed vendors connect with one click and their
@@ -16,18 +16,19 @@ import { useWorkspace } from '../shell/workspace.tsx';
 
 type Conn = Awaited<ReturnType<typeof connections.list>>['connections'][number];
 
-export function IntegrationsPage() {
+export function PersonalIntegrations() {
   const [list, setList] = useState<Conn[] | null>(null);
   const [orphaned, setOrphaned] = useState<Conn[]>([]);
   const [catalogue, setCatalogue] = useState<Awaited<ReturnType<typeof connections.catalogue>> | null>(null);
   const [encryption, setEncryption] = useState(true);
   const [params, setParams] = useSearchParams();
-  // ADR 0043: which organization's rooms these connections are for. `?team=<id>`,
-  // `?team=` for Personal, and otherwise the organization chosen in the sidebar.
-  const { team, teams } = useWorkspace();
+  // ADR 0043 (amended 2026-10-14): what a NEW connection is for. `?team=<id>` is
+  // one organization only; absent or empty, all your rooms, the default.
+  const { teams } = useWorkspace();
   const asked = params.get('team');
-  const scope: string | null = asked === null ? (team?.id ?? null) : asked || null;
-  const scopeName = scope ? (teams.find((t) => t.id === scope)?.name ?? 'this organization') : 'Personal rooms';
+  const scope: string | null = asked || null;
+  const orgName = (id: string) => teams.find((t) => t.id === id)?.name ?? 'an organization';
+  const scopeName = scope ? `${orgName(scope)} only` : 'all your rooms';
   /** Search params to keep, so the scope survives a notice or its dismissal. */
   const withScope = (extra: Record<string, string> = {}) => ({ team: scope ?? '', ...extra });
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +38,7 @@ export function IntegrationsPage() {
 
   const load = useCallback(() => {
     connections
-      .list(scope)
+      .list(null)
       .then((r) => {
         setList(r.connections);
         setOrphaned(r.orphaned);
@@ -121,199 +122,202 @@ export function IntegrationsPage() {
     [...(catalogue?.entries ?? []), ...(catalogue?.unavailable ?? [])].find((e) => e.id === entry)?.logo ?? null;
 
   return (
-    <div className="page">
-      <main className="column">
-        <h1>Personal integrations</h1>
-        <p className="muted">
-          Your own connections. Calls made with them run as you — your account is what the vendor's audit log names.
-          Attach one to a session from that session's Setup.
-        </p>
-        <div className="row integrations-for">
-          <span className="muted small">For</span>
-          <Select
-            label="For"
-            value={scope ?? ''}
-            options={[{ value: '', label: 'Personal rooms' }, ...teams.map((t) => ({ value: t.id, label: t.name }))]}
-            onChange={(v) => setParams({ team: v }, { replace: true })}
-          />
-          <span className="muted small">Each organization has its own; for two, connect twice.</span>
-        </div>
+    <>
+    <p className="muted">
+      Your own connections. Calls made with them run as you — your account is what the vendor's audit log names.
+      Attach one to a session from that session's Setup.
+    </p>
 
-        {(connected || failed) && (
-          <p className={connected ? 'notice ok' : 'notice danger-hint'} role="status">
-            {connected ? `Connected to ${connectedName}.` : `Couldn't connect: ${failed}`}{' '}
-            <button className="link small" onClick={() => setParams(withScope(), { replace: true })}>
-              Dismiss
+    {(connected || failed) && (
+      <p className={connected ? 'notice ok' : 'notice danger-hint'} role="status">
+        {connected ? `Connected to ${connectedName}.` : `Couldn't connect: ${failed}`}{' '}
+        <button className="link small" onClick={() => setParams(withScope(), { replace: true })}>
+          Dismiss
+        </button>
+      </p>
+    )}
+
+    {inBrowser && (
+      <p className="notice" role="status">
+        Finish signing in to {catalogue?.entries.find((e) => e.id === inBrowser)?.name ?? inBrowser} in your browser, then
+        come back here.{' '}
+        <button className="link small" onClick={() => setInBrowser(null)}>
+          Dismiss
+        </button>
+      </p>
+    )}
+
+    {!encryption && (
+      <p className="hint danger-hint">
+        <code>FABRIKKA_ENCRYPTION_KEY</code> is not set, so tokens can't be stored. Connecting will be refused rather
+        than saved in plaintext.
+      </p>
+    )}
+
+    <h2>Your connections</h2>
+    {list && list.length === 0 && <p className="muted small">No connections yet. Add one below.</p>}
+    <ul className="connection-list">
+      {list?.map((c) => (
+        <li key={c.id} className="connection-row">
+          <VendorMark logo={logoOf(c.entry)} name={c.label} />
+          <span className="connection-text">
+            <span className="connection-name">
+              <strong>{c.label}</strong>
+              {c.status === 'needs_reconnect' ? (
+                <span className="badge-shared">needs reconnecting</span>
+              ) : (
+                <span className="badge-ok">connected</span>
+              )}
+              {/* ADR 0043 (amended): where it works. */}
+              <span className="muted small">{c.teamId ? `${orgName(c.teamId)} only` : 'all your rooms'}</span>
+            </span>
+            <span className="muted small">
+              {c.auth === 'oauth'
+                ? 'signed in with the vendor'
+                : c.auth === 'basic'
+                  ? 'email + API token stored'
+                  : c.hasCredential
+                    ? 'token stored'
+                    : 'no token'}{' '}
+              · in {c.sessions} session{c.sessions === 1 ? '' : 's'}
+            </span>
+          </span>
+          {c.status === 'needs_reconnect' && c.entry && (
+            <button className="small" onClick={() => connect(c.entry!)}>
+              Reconnect
             </button>
-          </p>
-        )}
+          )}
+          <button
+            className="link small danger"
+            title={c.sessions ? `Also removes it from ${c.sessions} session${c.sessions === 1 ? '' : 's'}` : undefined}
+            onClick={async () => {
+              await connections.remove(c.slug, c.teamId).catch(() => {});
+              load();
+            }}
+          >
+            Remove{c.sessions ? ` (from ${c.sessions} session${c.sessions === 1 ? '' : 's'})` : ''}
+          </button>
+        </li>
+      ))}
+    </ul>
 
-        {inBrowser && (
-          <p className="notice" role="status">
-            Finish signing in to {catalogue?.entries.find((e) => e.id === inBrowser)?.name ?? inBrowser} in your browser, then
-            come back here.{' '}
-            <button className="link small" onClick={() => setInBrowser(null)}>
-              Dismiss
-            </button>
-          </p>
-        )}
-
-        {!encryption && (
-          <p className="hint danger-hint">
-            <code>FABRIKKA_ENCRYPTION_KEY</code> is not set, so tokens can't be stored. Connecting will be refused rather
-            than saved in plaintext.
-          </p>
-        )}
-
-        <h2>Your connections for {scopeName}</h2>
-        {list && list.length === 0 && <p className="muted small">No connections for {scopeName} yet. Add one below.</p>}
+    {orphaned.length > 0 && (
+      <>
+        <h2>For organizations you've left</h2>
+        <p className="muted small">These no longer work anywhere. Remove them to delete their credentials.</p>
         <ul className="connection-list">
-          {list?.map((c) => (
+          {orphaned.map((c) => (
             <li key={c.id} className="connection-row">
               <VendorMark logo={logoOf(c.entry)} name={c.label} />
               <span className="connection-text">
-                <span className="connection-name">
-                  <strong>{c.label}</strong>
-                  {c.status === 'needs_reconnect' ? (
-                    <span className="badge-shared">needs reconnecting</span>
-                  ) : (
-                    <span className="badge-ok">connected</span>
-                  )}
-                </span>
-                <span className="muted small">
-                  {c.auth === 'oauth'
-                    ? 'signed in with the vendor'
-                    : c.auth === 'basic'
-                      ? 'email + API token stored'
-                      : c.hasCredential
-                        ? 'token stored'
-                        : 'no token'}{' '}
-                  · in {c.sessions} session{c.sessions === 1 ? '' : 's'}
-                </span>
+                <strong>{c.label}</strong>
+                <span className="muted small">no longer a member</span>
               </span>
-              {c.status === 'needs_reconnect' && c.entry && (
-                <button className="small" onClick={() => connect(c.entry!)}>
-                  Reconnect
-                </button>
-              )}
               <button
                 className="link small danger"
-                title={c.sessions ? `Also removes it from ${c.sessions} session${c.sessions === 1 ? '' : 's'}` : undefined}
                 onClick={async () => {
                   await connections.remove(c.slug, c.teamId).catch(() => {});
                   load();
                 }}
               >
-                Remove{c.sessions ? ` (from ${c.sessions} session${c.sessions === 1 ? '' : 's'})` : ''}
+                Remove
               </button>
             </li>
           ))}
         </ul>
+      </>
+    )}
 
-        {orphaned.length > 0 && (
-          <>
-            <h2>For organizations you've left</h2>
-            <p className="muted small">These no longer work anywhere. Remove them to delete their credentials.</p>
-            <ul className="connection-list">
-              {orphaned.map((c) => (
-                <li key={c.id} className="connection-row">
-                  <VendorMark logo={logoOf(c.entry)} name={c.label} />
-                  <span className="connection-text">
-                    <strong>{c.label}</strong>
-                    <span className="muted small">no longer a member</span>
-                  </span>
-                  <button
-                    className="link small danger"
-                    onClick={async () => {
-                      await connections.remove(c.slug, c.teamId).catch(() => {});
-                      load();
-                    }}
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-
-        <h2>Add a connection for {scopeName}</h2>
-        <div className="catalogue-tools">
-          <label className="catalogue-search">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="11" cy="11" r="7" />
-              <path d="M20 20l-3.5-3.5" />
-            </svg>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search integrations"
-              aria-label="Search integrations"
-            />
-          </label>
-          <div className="chips" role="group" aria-label="Category">
-            <button className={`chip${category === null ? ' on' : ''}`} aria-pressed={category === null} onClick={() => setCategory(null)}>
-              All
-            </button>
-            {chips.map((c) => (
-              <button
-                key={c.key}
-                className={`chip${category === c.key ? ' on' : ''}`}
-                aria-pressed={category === c.key}
-                onClick={() => setCategory(category === c.key ? null : c.key)}
-              >
-                {c.name} <span className="chip-count">{c.count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {catalogue && (catalogue.entries.length + catalogue.unavailable.length === 0) && (
-          <p className="muted small">No vendors are listed on this server yet. Use a custom connection below.</p>
-        )}
-        {catalogue && catalogue.entries.length + catalogue.unavailable.length > 0 && byCategory.length === 0 && (
-          <div className="catalogue-empty">
-            <p className="muted">
-              Nothing matches{query.trim() ? <> “{query.trim()}”</> : ' this category'}.
-            </p>
-            <button className="small" onClick={() => setCustomOpen(true)}>
-              Add it as a custom connection
-            </button>
-          </div>
-        )}
-        {byCategory.map((cat) => (
-          <section key={cat.key} className="catalogue-category">
-            <h3 className="subhead">{cat.name}</h3>
-            <div className="catalogue-grid">
-              {cat.entries.map((e) => (
-                <CatalogueCard key={e.id} entry={e} onConnect={connect} />
-              ))}
-              {cat.unavailable.map((u) => (
-                // Not hidden: say what this server is missing, so whoever runs it knows what to set.
-                <div key={u.id} className="catalogue-card unavailable">
-                  <div className="catalogue-head">
-                    <VendorMark logo={u.logo} name={u.name} />
-                    <strong>{u.name}</strong>
-                    <span className="badge">not set up on this server</span>
-                  </div>
-                  <p className="muted small">
-                    Whoever runs this server needs to add {u.missing.map((m) => <code key={m}>{m}</code>).reduce<React.ReactNode[]>((acc, el, i) => (i ? [...acc, ' and ', el] : [el]), [])}{' '}
-                    (see “Connections by vendor” in docs/operations.md).
-                  </p>
-                </div>
-              ))}
-            </div>
-          </section>
-        ))}
-        {error && <p className="error">{error}</p>}
-
-        <details className="custom-connection" open={customOpen} onToggle={(e) => setCustomOpen(e.currentTarget.open)}>
-          <summary className="muted small">Custom connection (any MCP server, by URL and token)</summary>
-          <CustomConnection onSaved={load} teamId={scope} />
-        </details>
-      </main>
+    <h2>Add a connection</h2>
+    <div className="row integrations-for">
+      <span className="muted small">Use in</span>
+      <Select
+        label="Use in"
+        value={scope ?? ''}
+        options={[{ value: '', label: 'All your rooms' }, ...teams.map((t) => ({ value: t.id, label: `Only ${t.name}` }))]}
+        onChange={(v) => setParams(v ? { team: v } : {}, { replace: true })}
+      />
+      <span className="muted small">
+        {scope
+          ? `A separate account for ${orgName(scope)}: its rooms use it instead of the one for all your rooms.`
+          : 'Pick an organization to connect a different account for it alone.'}
+      </span>
     </div>
+    <div className="catalogue-tools">
+      <label className="catalogue-search">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M20 20l-3.5-3.5" />
+        </svg>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search integrations"
+          aria-label="Search integrations"
+        />
+      </label>
+      <div className="chips" role="group" aria-label="Category">
+        <button className={`chip${category === null ? ' on' : ''}`} aria-pressed={category === null} onClick={() => setCategory(null)}>
+          All
+        </button>
+        {chips.map((c) => (
+          <button
+            key={c.key}
+            className={`chip${category === c.key ? ' on' : ''}`}
+            aria-pressed={category === c.key}
+            onClick={() => setCategory(category === c.key ? null : c.key)}
+          >
+            {c.name} <span className="chip-count">{c.count}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {catalogue && (catalogue.entries.length + catalogue.unavailable.length === 0) && (
+      <p className="muted small">No vendors are listed on this server yet. Use a custom connection below.</p>
+    )}
+    {catalogue && catalogue.entries.length + catalogue.unavailable.length > 0 && byCategory.length === 0 && (
+      <div className="catalogue-empty">
+        <p className="muted">
+          Nothing matches{query.trim() ? <> “{query.trim()}”</> : ' this category'}.
+        </p>
+        <button className="small" onClick={() => setCustomOpen(true)}>
+          Add it as a custom connection
+        </button>
+      </div>
+    )}
+    {byCategory.map((cat) => (
+      <section key={cat.key} className="catalogue-category">
+        <h3 className="subhead">{cat.name}</h3>
+        <div className="catalogue-grid">
+          {cat.entries.map((e) => (
+            <CatalogueCard key={e.id} entry={e} onConnect={connect} />
+          ))}
+          {cat.unavailable.map((u) => (
+            // Not hidden: say what this server is missing, so whoever runs it knows what to set.
+            <div key={u.id} className="catalogue-card unavailable">
+              <div className="catalogue-head">
+                <VendorMark logo={u.logo} name={u.name} />
+                <strong>{u.name}</strong>
+                <span className="badge">not set up on this server</span>
+              </div>
+              <p className="muted small">
+                Whoever runs this server needs to add {u.missing.map((m) => <code key={m}>{m}</code>).reduce<React.ReactNode[]>((acc, el, i) => (i ? [...acc, ' and ', el] : [el]), [])}{' '}
+                (see “Connections by vendor” in docs/operations.md).
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+    ))}
+    {error && <p className="error">{error}</p>}
+
+    <details className="custom-connection" open={customOpen} onToggle={(e) => setCustomOpen(e.currentTarget.open)}>
+      <summary className="muted small">Custom connection (any MCP server, by URL and token)</summary>
+      <CustomConnection onSaved={load} teamId={scope} />
+    </details>
+    </>
   );
 }
 

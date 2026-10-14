@@ -8,7 +8,13 @@
  *
  * Scopes: read, search and write for Jira and Confluence, offline_access for
  * refresh tokens. Not delete or manage — least privilege; widen with evidence.
- * Presets come from a real connection's tool list, not from docs.
+ * Presets, from the owner's real connection (16 tools, 2026-10-14). Read is everything that
+ * only looks. Write adds what creates or changes, and leaves out deleting,
+ * merging, forking, and anything that hands work to another agent or spends
+ * credits: those are granted by hand, tool by tool.
+ * Jira and Confluence each list their own tools; a session on the shared
+ * connection gets the union. `discover` + `executeRead` / `executeWrite` are
+ * Atlassian's catch-alls for everything else; `executeDestructive` is out.
  */
 import type { CatalogueEntry } from './types.ts';
 
@@ -34,6 +40,23 @@ export const jira: CatalogueEntry = {
   connectionName: 'Atlassian',
   mcpUrl: MCP_URL,
   auth: { type: 'oauth', scopes: SCOPES },
+  presets: {
+    read: [
+      'getAccessibleAtlassianResources',
+      'atlassianUserInfo',
+      'getJiraIssue',
+      'searchJiraIssuesUsingJql',
+      'discover',
+      'executeRead',
+    ],
+    write: [
+      'createJiraIssue',
+      'editJiraIssue',
+      'transitionJiraIssue',
+      'addOrEditJiraIssueComment',
+      'executeWrite',
+    ],
+  },
   keywords: ['atlassian', 'tickets', 'issues', 'epics', 'sprints', 'bugs'],
   // Simple Icons 13.21.0 (CC0), "jira".
   logo: {
@@ -51,6 +74,21 @@ export const confluence: CatalogueEntry = {
   connectionName: 'Atlassian',
   mcpUrl: MCP_URL,
   auth: { type: 'oauth', scopes: SCOPES },
+  presets: {
+    read: [
+      'getAccessibleAtlassianResources',
+      'atlassianUserInfo',
+      'getConfluenceContent',
+      'searchConfluence',
+      'discover',
+      'executeRead',
+    ],
+    write: [
+      'createConfluenceContent',
+      'updateConfluenceContent',
+      'executeWrite',
+    ],
+  },
   keywords: ['atlassian', 'wiki', 'pages', 'spaces', 'documentation'],
   // Simple Icons 13.21.0 (CC0), "confluence".
   logo: {

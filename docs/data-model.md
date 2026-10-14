@@ -786,7 +786,7 @@ mcp_servers                               -- a user's own external connection
   label           text not null
   url             text not null           -- streamable HTTP only
   sealed_credential text                  -- AES-256-GCM; never returned by any API
-  team_id         uuid -> teams.id cascade -- ADR 0043: the organization whose rooms may use it; null = Personal
+  team_id         uuid -> teams.id cascade -- ADR 0043 (amended 2026-10-14): only this organization's rooms may use it; null = all your rooms
   created_at      timestamptz not null
   unique nulls not distinct (owner_id, team_id, slug)   -- ADR 0043: one per vendor per scope (was (owner_id, slug))
 
@@ -794,7 +794,7 @@ session_mcp_servers
   session_id       uuid -> sessions.id
   mcp_server_id    uuid -> mcp_servers.id
   added_by_user_id uuid -> users.id not null
-  from_personal    boolean not null default false  -- ADR 0043: a Personal connection attached in an organization's room before connections had organizations
+  from_personal    boolean not null default false  -- ADR 0043, first version; not read since the 2026-10-14 amendment (an all-rooms connection works everywhere)
   primary key (session_id, mcp_server_id)
 
 session_mcp_tool_grants

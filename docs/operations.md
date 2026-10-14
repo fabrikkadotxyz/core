@@ -322,7 +322,7 @@ enforced, not advisory:
    the bridge ([ADR 0014](decisions/0014-aggregation-is-http-only-and-credentials-are-encrypted.md)).
 
 **Team credentials (M30).** A team owner can add a connection that belongs to the
-team, under *Team integrations*. Members, and their agents, use it in that team's
+team, under *Settings → Organization integrations*. Members, and their agents, use it in that team's
 sessions wherever they haven't attached their own. Every call made with it is
 recorded with the participant who made it, the tool and the outcome (never the
 arguments), and team owners see recent uses on the same page. See
@@ -331,7 +331,7 @@ The record has no retention limit yet; it is one small row per call.
 
 ### Connections by vendor (M18)
 
-Listed vendors connect with a click: *Personal integrations → Add a connection*.
+Listed vendors connect with a click: *Settings → Personal integrations → Add a connection*.
 Most need no setup on the instance, because their MCP servers let Fabrikka
 register itself (Atlassian, Grafana Cloud). **GitHub doesn't**, so it appears
 only once the instance has a GitHub OAuth App:

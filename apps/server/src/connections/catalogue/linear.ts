@@ -1,6 +1,6 @@
 /**
- * Linear (M18, ADR 0024). PREPARED, NOT LISTED: it isn't in registry.ts until
- * the owner has connected it for real ("verified, not documented").
+ * Linear (M18, ADR 0024). Listed: the owner connected it for real on
+ * 2026-10-14 ("verified, not documented").
  *
  * Probed 2026-10-10, without signing in:
  *   - POST https://mcp.linear.app/mcp → 401,
@@ -14,7 +14,12 @@
  *     setup), PKCE S256 only, token auth none / client_secret_post /
  *     client_secret_basic, scopes read, write, openid and email.
  *
- * Presets are filled in from a real connection's tool list, not from docs.
+ * Presets, from the owner's real connection (68 tools, 2026-10-14). Read is everything that
+ * only looks. Write adds what creates or changes, and leaves out deleting,
+ * merging, forking, and anything that hands work to another agent or spends
+ * credits: those are granted by hand, tool by tool.
+ * Out of both: delete_*, retire_* / restore_*, share_issue / unshare_issue
+ * (public links), merge_diff, extract_images.
  */
 import type { CatalogueEntry } from './types.ts';
 
@@ -29,6 +34,68 @@ export const linear: CatalogueEntry = {
     type: 'oauth',
     // What its 401 and resource metadata ask for.
     scopes: ['read', 'write'],
+  },
+  presets: {
+    read: [
+      'get_attachment',
+      'list_agent_skills',
+      'get_agent_skill',
+      'list_comments',
+      'list_cycles',
+      'list_custom_views',
+      'get_document',
+      'list_documents',
+      'get_issue',
+      'list_issues',
+      'list_issue_statuses',
+      'get_issue_status',
+      'list_issue_labels',
+      'list_projects',
+      'get_project',
+      'list_project_labels',
+      'list_release_pipelines',
+      'list_releases',
+      'get_release',
+      'list_release_notes',
+      'get_release_note',
+      'list_milestones',
+      'get_milestone',
+      'get_notifications',
+      'list_teams',
+      'get_team',
+      'get_triage_responsibility',
+      'list_templates',
+      'get_template',
+      'list_users',
+      'get_user',
+      'get_workspace',
+      'search_documentation',
+      'get_diff',
+      'list_diffs',
+      'get_diff_threads',
+      'get_status_updates',
+    ],
+    write: [
+      'prepare_attachment_upload',
+      'create_attachment_from_upload',
+      'create_attachment',
+      'save_comment',
+      'save_document',
+      'save_issue',
+      'save_issue_label',
+      'create_issue_label',
+      'save_project',
+      'save_project_label',
+      'save_release',
+      'save_release_note',
+      'save_milestone',
+      'mark_notification',
+      'save_diff_comment',
+      'resolve_diff_thread',
+      'submit_diff_review',
+      'update_diff',
+      'save_status_update',
+    ],
   },
   keywords: ['tickets', 'issues', 'projects', 'cycles', 'sprints', 'bugs'],
   // Simple Icons 13.21.0 (CC0), "linear".

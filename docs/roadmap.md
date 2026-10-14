@@ -798,16 +798,87 @@ metadata):
 | Confluence | Docs | the same Atlassian server | the same: **one Atlassian connection serves both entries** | none |
 | Grafana | Observability | `https://mcp.grafana.com/mcp` (Grafana Cloud) | OAuth 2.1: PKCE, dynamic registration; the stack is chosen with an `X-Grafana-URL` header | none |
 
+**Listed after a real connection (owner, 2026-10-14).** Each was prepared from
+a probe, switched on as a preview with `FABRIKKA_PREPARED_VENDORS`, connected
+by the owner, and only then moved into `registry.ts`; its presets are read from
+that connection's tool list, not from docs:
+
+| Vendor | Category | MCP server | Sign-in | Operator setup | Entry |
+| --- | --- | --- | --- | --- | --- |
+| Linear | Issue tracker | `https://mcp.linear.app/mcp` | OAuth: PKCE (S256), dynamic registration, scopes `read write` (probed 2026-10-10) | none | `catalogue/linear.ts`, 68 tools. M20 runs with both Jira and Linear (owner, 2026-10-10). |
+| Sentry | Observability | `https://mcp.sentry.dev/mcp` | OAuth: PKCE (S256), dynamic registration, no scope asked for (probed 2026-10-12) | none | `catalogue/sentry.ts`, 15 tools |
+| Notion | Docs | `https://mcp.notion.com/mcp` | OAuth: PKCE (S256), dynamic registration, one scope `default`, refresh tokens (probed 2026-10-13) | none | `catalogue/notion.ts`, 55 tools |
+| ClickUp | Issue tracker | `https://mcp.clickup.com/mcp` | OAuth: PKCE (S256), dynamic registration (public client), scopes `read write`, **no refresh grant** (probed 2026-10-13) | none | `catalogue/clickup.ts`, 61 tools. Its access token lasts ten years, so nothing to refresh in practice; an expired one means *needs reconnecting*. |
+| GitLab | Code host | `https://gitlab.com/api/v4/mcp` | OAuth: PKCE (S256), dynamic registration, scope `mcp`, refresh tokens; the token endpoint takes **no public client**, so the registered client is confidential (probed 2026-10-13) | none | `catalogue/gitlab.ts`, 36 tools. gitlab.com only; a self-managed GitLab is a custom connection. |
+
 **Prepared, not listed.** An entry written from a real probe, but kept out of
 `registry.ts` until it has been connected for real:
 
 | Vendor | Category | MCP server | Sign-in | Operator setup | Entry |
 | --- | --- | --- | --- | --- | --- |
-| Linear | Issue tracker | `https://mcp.linear.app/mcp` | OAuth: PKCE (S256), dynamic registration, scopes `read write` (probed 2026-10-10) | none | `catalogue/linear.ts`. Offered on an instance with `FABRIKKA_PREPARED_VENDORS=linear`, marked *Preview* (`docs/operations.md`). Listed once the owner connects it; presets come from that connection's tools. M20 runs with both Jira and Linear (owner, 2026-10-10). |
+| Grafana Cloud | Observability | `https://mcp.grafana.com/mcp` | OAuth 2.1: PKCE (S256), dynamic registration; the stack is a field, sent as `X-Grafana-URL` (probed 2026-10-12) | none | `catalogue/grafana.ts` |
 
-Later wave: GitLab, Linear, ClickUp, Sentry, Rollbar, Notion. Each is probed and
-connected for real before it gets an entry. Self-hosted Grafana
-(`grafana/mcp-grafana`, a service-account token) stays a **custom connection**.
+A prepared vendor is offered on an instance whose `FABRIKKA_PREPARED_VENDORS`
+names it, marked *Preview* (`docs/operations.md`), and is listed for everyone once
+the owner has connected it; its presets come from that connection's tools.
+
+**Next wave (the owner's list, 2026-10-14), probed before any code.**
+Unauthenticated requests to each server and its OAuth metadata sort it into what
+the catalogue can take, what needs the owner first, and what isn't a connection
+at all. Each row below becomes an entry the same way as the rows above: prepared,
+previewed, connected for real, then listed. In the order they can land:
+
+| Vendor | Category | MCP server | Sign-in | Operator setup | State |
+| --- | --- | --- | --- | --- | --- |
+| Plaud | Meetings (new) | `https://mcp.plaud.ai/mcp` | OAuth: PKCE (S256), dynamic registration (a probe registration was accepted), refresh tokens, no scope asked for | none | ready to prepare |
+| Vocci | Meetings (new) | `https://mcp.vocci.ai/mcp` | OAuth: PKCE (S256), dynamic registration at `clerk.vocci.ai`, scopes `profile offline_access email`, refresh tokens | none | ready to prepare |
+| Slack | Chat (new) | `https://mcp.slack.com/mcp` | OAuth with **user** tokens (`slack.com/oauth/v2_user/authorize`): PKCE (S256), **no dynamic registration**, `client_secret_post`, refresh grant; the metadata lists the user scopes it takes (`channels:history`, `channels:read`, `chat:write`, `search:read.*`, `users:read`, …) | **A Slack app**, once per instance (`SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_CLIENT_SECRET`), with the callback as its redirect URL and those user scopes. Without one, Slack is absent, like GitHub. | needs the owner first |
+| Gmail | Email (new) | `https://gmailmcp.googleapis.com/mcp/v1` | Google OAuth (`accounts.google.com`): PKCE, **no dynamic registration**; the server's metadata lists `gmail.readonly`, `gmail.compose`, `gmail.send`, `gmail.modify`, …; a refresh token only with `access_type=offline` | **One Google Cloud OAuth client**, once per instance (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`), a *Web application* marked for an AI agent, with the callback as its redirect URI; the Workspace **Developer Preview Program**; and, before anyone but the project's test users can connect, Google's app verification (Gmail's scopes are restricted). | Google calls it a Developer Preview (page updated 2026-10-13); needs the owner first |
+| Google Calendar | Calendar (new) | `https://calendarmcp.googleapis.com/mcp/v1` | the same client; Google's scope list is read-only so far (`calendar.calendarlist.readonly`, `calendar.events.freebusy`, `calendar.events.readonly`) | the same Google client | the same |
+| Google Drive | Docs | `https://drivemcp.googleapis.com/mcp/v1` | the same client; `drive.readonly`, `drive.file` | the same | the same |
+| Google Sheets | Docs | `https://sheetsmcp.googleapis.com/mcp/v1` | the same client; `spreadsheets.readonly`, `spreadsheets`, plus Drive's | the same | the same |
+| Google Docs | Docs | `https://docsmcp.googleapis.com/mcp/v1` | the same client; `documents.readonly`, `documents`, plus Drive's | the same | the same. This makes Google Docs a **connection** after all, beside the M14 `gdoc` output kind. |
+
+Two things the Google rows settle when they land, in an ADR if they need one:
+each Google product is its own server with its own scopes, so each is its own
+connection, and whether one Google consent can serve several of them is the
+question to answer then; and the pre-registered client (`auth.client`) is
+exactly GitHub's mechanism, so nothing new in `oauth.ts`. Categories grow with
+the catalogue: *Meetings*, *Chat*, *Email* and *Calendar* join the four in
+`catalogue/types.ts` when their first entry is prepared, one line each, and the
+page builds its chips from the server's list.
+
+**No entry, and why (2026-10-13):** Rollbar has no hosted MCP server, only a
+local `@rollbar/mcp-server` run with an access token, so it can't be connected
+per person with OAuth; it stays a **custom connection** if Rollbar ever hosts
+one. Self-hosted Grafana (`grafana/mcp-grafana`, a service-account token) and
+self-managed GitLab stay custom connections too. Google Docs was not a
+connection until Google hosted a Docs MCP server (see the next wave above); the
+`gdoc` output kind (M14) is a different thing and stays.
+
+**From the owner's list, no entry either (probed 2026-10-14):**
+
+- **Outlook.** Microsoft's Outlook mail and calendar MCP servers (*Work IQ*,
+  under Agent 365) are in preview, need a Microsoft 365 Copilot licence, and are
+  reachable only after a tenant admin registers an Entra app. No personal
+  accounts. A tenant that has them connects them as a **custom connection**; an
+  entry waits until Microsoft offers them per person.
+- **Read AI.** Announced a hosted MCP server (`https://api.read.ai/mcp/`), but
+  it signs in with username and password and says OAuth is *coming soon*; the
+  URL answered 404 on 2026-10-14. Revisit when OAuth lands.
+- **LINE Official Account.** LINE's own `line-bot-mcp-server` is local, run with
+  a channel access token, and the use case (new messages land in an inbox) is
+  **inbound**: that is M38, the chat-app connector, not a connection.
+- **Google Analytics, Google Search Console.** Google hosts no MCP server for
+  either (Analytics has an official local, experimental one; Search Console only
+  community ones). Custom connection if someone hosts one.
+- **X (Twitter), LinkedIn, TikTok, YouTube, Reddit, Instagram.** No vendor hosts
+  an MCP server for any of them (Meta hosts one for Ads only, `mcp.facebook.com/ads`;
+  TikTok announced one for Ads). Each would mean a Fabrikka-written adapter on
+  the platform's API plus that platform's app review, which ADR 0024 rules out.
+  Any of them comes back the day its vendor hosts a server.
+- **"MCP Server"** on that list is the custom connection Fabrikka has had since
+  M8. **GitHub, Notion, Linear** are already listed.
 
 - **Add a connection → a category → a vendor → Connect.** Each catalogue entry
   (`apps/server/src/connections/catalogue/<vendor>.ts`, plus one registry line)
@@ -817,7 +888,11 @@ connected for real before it gets an entry. Self-hosted Grafana
   - protected-resource discovery (RFC 9728) and authorization-server metadata
     (RFC 8414);
   - dynamic client registration (RFC 7591) where the vendor supports it, or the
-    entry's pre-registered client otherwise;
+    entry's pre-registered client otherwise. The registration asks only for what
+    the server's metadata says it accepts: a public client with a refresh grant
+    where both are offered (Atlassian, Notion), no refresh grant where there is
+    none (ClickUp), and a confidential client with `client_secret_post` where
+    `none` isn't offered (GitLab), its secret sealed like a token (2026-10-13);
   - PKCE (S256), and a single-use `state` bound to the person who started it;
   - the callback is on the instance's own origin
     (`/api/connections/oauth/callback`), so `localhost` works with no domain.
@@ -833,7 +908,11 @@ connected for real before it gets an entry. Self-hosted Grafana
 - **Grant presets per entry,** *Read* and *Read & write*, expand to the per-tool,
   default-deny grants M8 already enforces. An entry's tool lists come from
   listing that vendor's tools in a real connection. A tool an entry doesn't
-  classify is in no preset.
+  classify is in no preset. The rule for classifying (2026-10-14): *Read* is
+  everything that only looks; *Write* adds what creates or changes, and leaves
+  out deleting, merging, forking, and anything that hands work to another agent
+  or spends credits (Copilot delegation, Sentry's Seer, Atlassian's
+  `executeDestructive`). Those are granted by hand, tool by tool.
 - **Custom connection** stays: any streamable-HTTP MCP server, with a URL and
   token, as at M8.
 - **Personal integrations stays tidy as the catalogue grows (2026-10-10):**
@@ -1111,6 +1190,14 @@ decision, with who decided and when, and opens in any editor.
   - **Personal integrations**: your own connections, on a page of their own.
     You connect, see and remove them here, not inside a session; attaching one to
     a session stays in that session's Setup (M8).
+- **Settings, one screen (2026-10-14):** the sidebar is for rooms. Everything a
+  person configures is behind one entry at its bottom, **Settings**, a screen
+  with tabs: *Personal integrations*; *Organization integrations* and *People*,
+  for the organization chosen in the sidebar; *Your devices*; *Appearance*. Each
+  tab has its own address (`/settings/<tab>`), and the pages' old addresses
+  forward there, so links in notices and docs keep working, and the OAuth
+  callback comes back to the Personal integrations tab. One click more on each
+  of those paths; all stay within five.
 - "Most recently active" means the latest message, or the session's creation if
   it has none. Fabrikka doesn't track who looked at what beyond your own read
   position (M24).
@@ -1202,8 +1289,8 @@ The ADR's answers:
   participant who made it, the tool, and the outcome. Never its arguments or
   results. Team owners see recent uses.
 
-- **Team integrations** joins the sidebar: the team's shared connections, managed
-  by team owners.
+- **Team integrations** (since 2026-10-14 the *Organization integrations* tab of
+  Settings): the team's shared connections, managed by team owners.
 - Everything else about connections is unchanged: per-tool grants stay
   default-deny, and credentials are sealed and never returned (ADR 0014).
 
@@ -1211,8 +1298,8 @@ The ADR's answers:
 proved rather than assumed. Fede owns team T; Alice is a member; Carol is a guest
 in one of T's sessions, not on the team.
 
-1. Fede, sidebar → **Team integrations**, fills in name, server and token →
-   **Save**: **2 clicks**. The token is never returned by any API.
+1. Fede, **Settings → Organization integrations**, fills in name, server and
+   token → **Save**: **3 clicks**. The token is never returned by any API.
 2. Alice opens Team integrations: she sees the connection and who added it, not
    the token, and has no form. Adding one as her is refused.
 3. In a session of T: Fede opens **Setup**, the team's connection shows *team's ·
@@ -1805,16 +1892,22 @@ on is one-time.
     extension, `nosniff`;
   - `GET`/`PUT /api/me/theme`: `{ theme }`, a theme id, `system`, or null for
     the default. An unknown id is refused.
-- **The page:** **Appearance** at the bottom of the sidebar opens a grid of
-  cards drawn from each theme's swatches, plus *Match my system*. One click
-  applies it.
+- **The page:** **Appearance**, a tab of Settings (until 2026-10-14 an entry at
+  the bottom of the sidebar), is a grid of cards drawn from each theme's
+  swatches, plus *Match my system*. One click applies it.
 - **No flash:** the choice is cached on the device, and an inline script in
   `index.html` loads the theme's CSS before the app renders. The account's
   choice wins once it arrives.
 - **Desktop app:** nothing new. It's the web app.
+- **Typing on this device (2026-10-14):** spelling and autocorrect are **off by
+  default** in the composer, the objective and comments. People type commands,
+  paths and agents' names there, and an autocorrected one is a wrong message;
+  in the desktop app (WKWebView on macOS) the system autocorrects unless the
+  page says not to. *Appearance → Typing on this device* has one switch, **Check
+  spelling and autocorrect as I type**, per device like notifications' text.
 
 **Test:**
-1. Open Appearance from the sidebar, and click **Terminal** (**2 clicks**). The
+1. Open **Settings → Appearance**, and click **Terminal** (**3 clicks**). The
    whole app turns monospace and dark at once, with no reload.
 2. Reload: it paints as Terminal from the first frame, with no flash of Dusk.
 3. Sign in on another browser: it's Terminal there too.
@@ -1829,7 +1922,12 @@ on is one-time.
 7. Nothing outside a pack is served: `/themes/terminal/x.svg` and a missing
    file are 404, and `../` paths never return a file from outside the folder.
 
-**Clicks:** choosing a theme, **2** from anywhere.
+8. In the desktop app on macOS, type `teh useEffect hook` in a room's
+   composer: nothing is corrected or capitalised, and no word is underlined.
+   Appearance → *Typing on this device* → tick the switch, open a room again:
+   `teh` is corrected and underlining is back. Untick: off again.
+
+**Clicks:** choosing a theme, **3** from anywhere. Spelling on or off, **3**.
 
 ## M45 — Email to any provider, over SMTP
 
@@ -1953,10 +2051,12 @@ invite on the core):
 
 ## M48 — Each organization has its own folders and connections
 
-> People work for several organizations: an employer, a client. A folder or a
-> personal connection set up for one must never turn up in another's rooms by
-> a slip of the picker, and two organizations may need two GitHub accounts.
-> [ADR 0043](decisions/0043-folders-and-personal-connections-belong-to-one-organization.md).
+> People work for several organizations: an employer, a client. A folder set up
+> for one must never turn up in another's rooms by a slip of the picker, and two
+> organizations may need two GitHub accounts.
+> [ADR 0043](decisions/0043-folders-and-personal-connections-belong-to-one-organization.md),
+> amended 2026-10-14: a personal connection works in **all your rooms** unless
+> it was connected for one organization only.
 
 ### Folders (first)
 
@@ -1973,13 +2073,18 @@ invite on the core):
 
 ### Personal connections (second)
 
-- **The Integrations page asks "For"** (default: the organization in the
-  sidebar). One connection per vendor per organization, so two GitHub
-  accounts for two organizations works.
-- **A room attaches, and resolves, only its organization's connections;** your
-  own still beats the organization's shared one, within that organization.
-- **Existing connections are Personal;** ones already attached in an
-  organization's room keep working, marked the same way.
+- **A connection is for all your rooms by default** (amended 2026-10-14).
+  Connecting asks *Use in:* **all your rooms**, or **only <organization>**,
+  for a second account or a work account that must stay out of a client's
+  rooms. One connection per vendor per scope, so two GitHub accounts for two
+  organizations still works.
+- **An organization's room attaches, and resolves, that organization's
+  connection first, then your all-rooms one, then the organization's shared
+  one** (ADR 0028). A room in no organization uses your all-rooms ones.
+- **The Personal integrations tab lists every connection with its scope:**
+  *all your rooms*, or the organization's name.
+- **Existing connections are for all your rooms** and work everywhere at once;
+  nothing is marked or redone.
 
 **Test.** With two organizations, *Acme* and *Client*:
 1. Folders window → **For: Acme** → Add folder… → pick the repo: **3 clicks**.
@@ -1989,8 +2094,10 @@ invite on the core):
    personal room, all of them, marked *Acme* and *Client*.
 3. Move the Acme room to Client (room settings → Organization): the agent
    goes offline, and *Add my agent* there offers only the Client folder.
-4. Integrations → **For: Client** → Connect GitHub with a second account. In a
-   Client room, *attach* offers only that one, and calls use it.
+4. Settings → Personal integrations: GitHub, connected for all your rooms,
+   attaches in an Acme room and in a Client room alike. Then *Use in: only
+   Client* → Connect GitHub with a second account: in a Client room, *attach*
+   now offers that one and calls use it; in an Acme room, still the first.
 5. An agent bound before this milestone, in an organization's room, still
    answers and says *from Personal: add it for <org>*.
 

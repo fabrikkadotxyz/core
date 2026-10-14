@@ -1,6 +1,6 @@
 /**
- * Sentry (M18, ADR 0024). PREPARED, NOT LISTED: it isn't in registry.ts until
- * the owner has connected it for real ("verified, not documented").
+ * Sentry (M18, ADR 0024). Listed: the owner connected it for real on
+ * 2026-10-14 ("verified, not documented").
  *
  * Probed 2026-10-12, without signing in:
  *   - POST https://mcp.sentry.dev/mcp → 401, `WWW-Authenticate: Bearer
@@ -15,8 +15,14 @@
  *     client_secret_post.
  *
  * No scope is asked for: the 401 names none, and Sentry's consent page lets the
- * person choose. Confirm on the first real connection. Presets are filled in
- * from a real connection's tool list, not from docs.
+ * person choose. Confirm on the first real connection.
+ *
+ * Presets, from the owner's real connection (15 tools, 2026-10-14). Read is everything that
+ * only looks. Write adds what creates or changes, and leaves out deleting,
+ * merging, forking, and anything that hands work to another agent or spends
+ * credits: those are granted by hand, tool by tool.
+ * Out of both: analyze_issue_with_seer (spends Seer credits) and
+ * execute_sentry_tool (runs anything search_sentry_tools finds).
  */
 import type { CatalogueEntry } from './types.ts';
 
@@ -28,6 +34,25 @@ export const sentry: CatalogueEntry = {
   slug: 'sentry',
   mcpUrl: 'https://mcp.sentry.dev/mcp',
   auth: { type: 'oauth' },
+  presets: {
+    read: [
+      'find_organizations',
+      'find_projects',
+      'search_errors',
+      'search_logs',
+      'search_traces',
+      'search_metrics',
+      'search_profiles',
+      'search_replays',
+      'search_issues',
+      'find_dropped_events',
+      'get_sentry_resource',
+      'search_sentry_tools',
+    ],
+    write: [
+      'update_issue',
+    ],
+  },
   keywords: ['errors', 'exceptions', 'crashes', 'stack traces', 'monitoring', 'incidents'],
   // Simple Icons 13.21.0 (CC0), "sentry".
   logo: {

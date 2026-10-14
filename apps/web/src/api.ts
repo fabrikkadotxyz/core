@@ -213,13 +213,14 @@ export interface PersonalConnection {
   entry: string | null;
   auth: string;
   status: string;
-  /** ADR 0043: the organization whose rooms may use it; null for Personal. */
+  /** ADR 0043 (amended 2026-10-14): only this organization's rooms may use it; null for all your rooms. */
   teamId: string | null;
 }
 
 /**
- * Your connections (M28, M18). ADR 0043: each is for one organization's rooms
- * (`team`, an organization id) or Personal (null): one per vendor per scope.
+ * Your connections (M28, M18). ADR 0043 (amended 2026-10-14): each is for all
+ * your rooms (`team` null, the default) or for one organization only. `list`
+ * with no team is every one you can use; with a team, exactly that scope.
  */
 const scopeQuery = (team: string | null) => (team ? `?team=${encodeURIComponent(team)}` : '');
 export const connections = {
@@ -392,10 +393,9 @@ export const sessions = {
 
   integrations: (ref: SessionRef) =>
     call<{
-      /** `fromPersonal`: ADR 0043, a Personal connection attached here before connections had organizations. */
-      mine: { id: string; slug: string; label: string; url: string; hasCredential: boolean; fromPersonal?: boolean }[];
+      mine: { id: string; slug: string; label: string; url: string; hasCredential: boolean }[];
       /** M28: your saved connections not yet in this session (ADR 0043: only the room's organization's). */
-      available: { id: string; slug: string; label: string; url: string; hasCredential: boolean }[];
+      available: { id: string; slug: string; label: string; url: string; hasCredential: boolean; teamId: string | null }[];
       /** M30: the team's shared connections that apply to you here. */
       team: { slug: string; label: string; teamName: string; hasCredential: boolean; overridden: boolean }[];
       inSession: { slug: string; label: string; attachedBy: number }[];

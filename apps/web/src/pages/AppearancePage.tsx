@@ -6,6 +6,7 @@ import { useState } from 'react';
 import type { ThemeInfo } from '../api.ts';
 import { chooseTheme, DEFAULT_THEME, useThemes } from '../themes.ts';
 import { askPermission, permission, setShowsText, showsText } from '../notify.ts';
+import { setSpellingOn, spellingOn } from '../typing.ts';
 
 /** M42: per device, because a shared screen and a laptop want different answers. */
 function DeviceNotifications() {
@@ -33,6 +34,28 @@ function DeviceNotifications() {
         />{' '}
         Show message text in notifications
       </label>
+    </section>
+  );
+}
+
+/** Per device: spelling and autocorrect in rooms, off by default (`typing.ts`). */
+function DeviceTyping() {
+  const [on, setOn] = useState(spellingOn);
+  return (
+    <section aria-label="Typing on this device">
+      <h2>Typing on this device</h2>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => {
+            setSpellingOn(e.target.checked);
+            setOn(e.target.checked);
+          }}
+        />{' '}
+        Check spelling and autocorrect as I type
+      </label>
+      <p className="muted small">Off, so commands, paths and names stay as you typed them. Applies to rooms you open next.</p>
     </section>
   );
 }
@@ -100,7 +123,7 @@ export function ThemePicker({ offered, selected, onPick }: { offered: ThemeInfo[
   );
 }
 
-export function AppearancePage() {
+export function Appearance() {
   const { offered, choice } = useThemes();
   const [error, setError] = useState<string | null>(null);
   const pick = (id: string | null) => {
@@ -109,24 +132,22 @@ export function AppearancePage() {
   };
 
   return (
-    <div className="page">
-      <main className="column">
-        <h1>Appearance</h1>
-        <p className="muted">
-          Your theme follows your account to every browser and the desktop app. Anyone can make one:{' '}
-          <a href="https://github.com/fabrikkadotxyz/core/blob/main/docs/themes.md" target="_blank" rel="noreferrer noopener">
-            how themes work
-          </a>
-          .
-        </p>
-        {error && <p className="error">{error}</p>}
-        {!offered ? (
-          <p className="muted">Loading themes…</p>
-        ) : (
-          <ThemePicker offered={offered} selected={choice} onPick={pick} />
-        )}
-        <DeviceNotifications />
-      </main>
-    </div>
+    <>
+    <p className="muted">
+      Your theme follows your account to every browser and the desktop app. Anyone can make one:{' '}
+      <a href="https://github.com/fabrikkadotxyz/core/blob/main/docs/themes.md" target="_blank" rel="noreferrer noopener">
+        how themes work
+      </a>
+      .
+    </p>
+    {error && <p className="error">{error}</p>}
+    {!offered ? (
+      <p className="muted">Loading themes…</p>
+    ) : (
+      <ThemePicker offered={offered} selected={choice} onPick={pick} />
+    )}
+    <DeviceNotifications />
+    <DeviceTyping />
+    </>
   );
 }

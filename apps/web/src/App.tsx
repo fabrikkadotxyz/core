@@ -1,5 +1,5 @@
-import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { useEffect, type ReactNode } from 'react';
 import { AuthProvider, useAuth } from './auth-context.tsx';
 import { InvitePage } from './pages/InvitePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
@@ -7,15 +7,11 @@ import { SetupPage } from './pages/SetupPage.tsx';
 import { ForgotPasswordPage, ResetPasswordPage } from './pages/ResetPage.tsx';
 import { AllSessionsPage } from './pages/AllSessionsPage.tsx';
 import { HomePage } from './pages/HomePage.tsx';
-import { IntegrationsPage } from './pages/IntegrationsPage.tsx';
-import { TeamIntegrationsPage } from './pages/TeamIntegrationsPage.tsx';
-import { DevicesPage } from './pages/DevicesPage.tsx';
-import { AppearancePage } from './pages/AppearancePage.tsx';
 import { PairPage } from './pages/PairPage.tsx';
 import { AppShell } from './shell/AppShell.tsx';
-import { WorkspaceProvider } from './shell/workspace.tsx';
+import { SettingsPage } from './pages/SettingsPage.tsx';
+import { useWorkspace, WorkspaceProvider } from './shell/workspace.tsx';
 import { SessionPage } from './pages/SessionPage.tsx';
-import { TeamPage } from './pages/TeamPage.tsx';
 import { WelcomePage } from './pages/WelcomePage.tsx';
 import { useOnboarding } from './onboarding.ts';
 
@@ -38,11 +34,14 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/sessions" element={<AllSessionsPage />} />
           <Route path="/teams/:id/sessions" element={<AllSessionsPage />} />
-          <Route path="/teams/:id" element={<TeamPage />} />
-          <Route path="/teams/:id/integrations" element={<TeamIntegrationsPage />} />
-          <Route path="/integrations" element={<IntegrationsPage />} />
-          <Route path="/devices" element={<DevicesPage />} />
-          <Route path="/appearance" element={<AppearancePage />} />
+          {/* Settings (2026-10-14): one screen with tabs. The pages' old addresses forward to their tab. */}
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/:tab" element={<SettingsPage />} />
+          <Route path="/integrations" element={<Moved to="/settings/integrations" />} />
+          <Route path="/devices" element={<Moved to="/settings/devices" />} />
+          <Route path="/appearance" element={<Moved to="/settings/appearance" />} />
+          <Route path="/teams/:id" element={<MovedToOrganization tab="people" />} />
+          <Route path="/teams/:id/integrations" element={<MovedToOrganization tab="organization" />} />
           <Route path="/pair/:code" element={<PairPage />} />
           <Route path="/o/:owner/s/:session" element={<SessionPage />} />
         </Route>
@@ -87,4 +86,20 @@ function RequireAuth({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
   return <>{children}</>;
+}
+
+/** A page that moved into Settings: forward, keeping the query (a notice, a scope). */
+function Moved({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={to + search} replace />;
+}
+
+/** An organization's page that moved into Settings: choose that organization in the sidebar, then forward. */
+function MovedToOrganization({ tab }: { tab: 'people' | 'organization' }) {
+  const { id } = useParams();
+  const { team, selectTeam } = useWorkspace();
+  useEffect(() => {
+    if (id && team?.id !== id) selectTeam(id);
+  }, [id, team, selectTeam]);
+  return <Navigate to={`/settings/${tab}`} replace />;
 }

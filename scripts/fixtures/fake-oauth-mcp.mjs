@@ -19,6 +19,10 @@ import { z } from 'zod';
 
 const PORT = Number(process.argv[2] ?? 9201);
 const NO_REG = process.argv.includes('--no-registration');
+// Like GitLab (no public clients at the token endpoint) and ClickUp (no refresh
+// grant): the metadata says so, registration refuses anything else, and the
+// registered client gets a secret it must present.
+const CONFIDENTIAL = process.argv.includes('--confidential');
 const PRE = process.argv[process.argv.indexOf('--client') + 1]?.split(':');
 const BASE = `http://localhost:${PORT}`;
 const ISSUER = `${BASE}/oauth`;
@@ -45,7 +49,8 @@ app.get('/.well-known/oauth-authorization-server/oauth', (c) =>
     token_endpoint: `${ISSUER}/token`,
     ...(NO_REG ? {} : { registration_endpoint: `${ISSUER}/register` }),
     code_challenge_methods_supported: ['S256'],
-    grant_types_supported: ['authorization_code', 'refresh_token'],
+    grant_types_supported: CONFIDENTIAL ? ['authorization_code'] : ['authorization_code', 'refresh_token'],
+    token_endpoint_auth_methods_supported: CONFIDENTIAL ? ['client_secret_post'] : ['none'],
   }),
 );
 
@@ -53,10 +58,15 @@ app.get('/.well-known/oauth-authorization-server/oauth', (c) =>
 app.post('/oauth/register', async (c) => {
   if (NO_REG) return c.json({ error: 'registration_not_supported' }, 404);
   const body = await c.req.json();
+  if (CONFIDENTIAL) {
+    if ((body.grant_types ?? []).includes('refresh_token')) return c.json({ error: 'invalid_client_metadata', error_description: 'no refresh_token grant here' }, 400);
+    if (body.token_endpoint_auth_method !== 'client_secret_post') return c.json({ error: 'invalid_client_metadata', error_description: 'public clients not allowed' }, 400);
+  }
   const id = `client-${token()}`;
-  clients.set(id, { secret: null, redirectUris: body.redirect_uris ?? [] });
+  const secret = CONFIDENTIAL ? `secret-${token()}` : null;
+  clients.set(id, { secret, redirectUris: body.redirect_uris ?? [] });
   stats.registrations++;
-  return c.json({ client_id: id, redirect_uris: body.redirect_uris }, 201);
+  return c.json({ client_id: id, redirect_uris: body.redirect_uris, ...(secret ? { client_secret: secret } : {}) }, 201);
 });
 
 /* ---- authorize: automatic consent ---- */
@@ -86,7 +96,7 @@ app.post('/oauth/token', async (c) => {
     const r = token();
     access.set(a, { expiresAt: Date.now() + ttl * 1000 });
     refreshes.set(r, { clientId: form.get('client_id'), revoked: false });
-    return { access_token: a, token_type: 'Bearer', expires_in: ttl, refresh_token: r };
+    return CONFIDENTIAL ? { access_token: a, token_type: 'Bearer', expires_in: ttl } : { access_token: a, token_type: 'Bearer', expires_in: ttl, refresh_token: r };
   };
   if (form.get('grant_type') === 'authorization_code') {
     const code = codes.get(form.get('code'));

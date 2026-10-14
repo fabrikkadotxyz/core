@@ -20,6 +20,7 @@ const PORT = 9213;
 const INST = `http://localhost:${PORT}`;
 const A = 9211;
 const B = 9212;
+const C = 9214;
 const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
 const PASSWORD = process.env.FABRIKKA_TEST_PASSWORD ?? 'fabrikka-dev-pw';
 
@@ -46,9 +47,10 @@ const sql = (q) => run('docker', ['exec', '-i', 'fabrikka-postgres', 'psql', '-U
 const procs = [
   spawn('node', ['scripts/fixtures/fake-oauth-mcp.mjs', String(A)], { stdio: 'ignore', detached: true }),
   spawn('node', ['scripts/fixtures/fake-oauth-mcp.mjs', String(B), '--no-registration', '--client', 'pre-id:pre-secret'], { stdio: 'ignore', detached: true }),
+  spawn('node', ['scripts/fixtures/fake-oauth-mcp.mjs', String(C), '--confidential'], { stdio: 'ignore', detached: true }),
   spawn('npx', ['tsx', '--env-file-if-exists=../../.env', '../../scripts/fixtures/catalogue-server.mts'], {
     cwd: 'apps/server',
-    env: { ...process.env, PORT: String(PORT), PUBLIC_URL: INST, FAKE_A: String(A), FAKE_B: String(B), FAKE_PRE_CLIENT_ID: 'pre-id', FAKE_PRE_CLIENT_SECRET: 'pre-secret' },
+    env: { ...process.env, PORT: String(PORT), PUBLIC_URL: INST, FAKE_A: String(A), FAKE_B: String(B), FAKE_C: String(C), FABRIKKA_PREPARED_VENDORS: 'grafana', FAKE_PRE_CLIENT_ID: 'pre-id', FAKE_PRE_CLIENT_SECRET: 'pre-secret' },
     stdio: 'ignore',
     detached: true,
   }),
@@ -63,7 +65,7 @@ const stopAll = () => {
   }
 };
 for (let i = 0; i < 60; i++) {
-  const up = await Promise.all([`${INST}/health`, `http://localhost:${A}/admin/stats`, `http://localhost:${B}/admin/stats`].map((u) => fetch(u).then((r) => r.ok).catch(() => false)));
+  const up = await Promise.all([`${INST}/health`, `http://localhost:${A}/admin/stats`, `http://localhost:${B}/admin/stats`, `http://localhost:${C}/admin/stats`].map((u) => fetch(u).then((r) => r.ok).catch(() => false)));
   if (up.every(Boolean)) break;
   await sleep(500);
 }
@@ -91,7 +93,7 @@ const connect = async (entry, fields) => {
   const a = await authorize(entry, fields);
   return a.callback ? land(a.callback) : `error=${a.error}`;
 };
-const slugs = ['fakehub', 'fakepre', 'fakesuite', 'fakegraf'];
+const slugs = ['fakehub', 'fakepre', 'fakesuite', 'fakegraf', 'fakeconf'];
 for (const s of slugs) await api(`/me/connections/${s}`, { method: 'DELETE' });
 
 /* ------------------------------------------------ 1. the catalogue */
@@ -101,7 +103,10 @@ const offered = cat.entries.map((e) => e.id);
 check(['fakehub', 'fakepre', 'faketracker', 'fakewiki', 'fakegraf'].every((id) => offered.includes(id)), 'the catalogue lists its vendors by category');
 check(!offered.includes('fakeunset'), 'A VENDOR NEEDING A PRE-REGISTERED CLIENT IS ABSENT UNTIL THE INSTANCE HAS ONE');
 check(cat.entries.filter((e) => e.id.startsWith('fake')).every((e) => e.preview === false), 'verified vendors are not marked preview');
-check(cat.entries.filter((e) => e.id === 'linear').every((e) => e.preview === true), 'A PREPARED VENDOR (Linear) IS OFFERED ONLY AS A PREVIEW, and only where FABRIKKA_PREPARED_VENDORS names it');
+check(cat.entries.some((e) => e.id === 'grafana' && e.preview === true), 'A PREPARED VENDOR (Grafana) IS OFFERED ONLY AS A PREVIEW, and only where FABRIKKA_PREPARED_VENDORS names it');
+const verified = ['linear', 'sentry', 'notion', 'clickup', 'gitlab'];
+check(verified.every((id) => cat.entries.find((e) => e.id === id)?.preview === false), 'THE VENDORS THE OWNER CONNECTED FOR REAL ARE LISTED, not previews');
+check(verified.every((id) => cat.entries.find((e) => e.id === id)?.presets?.read > 0), '…each with a Read preset from its real tool list');
 
 /* ------------------------------------------------ 2. sign in: discovery, registration, PKCE */
 
@@ -126,6 +131,11 @@ check((await land(mine.callback, otherCookie)).includes('error='), "SOMEONE ELSE
 check((await land(mine.callback)).includes('connected=fakehub'), '…while you still can');
 
 check((await connect('fakepre')).includes('connected=fakepre') && (await stats(B)).registrations === 0, 'a vendor without registration connects with the pre-registered client (GitHub-like)');
+check(
+  (await connect('fakeconf')).includes('connected=fakeconf') && (await stats(C)).registrations === 1,
+  'A VENDOR WITH NO PUBLIC CLIENTS AND NO REFRESH GRANT (GitLab-, ClickUp-like): registration follows its metadata, and the secret it returns is used at the token endpoint',
+);
+check((await json('/me/connections')).connections.find((c) => c.slug === 'fakeconf')?.status === 'ok', '…and the connection is usable without a refresh token');
 
 /* ------------------------------------------------ 3. shared connection, fields */
 
@@ -243,7 +253,7 @@ check((await fetch(hoCallback, { redirect: 'manual', headers: { cookie: bound.sp
 await api(base, { method: 'DELETE' });
 for (const s of slugs) await api(`/me/connections/${s}`, { method: 'DELETE' });
 await run('pnpm', ['admin', 'delete-user', '--email', otherEmail]).catch(() => {});
-await sql(`delete from oauth_clients where issuer like 'http://localhost:${A}%' or issuer like 'http://localhost:${B}%'`);
+await sql(`delete from oauth_clients where issuer like 'http://localhost:${A}%' or issuer like 'http://localhost:${B}%' or issuer like 'http://localhost:${C}%'`);
 stopAll();
 
 if (failures) {

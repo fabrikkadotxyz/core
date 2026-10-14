@@ -2429,3 +2429,7 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
   .auth-tagline { font-size: clamp(1.35rem, 6vw, 1.8rem); }
   .auth-panel { justify-content: center; }
 }
+
+/* -------------------------------------------------- Settings: one screen, tabs (2026-10-14) */
+.settings-tabs { flex-wrap: wrap; margin: 0 0 1.25rem; }
+.settings-tabs .tab { text-decoration: none; }

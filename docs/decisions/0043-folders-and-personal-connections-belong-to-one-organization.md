@@ -65,6 +65,10 @@ move something, remove it and add it again.
 
 ### Personal connections: chosen on the Integrations page
 
+> **Amended 2026-10-14, the owner's decision:** a Personal connection works in
+> **all your rooms**. See the amendment at the end; the bullets below describe
+> the first version where they differ.
+
 - **`mcp_servers` gains `team_id`** (null for Personal). Unique becomes
   `(owner_id, team_id, slug)`, NULLS NOT DISTINCT: one connection per vendor
   **per scope**. Two GitHub accounts for two organizations is two rows.
@@ -115,3 +119,48 @@ scope. New ones follow the rule.
   folder are shared across organizations, which is exactly what isn't wanted.
 - **Leaving existing ones usable everywhere.** Keeps the slip this ADR is
   for.
+
+## Amendment (2026-10-14): a Personal connection works in all your rooms
+
+**Context.** The owner connected a vendor with the wrong organization selected
+and couldn't attach it in a personal room. With two organizations every vendor
+had to be connected twice. And the isolation was thinner than it looked: a
+connection scoped to the client is the same account with the same reach at the
+vendor, so the scope recorded intent, not capability.
+
+**Decision.** A connection has one of two scopes:
+
+- **All your rooms** (`team_id` null; the default when connecting): usable in
+  your personal rooms and in every organization's rooms you're in.
+- **One organization only** (`team_id` set): usable in that organization's
+  rooms, and nowhere else. This is how a person keeps a second account for one
+  organization, or keeps a work account out of a client's rooms.
+
+In an organization's room, resolution order is: your connection for that
+organization, then your connection for all your rooms, then the
+organization's shared one (ADR 0028's "your own wins" holds). A room in no
+organization uses only connections for all your rooms.
+
+The question moves to connect time: *Use in: all your rooms* (default) or
+*only <organization>*. The Personal integrations tab lists every connection
+with its scope, instead of one scope at a time.
+
+**Folders are unchanged.** A folder is an organization's code on your disk and
+the machine enforces its scope; a connection is your identity at a vendor. The
+asymmetry is deliberate.
+
+**Consequences.**
+
+- The employer-in-a-client's-room slip is possible again for anyone who
+  connects a work account for all rooms. The defence is the choice at connect
+  time, and it is one click.
+- No migration: every existing connection is already in the all-rooms scope,
+  so it works everywhere at once. `session_mcp_servers.from_personal` is no
+  longer read; the *from Personal: add it for <org>* marker on attachments
+  goes. Folder bindings keep theirs.
+- `GET /api/me/connections` without `team` returns all of yours; with
+  `?team=` exactly that organization's (the catalogue's *connected* is still
+  per scope, so a second account can be connected for one organization).
+- A room's *attach* offers your all-rooms connections and, in an
+  organization's room, that organization's, one per vendor with the
+  organization's winning.

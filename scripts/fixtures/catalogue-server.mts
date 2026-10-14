@@ -3,12 +3,13 @@
  * scripts/fixtures/fake-oauth-mcp.mjs), the way a real catalogue lists GitHub
  * or Atlassian. Used only by scripts/acceptance/m18.mjs, on its own port.
  *
- *   PORT=… FAKE_A=<port> FAKE_B=<port> tsx catalogue-server.mts
+ *   PORT=… FAKE_A=<port> FAKE_B=<port> FAKE_C=<port> tsx catalogue-server.mts
  */
 import { createApp } from '../../apps/server/src/lib.ts';
 
 const A = `http://localhost:${process.env.FAKE_A}/mcp`;
 const B = `http://localhost:${process.env.FAKE_B}/mcp`;
+const C = `http://localhost:${process.env.FAKE_C}/mcp`;
 
 await createApp({
   catalogue: [
@@ -29,6 +30,8 @@ await createApp({
       auth: { type: 'oauth', client: { idEnv: 'FAKE_UNSET_CLIENT_ID', secretEnv: 'FAKE_UNSET_CLIENT_SECRET' } },
     },
     // Two entries, one connection, like Jira and Confluence.
+    // Registration shaped by the vendor's metadata: a confidential client, no refresh grant (GitLab, ClickUp).
+    { id: 'fakeconf', name: 'FakeConf', category: 'code', description: 'No public clients, no refresh.', slug: 'fakeconf', mcpUrl: C, auth: { type: 'oauth' } },
     { id: 'faketracker', name: 'FakeTracker', category: 'issues', description: 'Tickets.', slug: 'fakesuite', connectionName: 'FakeSuite', mcpUrl: A, auth: { type: 'oauth' } },
     { id: 'fakewiki', name: 'FakeWiki', category: 'docs', description: 'Pages.', slug: 'fakesuite', connectionName: 'FakeSuite', mcpUrl: A, auth: { type: 'oauth' } },
     // A field sent as a header, like Grafana's stack.

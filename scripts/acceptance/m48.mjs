@@ -10,9 +10,11 @@
  *     refuses any other folder, while a personal room takes any of yours;
  *   - a room moving to another organization stops its agent;
  *   - leaving an organization drops its folders from the server;
- *   - a personal connection is per organization too: one per vendor per
- *     scope, offered and attached only in its organization's rooms, and listed
- *     to remove once you leave.
+ *   - a personal connection is for all your rooms unless connected for one
+ *     organization only (ADR 0043, amended 2026-10-14): an organization's room
+ *     takes its own over the all-rooms one, any room takes the all-rooms one,
+ *     and an organization-only one is refused elsewhere; one for an
+ *     organization you left is listed to remove.
  * The Folders window's look and old bindings (`from_personal`) are the manual test.
  *
  * Requires: the server on :9090, the test account (_setup.mjs), and the
@@ -173,8 +175,18 @@ try {
   const personalAttach = await req(`${pb}/integrations`, { method: 'POST', body: { slug: 'm48gh' }, jar: me });
   check(personalAttach.json?.id === forMeConn.json.id, 'a Personal room attaches the Personal one');
   const clientRoom = (await req('/sessions', { method: 'POST', body: { title: `Client work ${stamp}`, teamId: client.id }, jar: me })).json;
-  const refused = await req(`/o/${clientRoom.ownerSlug}/s/${clientRoom.publicId}/integrations`, { method: 'POST', body: { slug: 'm48gh' }, jar: me });
-  check(refused.status === 400 && /another organization/.test(refused.json?.error ?? ''), 'A CLIENT ROOM REFUSES IT: there is none for Client, and it says so');
+  const cb = `/o/${clientRoom.ownerSlug}/s/${clientRoom.publicId}`;
+  const clientOffered = (await req(`${cb}/integrations`, { jar: me })).json?.available ?? [];
+  check(clientOffered.some((c) => c.id === forMeConn.json.id) && !clientOffered.some((c) => c.id === forAcmeConn.json.id), "a Client room offers the all-rooms one, not Acme's");
+  const clientAttach = await req(`${cb}/integrations`, { method: 'POST', body: { slug: 'm48gh' }, jar: me });
+  check(clientAttach.status === 201 && clientAttach.json?.id === forMeConn.json.id, 'A CLIENT ROOM ATTACHES THE ALL-ROOMS ONE (ADR 0043, amended 2026-10-14)');
+  check((await req(`${cb}/integrations`, { jar: me })).json?.mine?.some((m) => m.id === forMeConn.json.id), '…and resolves it');
+  const onlyAcme = await req('/me/connections', { method: 'POST', body: { slug: 'm48only', label: 'Acme only', url: 'https://example.com/mcp', teamId: acme.id }, jar: me });
+  const refused = await req(`${cb}/integrations`, { method: 'POST', body: { slug: 'm48only' }, jar: me });
+  check(onlyAcme.status === 201 && refused.status === 400 && /another organization only/.test(refused.json?.error ?? ''), 'A CONNECTION FOR ACME ONLY IS REFUSED IN A CLIENT ROOM, and it says so');
+  check(!((await req(`${pb}/integrations`, { jar: me })).json?.available ?? []).some((c) => c.id === onlyAcme.json.id), '…and a personal room does not offer it');
+  const everyone = (await req('/me/connections', { jar: me })).json?.connections ?? [];
+  check(everyone.some((c) => c.id === forMeConn.json.id) && everyone.some((c) => c.id === forAcmeConn.json.id) && everyone.some((c) => c.id === onlyAcme.json.id), 'Personal integrations lists every one with its scope');
 
   /* ---------------------------------------------- leaving an organization */
 

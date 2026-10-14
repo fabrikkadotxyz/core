@@ -66,7 +66,7 @@ export function PairPage() {
               <strong>Setup → Add my agent</strong>.
             </p>
             <p>
-              <Link to="/devices">Your devices</Link>
+              <Link to="/settings/devices">Your devices</Link>
             </p>
           </>
         )}

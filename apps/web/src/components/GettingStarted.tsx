@@ -58,7 +58,7 @@ export function GettingStarted() {
   const action = (id: GettingStartedStep) => {
     switch (id) {
       case 'computer':
-        return <Link className="button" to="/devices">Connect</Link>;
+        return <Link className="button" to="/settings/devices">Connect</Link>;
       case 'room':
         return <button onClick={startRoom} disabled={busy}>Start</button>;
       case 'agent':
@@ -67,11 +67,11 @@ export function GettingStarted() {
         }
         return <Link className="button" to={`/o/${state.room.ownerSlug}/s/${state.room.publicId}?add-agent=1`}>Add</Link>;
       case 'invite':
-        if (team) return <Link className="button" to={`/teams/${team.id}`}>Invite</Link>;
+        if (team) return <Link className="button" to="/settings/people">Invite</Link>;
         if (state.room) return <Link className="button" to={`/o/${state.room.ownerSlug}/s/${state.room.publicId}`}>Invite</Link>;
         return <span className="muted small">Start a room first</span>;
       case 'integration':
-        return <Link className="button" to="/integrations">Connect</Link>;
+        return <Link className="button" to="/settings/integrations">Connect</Link>;
     }
   };
 

@@ -318,38 +318,11 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         )}
       </section>
 
-      <section className="side-section" aria-label="Integrations">
-        <h2>Integrations</h2>
-        {team && (
-          <NavLink
-            to={`/teams/${team.id}/integrations`}
-            className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')}
-            onClick={onNavigate}
-          >
-            <span className="side-icon" aria-hidden>⚇</span>
-            <span className="side-label">Organization integrations</span>
-          </NavLink>
-        )}
-        <NavLink to="/integrations" className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
-          <span className="side-icon" aria-hidden>⚇</span>
-          <span className="side-label">Personal integrations</span>
-        </NavLink>
-        <NavLink to="/devices" className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
-          <span className="side-icon" aria-hidden>▣</span>
-          <span className="side-label">Your devices</span>
-        </NavLink>
-      </section>
-
       <div className="side-bottom">
-        {team && (
-          <NavLink to={`/teams/${team.id}`} className="side-item" onClick={onNavigate}>
-            <span className="side-icon" aria-hidden>⚙</span>
-            <span className="side-label">{team.name} — people</span>
-          </NavLink>
-        )}
-        <NavLink to="/appearance" className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
-          <span className="side-icon" aria-hidden>◐</span>
-          <span className="side-label">Appearance</span>
+        {/* Settings (2026-10-14): integrations, people, devices and appearance are tabs of one screen, not sidebar entries. */}
+        <NavLink to="/settings" className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
+          <span className="side-icon" aria-hidden>⚙</span>
+          <span className="side-label">Settings</span>
         </NavLink>
         <div className="side-user">
           <span className="muted small">@{user?.ownerSlug}</span>

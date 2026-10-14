@@ -6,6 +6,7 @@
  * refetch. See docs/decisions/0008-mentions-as-stable-markers.md.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { typingAttrs } from './typing.ts';
 import type { Mention, Participant } from '@fabrikka/types';
 
 const MARKER = /<@([0-9a-f-]{36})>/gi;
@@ -255,6 +256,8 @@ export function MentionComposer({
           onKeyDown={onKeyDown}
           placeholder={placeholder ?? 'Message everyone…  @ to mention'}
           autoComplete="off"
+          // Spelling and autocorrect follow Appearance → Typing on this device (off by default).
+          {...typingAttrs()}
           disabled={disabled}
         />
       </div>

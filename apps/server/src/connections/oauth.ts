@@ -54,6 +54,13 @@ export interface AuthServer {
   authorizationEndpoint: string;
   tokenEndpoint: string;
   registrationEndpoint: string | null;
+  /** What the server says it accepts, when it says (RFC 8414); null means unstated. */
+  grantTypesSupported: string[] | null;
+  tokenEndpointAuthMethodsSupported: string[] | null;
+}
+
+function stringList(v: unknown): string[] | null {
+  return Array.isArray(v) && v.every((x) => typeof x === 'string') ? (v as string[]) : null;
 }
 
 /** RFC 8414 metadata URL: the well-known path goes between the host and the issuer's path. */
@@ -94,6 +101,8 @@ export async function discover(mcpUrl: string): Promise<AuthServer> {
     authorizationEndpoint: safeUrl(meta.authorization_endpoint).href,
     tokenEndpoint: safeUrl(meta.token_endpoint).href,
     registrationEndpoint: typeof meta.registration_endpoint === 'string' ? safeUrl(meta.registration_endpoint).href : null,
+    grantTypesSupported: stringList(meta.grant_types_supported),
+    tokenEndpointAuthMethodsSupported: stringList(meta.token_endpoint_auth_methods_supported),
   };
 }
 
@@ -122,15 +131,21 @@ async function clientFor(db: Database, entry: CatalogueEntry, as: AuthServer, re
   if (!as.registrationEndpoint) throw new OAuthError(`${entry.name} needs a pre-registered client: it offers no dynamic registration`);
 
   // Per instance: the first person to connect registers it; everyone after reuses it.
+  // Ask only for what the server's metadata says it accepts: a public client with
+  // a refresh grant where it can (Atlassian, Notion), no refresh grant where there
+  // is none (ClickUp), a confidential client where "none" isn't offered (GitLab;
+  // tokenRequest then sends the secret it returns).
+  const grantTypes = ['authorization_code', 'refresh_token'].filter((g) => !as.grantTypesSupported || as.grantTypesSupported.includes(g));
+  const authMethod = !as.tokenEndpointAuthMethodsSupported || as.tokenEndpointAuthMethodsSupported.includes('none') ? 'none' : 'client_secret_post';
   const res = await fetch(as.registrationEndpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({
       client_name: 'Fabrikka',
       redirect_uris: [redirectUri],
-      grant_types: ['authorization_code', 'refresh_token'],
+      grant_types: grantTypes,
       response_types: ['code'],
-      token_endpoint_auth_method: 'none',
+      token_endpoint_auth_method: authMethod,
     }),
   });
   const reg = (await res.json().catch(() => ({}))) as { client_id?: string; client_secret?: string };

@@ -3,7 +3,10 @@
  * github.com/login/oauth — PKCE, no dynamic registration — so the instance needs
  * a GitHub OAuth App (docs/operations.md), and GitHub is absent until it has one.
  *
- * Presets are filled in from a real connection's tool list, not from docs.
+ * Presets, from the owner's real connection (49 tools, 2026-10-14). Read is everything that
+ * only looks. Write adds what creates or changes, and leaves out deleting,
+ * merging, forking, and anything that hands work to another agent or spends
+ * credits: those are granted by hand, tool by tool.
  */
 import type { CatalogueEntry } from './types.ts';
 
@@ -19,6 +22,52 @@ export const github: CatalogueEntry = {
     // From its resource metadata: what reading and changing repos and PRs needs.
     scopes: ['repo', 'read:org', 'read:user'],
     client: { idEnv: 'GITHUB_OAUTH_CLIENT_ID', secretEnv: 'GITHUB_OAUTH_CLIENT_SECRET' },
+  },
+  presets: {
+    read: [
+      'get_commit',
+      'get_file_contents',
+      'get_label',
+      'get_latest_release',
+      'get_me',
+      'get_release_by_tag',
+      'get_tag',
+      'get_team_members',
+      'get_teams',
+      'get_copilot_job_status',
+      'issue_read',
+      'list_branches',
+      'list_commits',
+      'list_issue_fields',
+      'list_issue_types',
+      'list_issues',
+      'list_pull_requests',
+      'list_releases',
+      'list_repository_collaborators',
+      'list_tags',
+      'pull_request_read',
+      'search_code',
+      'search_commits',
+      'search_issues',
+      'search_pull_requests',
+      'search_repositories',
+      'search_users',
+    ],
+    write: [
+      'add_comment_to_pending_review',
+      'add_issue_comment',
+      'add_reply_to_pull_request_comment',
+      'create_branch',
+      'create_or_update_file',
+      'create_pull_request',
+      'issue_write',
+      'pull_request_review_write',
+      'push_files',
+      'sub_issue_write',
+      'update_issue_comment',
+      'update_pull_request',
+      'update_pull_request_branch',
+    ],
   },
   keywords: ['git', 'repos', 'repositories', 'pull requests', 'prs', 'code review'],
   // Simple Icons 13.21.0 (CC0), "github".

@@ -1,10 +1,12 @@
 /**
- * The frame every signed-in page lives in (M28): the sidebar on the left, the
- * page on the right. On a narrow screen the sidebar is a drawer.
+ * The frame every signed-in page lives in (M28): on the left the icon rail of
+ * places and the list for the place you are in (M51, ADR 0048), the page on
+ * the right. On a narrow screen the rail and the list are one drawer.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar.tsx';
+import { placeOfPath, Rail, type Place } from './Rail.tsx';
 import { useWorkspace } from './workspace.tsx';
 
 /** M36: the sidebar's width — dragged, remembered, bounded. */
@@ -96,7 +98,29 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const side = useSidebarWidth();
   const location = useLocation();
+  const navigate = useNavigate();
   const { sessions, team, selectTeam, refresh } = useWorkspace();
+
+  /*
+   * ADR 0048: the place follows the page. Clicking another place while a room
+   * (or the home) is open changes the list, not the page: that pick is kept
+   * for this address only, so the next page shows its own place again. From
+   * any other page, Sessions and Chats go home with that list shown.
+   */
+  const [pick, setPick] = useState<{ path: string; place: Place } | null>(null);
+  const asked = (location.state as { place?: Place } | null)?.place;
+  const place: Place = pick?.path === location.pathname ? pick.place : location.pathname === '/' && asked ? asked : placeOfPath(location.pathname, sessions);
+  const pickPlace = (p: Place) => {
+    const isRoom = /^\/o\//.test(location.pathname);
+    if (p === 'integrations' || p === 'settings') {
+      if (place !== p) navigate(`/${p}`);
+      setDrawer(false);
+    } else if (isRoom || location.pathname === '/') {
+      setPick({ path: location.pathname, place: p });
+    } else {
+      navigate('/', { state: { place: p } });
+    }
+  };
   // ADR 0041: the last write a deployment refused, shown until dismissed.
   const [gated, setGated] = useState<{ text: string; url?: string } | null>(null);
   useEffect(() => {
@@ -121,7 +145,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className={drawer ? 'shell drawer-open' : 'shell'} style={{ '--side-w': `${side.width}px` } as React.CSSProperties}>
-      <Sidebar onNavigate={() => setDrawer(false)} />
+      <div className="side-stack">
+        <Rail place={place} onPick={pickPlace} />
+        <Sidebar place={place} onNavigate={() => setDrawer(false)} />
+      </div>
       {side.handle}
       {drawer && <button className="shell-backdrop" aria-label="Close menu" onClick={() => setDrawer(false)} />}
       <div className="shell-main">

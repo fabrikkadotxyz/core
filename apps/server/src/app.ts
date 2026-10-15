@@ -870,13 +870,13 @@ export function createApp(options: CreateAppOptions = {}) {
       return c.json({ error: 'not authenticated' }, 401);
     }
     const fail = (message: string) =>
-      viaHandoff ? c.html(failedPage(message), 400) : c.redirect(`/settings/integrations?error=${encodeURIComponent(message)}`);
+      viaHandoff ? c.html(failedPage(message), 400) : c.redirect(`/integrations?error=${encodeURIComponent(message)}`);
 
     if (error) return fail(error_description ?? error);
     if (!code || !state) return fail('the vendor sent no code back');
     try {
       const { entry, teamId } = await completeFlow(db, { userId: user?.id ?? null, code, state, publicUrl: PUBLIC_URL });
-      const back = `/settings/integrations?connected=${encodeURIComponent(entry.id)}${teamId ? `&team=${encodeURIComponent(teamId)}` : ''}`;
+      const back = `/integrations?connected=${encodeURIComponent(entry.id)}${teamId ? `&team=${encodeURIComponent(teamId)}` : ''}`;
       return viaHandoff ? c.html(donePage(entry.name)) : c.redirect(back);
     } catch (err) {
       if (err instanceof OAuthError) return fail(err.message);

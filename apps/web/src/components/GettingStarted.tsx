@@ -71,7 +71,7 @@ export function GettingStarted() {
         if (state.room) return <Link className="button" to={`/o/${state.room.ownerSlug}/s/${state.room.publicId}`}>Invite</Link>;
         return <span className="muted small">Start a room first</span>;
       case 'integration':
-        return <Link className="button" to="/settings/integrations">Connect</Link>;
+        return <Link className="button" to="/integrations">Connect</Link>;
     }
   };
 

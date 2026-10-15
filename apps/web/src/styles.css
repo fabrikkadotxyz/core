@@ -1682,8 +1682,9 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 .filter { width: 100%; margin: 4px 0 12px; }
 
 @media (max-width: 900px) {
-  .sidebar { position: fixed; z-index: 40; left: 0; top: 0; transform: translateX(-100%); transition: transform 0.15s ease; }
-  .shell.drawer-open .sidebar { transform: none; }
+  /* M51: the rail and the list are one drawer. */
+  .side-stack { position: fixed; z-index: 40; left: 0; top: 0; transform: translateX(-100%); transition: transform 0.15s ease; }
+  .shell.drawer-open .side-stack { transform: none; }
   .shell-backdrop { display: block; position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.5); border: 0; }
   .shell-menu {
     display: block; position: fixed; z-index: 20; top: 8px; left: 8px;
@@ -1807,7 +1808,7 @@ label.check input { margin-top: 3px; width: auto; flex: 0 0 auto; }
 .shell { --side-w: 248px; position: relative; }
 .sidebar { width: var(--side-w); flex-basis: var(--side-w); }
 .side-resize {
-  position: absolute; top: 0; left: calc(var(--side-w) - 3px); width: 7px; height: 100%; z-index: 5; cursor: col-resize;
+  position: absolute; top: 0; left: calc(var(--rail-w) + var(--side-w) - 3px); width: 7px; height: 100%; z-index: 5; cursor: col-resize;
   background: transparent; border: 0; padding: 0;
 }
 .side-resize::after {
@@ -2431,8 +2432,6 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
 }
 
 /* -------------------------------------------------- Settings: one screen, tabs (2026-10-14) */
-.settings-tabs { flex-wrap: wrap; margin: 0 0 1.25rem; }
-.settings-tabs .tab { text-decoration: none; }
 
 /* ------------------------------------- M49: the output in its own tab (ADR 0045) */
 .output-only-head {
@@ -2504,3 +2503,36 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
 .room-name { display: flex; gap: 0.5rem; align-items: center; }
 .room-name input { flex: 1; min-width: 0; }
 .danger-zone { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+
+/* ---- M51: the icon rail of places (ADR 0048) ---- */
+/* Painted with the sidebar's own tokens: no new token for themes. */
+.shell { --rail-w: 64px; }
+.side-stack { display: flex; flex: 0 0 auto; height: 100vh; }
+.rail-nav {
+  width: var(--rail-w); flex: 0 0 var(--rail-w); height: 100vh; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 0;
+  background: var(--side-bg); color: var(--side-muted); border-right: 1px solid var(--side-border);
+}
+.rail-home { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; margin-bottom: 6px; color: var(--side-strong); }
+.rail-home:hover { background: var(--side-hover); }
+.rail-place {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; width: 56px; padding: 6px 0; border-radius: 8px;
+  background: none; border: 0; cursor: pointer; font: inherit; color: var(--side-muted);
+}
+.rail-place:hover { background: var(--side-hover); color: var(--side-strong); }
+.rail-place.on { background: var(--side-selected); color: var(--side-strong); }
+.rail-icon { position: relative; display: grid; place-items: center; width: 24px; height: 24px; }
+.rail-icon svg { width: 21px; height: 21px; }
+.rail-label { font-size: 0.6rem; letter-spacing: 0; text-transform: none; line-height: 1; }
+.rail-count {
+  position: absolute; top: -7px; right: -11px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--radius-pill);
+  display: grid; place-items: center; font-size: 0.62rem; font-weight: 700; line-height: 1; color: #ffffff; background: var(--grad-attention);
+  box-shadow: 0 0 0 2px var(--side-bg);
+}
+.rail-dot { position: absolute; top: -2px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--grad-attention); box-shadow: 0 0 0 2px var(--side-bg); }
+.rail-spacer { flex: 1; }
+.rail-account {
+  width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer; font: inherit; font-weight: 700; font-size: 0.8rem;
+  display: grid; place-items: center; background: var(--side-selected); color: var(--side-strong); border: 1px solid var(--side-border);
+}
+.rail-account:hover { background: var(--side-hover); }

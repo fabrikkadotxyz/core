@@ -1259,6 +1259,10 @@ decision, with who decided and when, and opens in any editor.
   forward there, so links in notices and docs keep working, and the OAuth
   callback comes back to the Personal integrations tab. One click more on each
   of those paths; all stay within five.
+- **Superseded in M51 (2026-10-15, ADR 0048):** the sidebar became an icon
+  rail of four places (Sessions · Chats · Integrations · Settings) with the
+  list for one place beside it. Integrations live at `/integrations`; the
+  settings addresses above forward there.
 - "Most recently active" means the latest message, or the session's creation if
   it has none. Fabrikka doesn't track who looked at what beyond your own read
   position (M24).
@@ -2274,6 +2278,69 @@ invite on the core):
    stack, nothing is clipped.
 
 **Clicks:** 3 for an invite link, 4 for an agent, 3 to attach a connection.
+
+## M51 — The workspace: an icon rail of four places
+
+> **Built 2026-10-15** ([ADR 0048](decisions/0048-the-workspace-is-an-icon-rail-of-four-places.md)).
+>
+> The sidebar M28 built grew by accretion: switcher, Home, chats, five sessions
+> and a link, direct messages, personal sessions, Settings. Sessions and chats
+> are different kinds of work (ADR 0026) sharing one column; integrations are
+> a place people go to, filed as a settings tab. This gives the shell the shape
+> chat tools have: places on the left, the list for the place beside it.
+
+- **An icon rail at the far left: Sessions · Chats · Integrations · Settings.**
+  The Fabrikka mark above them is Home; the account is at the bottom. Fixed
+  width, never scrolls. Sessions and Chats show the *needs you* number for
+  rooms of their kind (M42) and a dot when one is unread.
+- **The list beside it is the resizable column of M36**, now showing one place
+  at a time, with the organization switcher always at its top:
+  - *Sessions*: Home; the organization's active sessions, **all of them**,
+    newest activity first, **+** to start one, *All organization sessions*
+    for the archived ones and the filter; *Personal sessions* with its **+**.
+  - *Chats*: the organization's chats, *Add a chat*; *Direct messages*, *New
+    message*.
+  - *Integrations*: *Personal*, and the organization's.
+  - *Settings*: *People*, *Your devices*, *Appearance*; below, who you are,
+    *Sign out*, the source link.
+- **The place follows the page**: a session under Sessions, a chat or direct
+  message under Chats, and so on. **Clicking a place while a room is open
+  changes the list, not the page**; from Settings or Integrations, Sessions
+  and Chats go home with that list shown.
+- **Integrations move to `/integrations` and `/integrations/organization`.**
+  `/settings/integrations` and `/settings/organization` forward there with
+  their query, so the OAuth callback (now sent to `/integrations`) and old
+  notices keep working. `/settings` opens *People* (or *Your devices* with no
+  organization). The Settings screen loses its own tab row: the list is the
+  navigation.
+- **Nothing new is permitted, and no new API.** The rail arranges what the
+  sidebar showed. Themes paint it with the sidebar's tokens.
+- On a phone the rail and the list are one drawer.
+
+**Test:**
+1. Sign in. The rail shows four places with Sessions lit; the list shows Home,
+   the organization's sessions (more than five if you have them) and your
+   personal ones.
+2. Click **Chats**: the list becomes chats and direct messages, the page does
+   not change. Click *#general*: it opens; Chats stays lit. Reload: still
+   Chats.
+3. Open a session from a chat's link, or the address bar: Sessions lights up.
+4. Click **Integrations**: *Personal* opens, the list offers the organization's.
+   Connect a vendor: it comes back to the same page with its notice.
+   **Integrations is 1 click from anywhere.**
+5. Click **Settings**: *People* opens; *Your devices* and *Appearance* are a
+   click each. *Sign out* is at the bottom of the list.
+6. Switch organization in the list: Sessions, Chats, the organization's
+   integrations and People follow it.
+7. Something needs you in a chat while you are in a session: the Chats icon
+   shows the number; opening the chat clears it.
+8. Drag the list's edge: it resizes as in M36; the rail does not. Narrow to a
+   phone width: the menu button opens a drawer with the rail and the list;
+   nothing is clipped.
+9. Try the six themes: the rail is readable in each.
+
+**Clicks:** 1 to Integrations from anywhere; 2 to a chat from a session
+(Chats, then the chat); 2 to any settings page.
 
 ## Later — Resuming offline agents
 

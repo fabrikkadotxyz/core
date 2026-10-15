@@ -1,9 +1,12 @@
 /**
- * The sidebar (M28): a team switcher, the team's recent sessions, your personal
- * sessions and your integrations — beside every page, so moving between pieces
- * of work never means going back to a list.
+ * The list beside the icon rail (M28, reshaped in M51 by ADR 0048): the
+ * organization switcher at the top, then what belongs to the place you are in.
+ * Sessions: Home, the organization's sessions, your personal ones. Chats: the
+ * organization's chats and your direct messages. Integrations and Settings:
+ * their pages, one row each. Beside every page, so moving between pieces of
+ * work never means going back to a list.
  *
- * It shows exactly what the session list already showed, arranged by team. No
+ * It shows exactly what the session list already showed, arranged by place. No
  * new permission lives here.
  */
 import { Select, TeamInitial } from '../components/Select.tsx';
@@ -13,6 +16,7 @@ import type { SessionSummary } from '@fabrikka/types';
 import { chats, sessions as sessionsApi } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { byActivity, useWorkspace } from './workspace.tsx';
+import { PLACE_LABEL, type Place } from './Rail.tsx';
 import { askPermission, bannerDismissed, dismissBanner, permission } from '../notify.ts';
 
 /**
@@ -50,8 +54,6 @@ function NotifyOffer({ total }: { total: number }) {
  * a rebuild, so it's a build setting: VITE_SOURCE_URL.
  */
 const SOURCE_URL = import.meta.env.VITE_SOURCE_URL || 'https://github.com/fabrikkadotxyz/core';
-
-const RECENT = 5;
 
 function SessionLink({ s, onNavigate }: { s: SessionSummary; onNavigate: () => void }) {
   const { needsYou } = useWorkspace();
@@ -210,7 +212,16 @@ function NewDirect({ onOpened }: { onOpened: (s: SessionSummary) => void }) {
   );
 }
 
-export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
+/** A page of a place, one row: Integrations and Settings list theirs here. */
+function PageLink({ to, label, onNavigate, end }: { to: string; label: string; onNavigate: () => void; end?: boolean }) {
+  return (
+    <NavLink to={to} end={end} className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
+      <span className="side-label">{label}</span>
+    </NavLink>
+  );
+}
+
+export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () => void }) {
   const { user, signOut } = useAuth();
   const { sessions, teams, team, selectTeam, needsYou } = useWorkspace();
   const navigate = useNavigate();
@@ -220,7 +231,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
 
   const { refresh } = useWorkspace();
   const active = sessions.filter((s) => s.status === 'active');
-  // Sessions and chats are different things (ADR 0026): each has its own section.
+  // Sessions and chats are different things (ADR 0026): each is a place of its own (ADR 0048).
   const work = active.filter((s) => (s.kind ?? 'session') === 'session');
   const teamSessions = team ? work.filter((s) => s.team?.id === team.id).sort(byActivity) : [];
   const personal = work.filter((s) => !s.team).sort(byActivity);
@@ -235,9 +246,10 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
     navigate(`/o/${s.ownerSlug}/s/${s.publicId}`);
     onNavigate();
   };
+  const rooms = place === 'sessions' || place === 'chats';
 
   return (
-    <nav className="sidebar" aria-label="Workspace">
+    <nav className="sidebar" aria-label={PLACE_LABEL[place]}>
       <div className="side-top">
         {teams.length > 0 ? (
           <Select
@@ -252,23 +264,57 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             }))}
             onChange={(id) => {
               selectTeam(id || null);
-              navigate('/');
+              // A page about the organization follows it; a room does not belong to the new one.
+              if (rooms) navigate('/');
               onNavigate();
             }}
           />
-        ) : null}
-        {teams.length > 0 && otherTeamsNeedYou ? <span className="side-team-dot" role="status" aria-label="Another organization needs you" title="Another organization needs you" /> : null}
-        {teams.length > 0 ? null : (
-          <strong className="side-brand">Fabrikka</strong>
+        ) : (
+          <strong className="side-brand">{PLACE_LABEL[place]}</strong>
         )}
-        <NotifyOffer total={sessions.reduce((n, s) => n + needsYou(s), 0)} />
-        <NavLink to="/" end className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
-          <span className="side-icon" aria-hidden>⌂</span>
-          <span className="side-label">Home</span>
-        </NavLink>
+        {teams.length > 0 && otherTeamsNeedYou ? <span className="side-team-dot" role="status" aria-label="Another organization needs you" title="Another organization needs you" /> : null}
+        {rooms && <NotifyOffer total={sessions.reduce((n, s) => n + needsYou(s), 0)} />}
+        {place === 'sessions' && (
+          <NavLink to="/" end className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
+            <span className="side-icon" aria-hidden>⌂</span>
+            <span className="side-label">Home</span>
+          </NavLink>
+        )}
       </div>
 
-      {team && (
+      {place === 'sessions' && team && (
+        <section className="side-section" aria-label="Organization sessions">
+          <SectionHead title="Organization sessions" label={`New session in ${team.name}`} onAdd={() => setCreating('team')} />
+          <NewSession teamId={team.id} open={creating === 'team'} onClose={() => setCreating(null)} onCreated={open} />
+          {teamSessions.length === 0 && <p className="side-empty">No sessions in {team.name} yet.</p>}
+          {teamSessions.map((s) => (
+            <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
+          ))}
+          <NavLink
+            to={`/teams/${team.id}/sessions`}
+            className={({ isActive }) => (isActive ? 'side-item side-more on' : 'side-item side-more')}
+            onClick={onNavigate}
+          >
+            All, archived too
+          </NavLink>
+        </section>
+      )}
+
+      {place === 'sessions' && (
+        <section className="side-section" aria-label="Personal sessions">
+          <SectionHead title="Personal sessions" label="New personal session" onAdd={() => setCreating('personal')} />
+          <NewSession teamId={null} open={creating === 'personal'} onClose={() => setCreating(null)} onCreated={open} />
+          {personal.length === 0 && <p className="side-empty">Sessions in no organization show here.</p>}
+          {personal.map((s) => (
+            <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
+          ))}
+          <NavLink to="/sessions?personal=1" className="side-item side-more" onClick={onNavigate}>
+            All, archived too
+          </NavLink>
+        </section>
+      )}
+
+      {place === 'chats' && team && (
         <section className="side-section" aria-label="Organization chats">
           <h2>Organization chats</h2>
           {teamChats.map((s) => (
@@ -278,63 +324,47 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         </section>
       )}
 
-      {team && (
-        <section className="side-section" aria-label="Organization sessions">
-          <SectionHead title="Organization sessions" label={`New session in ${team.name}`} onAdd={() => setCreating('team')} />
-          <NewSession teamId={team.id} open={creating === 'team'} onClose={() => setCreating(null)} onCreated={open} />
-          {teamSessions.length === 0 && <p className="side-empty">No sessions in {team.name} yet.</p>}
-          {teamSessions.slice(0, RECENT).map((s) => (
+      {place === 'chats' && (
+        <section className="side-section" aria-label="Direct messages">
+          <h2>Direct messages</h2>
+          {directs.map((s) => (
             <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
           ))}
-          <NavLink
-            to={`/teams/${team.id}/sessions`}
-            className={({ isActive }) => (isActive ? 'side-item side-more on' : 'side-item side-more')}
-            onClick={onNavigate}
-          >
-            All organization sessions{teamSessions.length > RECENT ? ` (${teamSessions.length})` : ''}
-          </NavLink>
+          <NewDirect onOpened={open} />
         </section>
       )}
 
-      <section className="side-section" aria-label="Direct messages">
-        <h2>Direct messages</h2>
-        {directs.slice(0, 8).map((s) => (
-          <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
-        ))}
-        <NewDirect onOpened={open} />
-      </section>
+      {place === 'integrations' && (
+        <section className="side-section" aria-label="Integrations">
+          <h2>Connections</h2>
+          <PageLink to="/integrations" end label="Personal" onNavigate={onNavigate} />
+          {team && <PageLink to="/integrations/organization" label={`${team.name}'s`} onNavigate={onNavigate} />}
+        </section>
+      )}
 
-      <section className="side-section" aria-label="Personal sessions">
-        <SectionHead title="Personal sessions" label="New personal session" onAdd={() => setCreating('personal')} />
-        <NewSession teamId={null} open={creating === 'personal'} onClose={() => setCreating(null)} onCreated={open} />
-        {personal.length === 0 && <p className="side-empty">Sessions in no organization show here.</p>}
-        {personal.slice(0, 8).map((s) => (
-          <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
-        ))}
-        {personal.length > 8 && (
-          <NavLink to="/sessions?personal=1" className="side-item side-more" onClick={onNavigate}>
-            All personal sessions ({personal.length})
-          </NavLink>
-        )}
-      </section>
+      {place === 'settings' && (
+        <section className="side-section" aria-label="Settings">
+          <h2>Settings</h2>
+          {team && <PageLink to="/settings/people" label="People" onNavigate={onNavigate} />}
+          <PageLink to="/settings/devices" label="Your devices" onNavigate={onNavigate} />
+          <PageLink to="/settings/appearance" label="Appearance" onNavigate={onNavigate} />
+        </section>
+      )}
 
-      <div className="side-bottom">
-        {/* Settings (2026-10-14): integrations, people, devices and appearance are tabs of one screen, not sidebar entries. */}
-        <NavLink to="/settings" className={({ isActive }) => (isActive ? 'side-item on' : 'side-item')} onClick={onNavigate}>
-          <span className="side-icon" aria-hidden>⚙</span>
-          <span className="side-label">Settings</span>
-        </NavLink>
-        <div className="side-user">
-          <span className="muted small">@{user?.ownerSlug}</span>
-          <span className="spacer" />
-          <button className="link small" onClick={signOut}>
-            Sign out
-          </button>
+      {place === 'settings' && (
+        <div className="side-bottom">
+          <div className="side-user">
+            <span className="muted small">@{user?.ownerSlug}</span>
+            <span className="spacer" />
+            <button className="link small" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
+          <a className="side-source" href={SOURCE_URL} target="_blank" rel="noreferrer noopener">
+            Source code · AGPL-3.0
+          </a>
         </div>
-        <a className="side-source" href={SOURCE_URL} target="_blank" rel="noreferrer noopener">
-          Source code · AGPL-3.0
-        </a>
-      </div>
+      )}
     </nav>
   );
 }

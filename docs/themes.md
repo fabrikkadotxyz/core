@@ -149,6 +149,10 @@ isn't the default: an account that hasn't chosen gets **Fabrikka**.
 | `--side-field` | Inputs and the team switcher inside it |
 | `--side-shadow` | Its edge shadow |
 
+The icon rail of places beside it (M51, ADR 0048) is painted with these same
+tokens: `--side-bg` behind it, `--side-muted` and `--side-strong` for its icons,
+`--side-selected` under the current place. It adds no token.
+
 ### Surfaces
 
 | Token | Used for |

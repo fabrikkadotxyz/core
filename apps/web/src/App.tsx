@@ -10,6 +10,7 @@ import { HomePage } from './pages/HomePage.tsx';
 import { PairPage } from './pages/PairPage.tsx';
 import { AppShell } from './shell/AppShell.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
+import { IntegrationsHubPage } from './pages/IntegrationsHubPage.tsx';
 import { OutputPage } from './pages/OutputPage.tsx';
 import { useWorkspace, WorkspaceProvider } from './shell/workspace.tsx';
 import { SessionPage } from './pages/SessionPage.tsx';
@@ -37,14 +38,16 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/sessions" element={<AllSessionsPage />} />
           <Route path="/teams/:id/sessions" element={<AllSessionsPage />} />
-          {/* Settings (2026-10-14): one screen with tabs. The pages' old addresses forward to their tab. */}
+          {/* M51 (ADR 0048): Integrations is a place of its own; Settings is People, Your devices, Appearance.
+              Every older address forwards, with its query, so notices and the OAuth callback keep working. */}
+          <Route path="/integrations" element={<IntegrationsHubPage scope="personal" />} />
+          <Route path="/integrations/organization" element={<IntegrationsHubPage scope="organization" />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/:tab" element={<SettingsPage />} />
-          <Route path="/integrations" element={<Moved to="/settings/integrations" />} />
           <Route path="/devices" element={<Moved to="/settings/devices" />} />
           <Route path="/appearance" element={<Moved to="/settings/appearance" />} />
-          <Route path="/teams/:id" element={<MovedToOrganization tab="people" />} />
-          <Route path="/teams/:id/integrations" element={<MovedToOrganization tab="organization" />} />
+          <Route path="/teams/:id" element={<MovedToOrganization to="/settings/people" />} />
+          <Route path="/teams/:id/integrations" element={<MovedToOrganization to="/integrations/organization" />} />
           <Route path="/pair/:code" element={<PairPage />} />
           <Route path="/o/:owner/s/:session" element={<SessionPage />} />
         </Route>
@@ -97,12 +100,12 @@ function Moved({ to }: { to: string }) {
   return <Navigate to={to + search} replace />;
 }
 
-/** An organization's page that moved into Settings: choose that organization in the sidebar, then forward. */
-function MovedToOrganization({ tab }: { tab: 'people' | 'organization' }) {
+/** An organization's old page: choose that organization in the switcher, then forward to where it lives now. */
+function MovedToOrganization({ to }: { to: string }) {
   const { id } = useParams();
   const { team, selectTeam } = useWorkspace();
   useEffect(() => {
     if (id && team?.id !== id) selectTeam(id);
   }, [id, team, selectTeam]);
-  return <Navigate to={`/settings/${tab}`} replace />;
+  return <Navigate to={to} replace />;
 }

@@ -2265,7 +2265,7 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
         <p className="muted small">No connections yet. Agents here can use only what you attach.</p>
       )}
       <p className="muted small">
-        <Link to="/settings/integrations">Add a connection</Link> in Settings, then attach it here.
+        <Link to="/integrations">Add a connection</Link> in Integrations, then attach it here.
       </p>
 
       {/* M50: the by-hand form is for the rare server with no catalogue entry; closed until asked for. */}

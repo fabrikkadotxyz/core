@@ -2478,3 +2478,29 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
   line-height: 1;
 }
 .tab-close:hover { color: var(--text); }
+
+/* ------------------------------------------------- M50: Setup, one question at a time */
+.setup-tabs {
+  margin: -0.5rem 0 0;
+  flex-wrap: wrap;
+}
+/* Blocks inside a Setup tab breathe: a list, then its button, then its switch. */
+.rail.setup .panel > * + * { margin-top: 0.85rem; }
+.rail.setup .panel > .participants + .side-form-row { margin-top: 0.75rem; }
+.setup-tabs { gap: 0; }
+.setup-tabs .tab { white-space: nowrap; font-size: 0.72rem; letter-spacing: 0.04em; padding: 0.4rem 0.45rem; }
+/* A row with an action at its end never wraps: the muted middle gives way with an ellipsis. */
+.participants li:has(.row-end) { flex-wrap: nowrap; }
+.participants li:has(.row-end) > .muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.participants li:has(.row-end) > span:first-child { white-space: nowrap; }
+.tab-count { margin-left: 0.3rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tab.on .tab-count { color: var(--text); }
+/* A row's action sits at its right edge, so a long label never pushes it onto a new line. */
+.participants li .row-end { margin-left: auto; display: inline-flex; gap: 0.5rem; align-items: center; white-space: nowrap; }
+.participants li .role { color: var(--muted); font-size: 0.75rem; }
+.setup-disclosure { margin: 0.25rem 0; }
+.setup-disclosure summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+.setup-disclosure[open] summary { margin-bottom: 0.5rem; }
+.room-name { display: flex; gap: 0.5rem; align-items: center; }
+.room-name input { flex: 1; min-width: 0; }
+.danger-zone { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }

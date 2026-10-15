@@ -424,6 +424,10 @@ export interface Member {
   role: SessionRole;
   /** True when this access came from the team roster (M21): leaving the team ends it. */
   viaTeam?: boolean;
+  /** M50: their participant in this session, so People is one list; null for a member with no participant yet. */
+  participantId?: string | null;
+  /** M50: the name they go by in this session (a rename is per session). */
+  participantName?: string | null;
 }
 
 export interface SessionSummary {

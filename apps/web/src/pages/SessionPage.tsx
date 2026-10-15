@@ -80,8 +80,14 @@ function RoomNotify({ ref_ }: { ref_: SessionRef }) {
 /** The editor is most of the bundle; load it when a document is first opened. */
 const OutputView = lazy(() => import('../outputs/OutputView.tsx'));
 
+/** M50: Setup shows one of four tabs at a time. */
+export type SetupTab = 'people' | 'agents' | 'tools' | 'room';
+const SETUP_TABS: SetupTab[] = ['people', 'agents', 'tools', 'room'];
+
 interface PaneState {
   setup: boolean;
+  /** The Setup tab last used in this room (M50). */
+  setupTab: SetupTab;
   output: boolean;
   /** Width of the output rail, in px. See `clampWidth`. */
   outputWidth: number;
@@ -97,6 +103,7 @@ interface PaneState {
 /** Setup is a one-time job; the conversation is the hour-long one. */
 const PANES_DEFAULT: PaneState = {
   setup: false,
+  setupTab: 'people',
   output: true,
   outputWidth: 320,
   docWidth: 0, // 0 = "as wide as allowed", resolved by clampWidth
@@ -155,6 +162,7 @@ export function usePanes(
       const parsed = JSON.parse(raw) as Partial<PaneState>;
       return {
         setup: typeof parsed.setup === 'boolean' ? parsed.setup : PANES_DEFAULT.setup,
+        setupTab: SETUP_TABS.includes(parsed.setupTab as SetupTab) ? (parsed.setupTab as SetupTab) : PANES_DEFAULT.setupTab,
         output: typeof parsed.output === 'boolean' ? parsed.output : PANES_DEFAULT.output,
         // Re-clamped on read: a width stored on a wide monitor is not a width
         // that works on the laptop this tab is open on.
@@ -311,7 +319,8 @@ export function SessionPage() {
   const [startAdding] = useState(() => searchParams.has('add-agent'));
   useEffect(() => {
     if (!startAdding) return;
-    setPanes((prev) => ({ ...prev, setup: true }));
+    // M50: Setup opens on its Agents tab, since that is where the adding happens.
+    setPanes((prev) => ({ ...prev, setup: true, setupTab: 'agents' }));
     setSearchParams((p) => {
       p.delete('add-agent');
       return p;
@@ -540,12 +549,15 @@ export function SessionPage() {
     await sessions.postMessage(ref, content, mentions);
   };
 
-  const rename = async () => {
-    const next = window.prompt('Rename session', view.session.title);
-    if (!next?.trim()) return;
-    await sessions.update(ref, { title: next.trim() });
-    reload();
-  };
+  // M50: which Setup tabs this room offers, and the one shown. A chat has no
+  // tools and no room settings (ADR 0026); only the owner has Room.
+  const setupTabs: { key: SetupTab; label: string; count?: number }[] = [
+    { key: 'people', label: 'People', count: view.members.length + (view.guests?.length ?? 0) },
+    { key: 'agents', label: 'Agents', count: view.participants.filter((p) => p.kind === 'agent').length },
+    ...(!isChat ? [{ key: 'tools' as const, label: 'Tools' }] : []),
+    ...(!isChat && isOwner ? [{ key: 'room' as const, label: 'Room' }] : []),
+  ];
+  const setupTab: SetupTab = setupTabs.some((t) => t.key === panes.setupTab) ? panes.setupTab : 'people';
 
   const toggleArchive = async () => {
     const status = view.session.status === 'archived' ? 'active' : 'archived';
@@ -569,46 +581,25 @@ export function SessionPage() {
         */}
         {!isViewer && (
         <aside className="rail setup" aria-label="Session setup" aria-hidden={!panes.setup}>
-          <Panel title="Participants">
-            <ul className="participants">
-              {view.participants.map((p: Participant) => (
-                <li key={p.id}>
-                  <span>{p.kind === 'agent' ? '🤖' : '👤'}</span>
-                  <span>@{p.displayName}</span>
-                  {p.kind === 'agent' && (
-                    <span className={`presence ${p.status ?? 'offline'}`}>
-                      {p.status ?? 'offline'}
-                    </span>
-                  )}
-                  {p.id === view.me.participantId && <em className="small">you</em>}
-                  {(p.id === view.me.participantId || isOwner) && (
-                    <button
-                      className="link small"
-                      onClick={async () => {
-                        const next = window.prompt(
-                          `Rename @${p.displayName} in this session`,
-                          p.displayName,
-                        );
-                        if (!next?.trim() || next.trim() === p.displayName) return;
-                        try {
-                          await sessions.renameParticipant(ref, p.id, next.trim());
-                          reload();
-                        } catch (err) {
-                          window.alert((err as Error).message);
-                        }
-                      }}
-                    >
-                      rename
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <p className="hint">
-              Renaming updates every message that mentioned them, including old
-              ones.
-            </p>
-          </Panel>
+          {/* M50: one question at a time. People · Agents · Tools · Room; the tab last used is remembered per room. */}
+          <nav className="tabs setup-tabs" role="tablist" aria-label="Setup">
+            {setupTabs.map((t) => (
+              <button
+                key={t.key}
+                role="tab"
+                aria-selected={setupTab === t.key}
+                className={setupTab === t.key ? 'tab on' : 'tab'}
+                onClick={() => setPanes((prev) => ({ ...prev, setupTab: t.key }))}
+              >
+                {t.label}
+                {t.count !== undefined && t.count > 0 && <span className="tab-count">{t.count}</span>}
+              </button>
+            ))}
+          </nav>
+
+          {setupTab === 'people' && (
+            <PeoplePanel ref_={ref} view={view} isOwner={isOwner} isChat={isChat} myUserId={user?.id} onChanged={reload} />
+          )}
 
           {/*
             ANY member may add their own agent — the server has allowed it since
@@ -616,105 +607,20 @@ export function SessionPage() {
             This panel was gated on isOwner until M11, which made it impossible
             through the UI.
           */}
-          <AgentsPanel
-            ref_={ref}
-            onChanged={reload}
-            isOwner={isOwner}
-            myUserId={user?.id}
-            startAdding={startAdding}
-          />
-
-          {!isChat && <IntegrationsPanel ref_={ref} isOwner={isOwner} />}
-
-          <Panel title={`Members (${view.members.length})`}>
-            <ul className="participants">
-              {view.members.map((m) => (
-                <li key={m.userId}>
-                  <span>{m.displayName}</span>
-                  <span className="muted small">
-                    {m.role}
-                    {m.viaTeam && <span title="Added from the organization. Leaving the organization ends this access."> · via organization</span>}
-                  </span>
-                  {isOwner && m.userId !== user?.id && kind !== 'chat' && (
-                    <button
-                      className="link small"
-                      onClick={async () => {
-                        await sessions.removeMember(ref, m.userId);
-                        reload();
-                      }}
-                    >
-                      remove
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Panel>
-
-          {!isChat && isOwner && !!view.guests?.length && (
-            <Panel title={`Guests (${view.guests.length})`}>
-              <p className="muted small">They can read this session and nothing else.</p>
-              <ul className="participants">
-                {view.guests.map((g) => (
-                  <li key={g.userId}>
-                    <span>{g.displayName}</span>
-                    <span className="muted small">view only</span>
-                    <button
-                      className="link small"
-                      onClick={async () => {
-                        await sessions.removeGuest(ref, g.userId);
-                        reload();
-                      }}
-                    >
-                      remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </Panel>
+          {setupTab === 'agents' && (
+            <AgentsPanel
+              ref_={ref}
+              onChanged={reload}
+              isOwner={isOwner}
+              myUserId={user?.id}
+              startAdding={startAdding}
+            />
           )}
 
-          {!isChat && <TeamPanel ref_={ref} isOwner={isOwner} onChanged={reload} visibility={view.visibility} />}
+          {setupTab === 'tools' && !isChat && <IntegrationsPanel ref_={ref} isOwner={isOwner} />}
 
-          {!isChat && isOwner && <InvitesPanel ref_={ref} />}
-
-          {!isChat && isOwner && (
-            <Panel title="Settings">
-              <div className="stack">
-                <a className="link" href={sessions.exportUrl(ref)} download>
-                  Export session
-                </a>
-                <p className="muted small">
-                  A zip you can open anywhere: the decisions with who made them and when, every
-                  document with its history, artifacts and the timeline. Once downloaded, it's out
-                  of Fabrikka's hands.
-                </p>
-              </div>
-              <div className="stack">
-                <button className="link" onClick={rename}>
-                  Rename session
-                </button>
-                <button className="link" onClick={toggleArchive}>
-                  {view.session.status === 'archived' ? 'Unarchive' : 'Archive'}
-                </button>
-                <button
-                  className="link danger"
-                  onClick={async () => {
-                    if (
-                      !window.confirm(
-                        `Delete “${view.session.title}”? This cannot be undone.`,
-                      )
-                    ) {
-                      return;
-                    }
-                    await sessions.remove(ref);
-                    navigate('/', { replace: true });
-                  }}
-                >
-                  Delete session
-                </button>
-              </div>
-            </Panel>
+          {setupTab === 'room' && !isChat && isOwner && (
+            <RoomPanel ref_={ref} view={view} onChanged={reload} onArchive={toggleArchive} onDeleted={() => navigate('/', { replace: true })} />
           )}
         </aside>
         )}
@@ -726,7 +632,7 @@ export function SessionPage() {
               <button
                 className={panes.setup ? 'pane-toggle on' : 'pane-toggle'}
                 aria-expanded={panes.setup}
-                title="Agents, members, integrations, invites"
+                title="People, agents, tools, room"
                 onClick={() => togglePane('setup')}
               >
                 Setup
@@ -990,43 +896,44 @@ export function SessionPage() {
  * The session's team, and adding a teammate without a link (M21, ADR 0025).
  * A team decides who can be added — never who can see.
  */
-function TeamPanel({
+/**
+ * People (M50): who is here, as one list. Members with their role, guests, and
+ * for the owner: colleagues to add with one click, an invite link behind one
+ * button, and the organization's read-along switch. Rename and remove sit on
+ * the row, for those allowed.
+ */
+function PeoplePanel({
   ref_,
+  view,
   isOwner,
+  isChat,
+  myUserId,
   onChanged,
-  visibility,
 }: {
   ref_: SessionRef;
+  view: SessionView;
   isOwner: boolean;
+  isChat: boolean;
+  myUserId: string | undefined;
   onChanged: () => void;
-  visibility: 'private' | 'team';
 }) {
-  const [team, setTeam] = useState<{ id: string; name: string } | null | undefined>(undefined);
-  const [mine, setMine] = useState<TeamSummary[]>([]);
+  const [org, setOrg] = useState<{ id: string; name: string } | null | undefined>(undefined);
   const [roster, setRoster] = useState<TeamMember[]>([]);
+  const [inviting, setInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    sessions.team(ref_).then(setTeam).catch(() => setTeam(null));
-    if (isOwner) {
-      teams.list().then(setMine).catch(() => {});
-      sessions.roster(ref_).then(setRoster).catch(() => setRoster([]));
-    }
-  }, [ref_, isOwner]);
+    sessions.team(ref_).then(setOrg).catch(() => setOrg(null));
+    if (isOwner && !isChat) sessions.roster(ref_).then(setRoster).catch(() => setRoster([]));
+  }, [ref_, isOwner, isChat]);
   useEffect(load, [load]);
 
-  if (team === undefined) return null;
-  // Nothing to show a member when there's no team; nothing to offer an owner on no team.
-  if (!team && (!isOwner || mine.length === 0)) return null;
-
-  const change = async (teamId: string) => {
+  const renameRow = async (participantId: string, current: string) => {
+    const next = window.prompt(`Rename @${current} in this session`, current);
+    if (!next?.trim() || next.trim() === current) return;
     setError(null);
-    if (team && teamId !== team.id && !window.confirm(
-      'People added from the current organization will lose access to this session. Continue?',
-    )) return;
     try {
-      setTeam(await sessions.setTeam(ref_, teamId || null));
-      load();
+      await sessions.renameParticipant(ref_, participantId, next.trim());
       onChanged();
     } catch (err) {
       setError((err as Error).message);
@@ -1034,25 +941,108 @@ function TeamPanel({
   };
 
   return (
-    <Panel title="Organization">
-      {isOwner ? (
-        <Select
-          label="Session organization"
-          value={team?.id ?? ''}
-          options={[
-            { value: '', label: 'No organization', description: 'Only people you add' },
-            ...mine.map((t) => ({ value: t.id, label: t.name, leading: <TeamInitial name={t.name} /> })),
-          ]}
-          onChange={(v) => change(v)}
-        />
-      ) : (
-        <p className="small">{team!.name}</p>
+    <Panel>
+      <ul className="participants">
+        {view.members.map((m) => {
+          const me = m.userId === myUserId;
+          const name = m.participantName ?? m.displayName;
+          return (
+            <li key={m.userId}>
+              <span>{name}</span>
+              <span className="role">
+                {m.role}
+                {m.viaTeam && <span title="Added from the organization. Leaving the organization ends this access."> · via organization</span>}
+                {me && ' · you'}
+              </span>
+              <span className="row-end">
+                {m.participantId && (me || isOwner) && (
+                  <button className="link small" onClick={() => renameRow(m.participantId!, name)}>
+                    rename
+                  </button>
+                )}
+                {isOwner && !me && !isChat && (
+                  <button
+                    className="link small"
+                    onClick={async () => {
+                      await sessions.removeMember(ref_, m.userId);
+                      onChanged();
+                    }}
+                  >
+                    remove
+                  </button>
+                )}
+              </span>
+            </li>
+          );
+        })}
+        {(view.guests ?? []).map((g) => (
+          <li key={g.userId}>
+            <span>{g.displayName}</span>
+            <span className="role" title="They can read this session and nothing else.">guest · view only</span>
+            {isOwner && !isChat && (
+              <span className="row-end">
+                <button
+                  className="link small"
+                  onClick={async () => {
+                    await sessions.removeGuest(ref_, g.userId);
+                    onChanged();
+                  }}
+                >
+                  remove
+                </button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {isOwner && !isChat && !inviting && (
+        <div className="side-form-row">
+          <button onClick={() => setInviting(true)}>Invite</button>
+        </div>
       )}
-      {isOwner && team && (
+      {isOwner && !isChat && inviting && (
+        <div className="stack">
+          {roster.length > 0 && (
+            <>
+              <p className="muted small">Add a colleague, no link needed:</p>
+              <ul className="participants">
+                {roster.map((m) => (
+                  <li key={m.userId}>
+                    <span>{m.displayName}</span>
+                    <span className="row-end">
+                      <button
+                        className="link small"
+                        onClick={async () => {
+                          setError(null);
+                          try {
+                            await sessions.addFromRoster(ref_, m.userId);
+                            load();
+                            onChanged();
+                          } catch (err) {
+                            setError((err as Error).message);
+                          }
+                        }}
+                      >
+                        add
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="muted small">Or anyone, with a link:</p>
+            </>
+          )}
+          <InviteForm ref_={ref_} onCopied={() => setInviting(false)} onCancel={() => setInviting(false)} />
+        </div>
+      )}
+      {isOwner && !isChat && <PendingInvites ref_={ref_} />}
+
+      {isOwner && !isChat && org && (
         <label className="check">
           <input
             type="checkbox"
-            checked={visibility === 'team'}
+            checked={view.visibility === 'team'}
             onChange={async (e) => {
               setError(null);
               try {
@@ -1064,58 +1054,23 @@ function TeamPanel({
             }}
           />
           <span>
-            Everyone on {team.name} can read along
+            Everyone on {org.name} can read along
             <span className="muted small"> — they see the timeline and documents, but can't post or edit</span>
           </span>
         </label>
-      )}
-      {isOwner && team && (
-        <>
-          <p className="muted small">
-            {roster.length ? 'Add a colleague — no link needed:' : 'Everyone in the organization is already here.'}
-          </p>
-          <ul className="participants">
-            {roster.map((m) => (
-              <li key={m.userId}>
-                <span>{m.displayName}</span>
-                <button
-                  className="link small"
-                  onClick={async () => {
-                    setError(null);
-                    try {
-                      await sessions.addFromRoster(ref_, m.userId);
-                      load();
-                      onChanged();
-                    } catch (err) {
-                      setError((err as Error).message);
-                    }
-                  }}
-                >
-                  add
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
       )}
       {error && <p className="error small">{error}</p>}
     </Panel>
   );
 }
 
-function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
-  const [list, setList] = useState<InviteSummary[]>([]);
+/** The invite link form (M50): shown when asked for, gone once the link is copied. */
+function InviteForm({ ref_, onCopied, onCancel }: { ref_: SessionRef; onCopied: () => void; onCancel: () => void }) {
   const [freshUrl, setFreshUrl] = useState<string | null>(null);
   const [scopeEmail, setScopeEmail] = useState('');
   const [guest, setGuest] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(() => {
-    sessions.invites(ref_).then(setList).catch(() => {});
-  }, [ref_]);
-
-  useEffect(refresh, [refresh]);
 
   const create = async () => {
     setError(null);
@@ -1127,7 +1082,6 @@ function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
       setFreshUrl(created.url);
       setScopeEmail('');
       setCopied(false);
-      refresh();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -1138,55 +1092,76 @@ function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
     try {
       await navigator.clipboard.writeText(freshUrl);
       setCopied(true);
+      // Copied: the job is done, the form goes away. The link stays in the clipboard.
+      window.setTimeout(onCopied, 600);
     } catch {
       setError('could not copy — select the link and copy it manually');
     }
   };
 
-  const pending = list.filter((i) => !i.redeemedAt && !i.revokedAt);
+  if (freshUrl) {
+    return (
+      <div className="fresh-invite">
+        <p className="hint">
+          <strong>Copy this now — it is shown only once.</strong> Anyone with this link can join until
+          it's redeemed, revoked, or expires.
+        </p>
+        <code className="endpoint">{freshUrl}</code>
+        <div className="side-form-row">
+          <button onClick={copy}>{copied ? 'Copied ✓' : 'Copy invite link'}</button>
+          <button className="link small" onClick={onCancel}>
+            Done
+          </button>
+        </div>
+        {error && <p className="error small">{error}</p>}
+      </div>
+    );
+  }
 
   return (
-    <Panel title="Invites">
-      <div className="stack">
-        <input
-          value={scopeEmail}
-          onChange={(e) => setScopeEmail(e.target.value)}
-          placeholder="restrict to an email (optional)"
-          aria-label="Restrict invite to an email address"
-        />
-        <label className="check">
-          <input type="checkbox" checked={guest} onChange={(e) => setGuest(e.target.checked)} />
-          <span>
-            Guest — view only
-            <span className="muted small"> (a client, an advisor: reads this session, nothing else)</span>
-          </span>
-        </label>
+    <div className="stack">
+      <input
+        value={scopeEmail}
+        onChange={(e) => setScopeEmail(e.target.value)}
+        placeholder="restrict to an email (optional)"
+        aria-label="Restrict invite to an email address"
+      />
+      <label className="check">
+        <input type="checkbox" checked={guest} onChange={(e) => setGuest(e.target.checked)} />
+        <span>
+          Guest — view only
+          <span className="muted small"> (a client, an advisor: reads this session, nothing else)</span>
+        </span>
+      </label>
+      <div className="side-form-row">
         <button onClick={create}>Create invite link</button>
+        <button className="link small" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
-
       {error && <p className="error small">{error}</p>}
+    </div>
+  );
+}
 
-      {freshUrl && (
-        <div className="fresh-invite">
-          <p className="hint">
-            <strong>Copy this now — it is shown only once.</strong> Anyone with
-            this link can join until it's redeemed, revoked, or expires.
-          </p>
-          <code className="endpoint">{freshUrl}</code>
-          <button onClick={copy}>{copied ? 'Copied ✓' : 'Copy invite link'}</button>
-        </div>
-      )}
-
-      {pending.length > 0 && (
-        <ul className="participants">
-          {pending.map((i) => (
-            <li key={i.id}>
-              <span className="small">
-                {i.invitedEmail ?? 'anyone with the link'}
-              </span>
-              <span className="muted small">
-                expires {new Date(i.expiresAt).toLocaleDateString()}
-              </span>
+/** Invite links not yet used (owner only), each revocable. */
+function PendingInvites({ ref_ }: { ref_: SessionRef }) {
+  const [list, setList] = useState<InviteSummary[]>([]);
+  const refresh = useCallback(() => {
+    sessions.invites(ref_).then(setList).catch(() => {});
+  }, [ref_]);
+  useEffect(refresh, [refresh]);
+  const pending = list.filter((i) => !i.redeemedAt && !i.revokedAt);
+  if (pending.length === 0) return null;
+  return (
+    <>
+      <h3 className="subhead">Invite links waiting</h3>
+      <ul className="participants">
+        {pending.map((i) => (
+          <li key={i.id}>
+            <span className="small">{i.invitedEmail ?? 'anyone with the link'}</span>
+            <span className="muted small">expires {new Date(i.expiresAt).toLocaleDateString()}</span>
+            <span className="row-end">
               <button
                 className="link small"
                 onClick={async () => {
@@ -1196,10 +1171,131 @@ function InvitesPanel({ ref_ }: { ref_: SessionRef }) {
               >
                 revoke
               </button>
-            </li>
-          ))}
-        </ul>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/**
+ * Room (M50, owner only): the name, inline; the organization; export; archive;
+ * and delete last, in the danger colour.
+ */
+function RoomPanel({
+  ref_,
+  view,
+  onChanged,
+  onArchive,
+  onDeleted,
+}: {
+  ref_: SessionRef;
+  view: SessionView;
+  onChanged: () => void;
+  onArchive: () => Promise<void>;
+  onDeleted: () => void;
+}) {
+  const [title, setTitle] = useState(view.session.title);
+  const [org, setOrg] = useState<{ id: string; name: string } | null | undefined>(undefined);
+  const [mine, setMine] = useState<TeamSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => setTitle(view.session.title), [view.session.title]);
+  useEffect(() => {
+    sessions.team(ref_).then(setOrg).catch(() => setOrg(null));
+    teams.list().then(setMine).catch(() => {});
+  }, [ref_]);
+
+  const saveTitle = async () => {
+    const next = title.trim();
+    if (!next || next === view.session.title) {
+      setTitle(view.session.title);
+      return;
+    }
+    setError(null);
+    try {
+      await sessions.update(ref_, { title: next });
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const changeOrg = async (teamId: string) => {
+    setError(null);
+    if (org && teamId !== org.id && !window.confirm(
+      'People added from the current organization will lose access to this session. Continue?',
+    )) return;
+    try {
+      setOrg(await sessions.setTeam(ref_, teamId || null));
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <Panel>
+      <div className="stack">
+        <label className="small muted" htmlFor="room-name">
+          Name
+        </label>
+        <div className="room-name">
+          <input
+            id="room-name"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              if (e.key === 'Escape') setTitle(view.session.title);
+            }}
+            aria-label="Room name"
+          />
+        </div>
+      </div>
+
+      {org !== undefined && (org || mine.length > 0) && (
+        <div className="stack">
+          <Select
+            label="Organization"
+            value={org?.id ?? ''}
+            options={[
+              { value: '', label: 'No organization', description: 'Only people you add' },
+              ...mine.map((t) => ({ value: t.id, label: t.name, leading: <TeamInitial name={t.name} /> })),
+            ]}
+            onChange={(v) => changeOrg(v)}
+          />
+        </div>
       )}
+
+      <div className="stack">
+        <a className="link" href={sessions.exportUrl(ref_)} download>
+          Export room
+        </a>
+        <p className="muted small">
+          A zip you can open anywhere: the decisions with who made them and when, every document with
+          its history, artifacts and the timeline. Once downloaded, it's out of Fabrikka's hands.
+        </p>
+        <button className="link" onClick={onArchive}>
+          {view.session.status === 'archived' ? 'Unarchive' : 'Archive'}
+        </button>
+      </div>
+
+      <div className="stack danger-zone">
+        <button
+          className="link danger"
+          onClick={async () => {
+            if (!window.confirm(`Delete “${view.session.title}”? This cannot be undone.`)) return;
+            await sessions.remove(ref_);
+            onDeleted();
+          }}
+        >
+          Delete room
+        </button>
+      </div>
+      {error && <p className="error small">{error}</p>}
     </Panel>
   );
 }
@@ -1325,7 +1421,7 @@ function AgentsPanel({
   };
 
   return (
-    <Panel title="Agents">
+    <Panel>
       {/* The five-click path (CLAUDE.md): Setup → Add my agent → folder → Add. */}
       {!picking ? (
         <button className="primary" onClick={startPicking}>
@@ -1449,6 +1545,24 @@ function AgentsPanel({
                     }`
                   : a.provider}
               </span>
+              {(isOwner || a.ownerUserId === myUserId) && (
+                <button
+                  className="link small"
+                  onClick={async () => {
+                    const next = window.prompt(`Rename @${a.displayName} in this session`, a.displayName);
+                    if (!next?.trim() || next.trim() === a.displayName) return;
+                    try {
+                      await sessions.renameParticipant(ref_, a.participantId, next.trim());
+                      refresh();
+                      onChanged();
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                >
+                  rename
+                </button>
+              )}
               {/*
                 Trust and step visibility are the AGENT owner's call, and the
                 server answers 404 to anyone else. Showing the buttons to a
@@ -2031,76 +2145,21 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
   const granted = (s: string, t: string) =>
     state.grants.some((g) => g.serverSlug === s && g.toolName === t && g.allowed);
 
+  const attachOne = async (slug: string) => {
+    setError(null);
+    try {
+      await sessions.attachIntegration(ref_, { slug });
+      load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   return (
-    <Panel title="Integrations">
-      {state.available.length > 0 && (
-        <div className="stack">
-          <p className="muted small">Your connections for {roomOrg ? roomOrg.name : 'Personal rooms'} — attach one to this session:</p>
-          <ul className="participants">
-            {state.available.map((a) => (
-              <li key={a.id}>
-                <span>{a.label}</span>
-                <span className="muted small">
-                  {a.slug}
-                  {roomOrg && (a.teamId ? ` · for ${roomOrg.name}` : ' · all your rooms')}
-                </span>
-                <button
-                  className="link small"
-                  onClick={async () => {
-                    setError(null);
-                    try {
-                      await sessions.attachIntegration(ref_, { slug: a.slug });
-                      load();
-                    } catch (err) {
-                      setError((err as Error).message);
-                    }
-                  }}
-                >
-                  attach
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {!state.encryptionConfigured && (
-        <p className="hint danger-hint">
-          <code>FABRIKKA_ENCRYPTION_KEY</code> is not set, so credentials cannot be
-          stored. Attaching one will be refused rather than saved in plaintext.
-        </p>
-      )}
-
-      <form className="stack" onSubmit={attach}>
-        <input
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-          placeholder="slug, e.g. github"
-          aria-label="Integration slug"
-        />
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://…/mcp"
-          aria-label="Server URL"
-        />
-        <input
-          type="password"
-          value={credential}
-          onChange={(e) => setCredential(e.target.value)}
-          placeholder="bearer token (yours)"
-          aria-label="Credential"
-          autoComplete="off"
-        />
-        <button type="submit" disabled={!slug.trim() || !url.trim()}>
-          Attach
-        </button>
-      </form>
-
-      {error && <p className="error small">{error}</p>}
-
+    <Panel>
       {state.mine.length > 0 && (
         <>
-          <h3 className="subhead">Yours</h3>
+          <h3 className="subhead">Attached · yours</h3>
           <ul className="participants">
             {state.mine.map((m) => (
               <li key={m.slug}>
@@ -2151,7 +2210,7 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
 
       {state.team.length > 0 && (
         <>
-          <h3 className="subhead">{state.team[0]!.teamName}'s</h3>
+          <h3 className="subhead">Attached · {state.team[0]!.teamName}'s</h3>
           <ul className="participants">
             {state.team.map((t) => (
               <li key={t.slug}>
@@ -2179,6 +2238,63 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
           </ul>
         </>
       )}
+
+      {state.available.length > 0 && (
+        <>
+          <h3 className="subhead">Attach a connection</h3>
+          <p className="muted small">Yours, for {roomOrg ? roomOrg.name : 'Personal rooms'}:</p>
+          <ul className="participants">
+            {state.available.map((a) => (
+              <li key={a.id}>
+                <span>{a.label}</span>
+                <span className="muted small">
+                  {a.slug}
+                  {roomOrg && (a.teamId ? ` · for ${roomOrg.name}` : ' · all your rooms')}
+                </span>
+                <span className="row-end">
+                  <button className="link small" onClick={() => attachOne(a.slug)}>
+                    attach
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {state.mine.length === 0 && state.team.length === 0 && state.available.length === 0 && (
+        <p className="muted small">No connections yet. Agents here can use only what you attach.</p>
+      )}
+      <p className="muted small">
+        <Link to="/settings/integrations">Add a connection</Link> in Settings, then attach it here.
+      </p>
+
+      {/* M50: the by-hand form is for the rare server with no catalogue entry; closed until asked for. */}
+      <details className="setup-disclosure">
+        <summary>Connect by hand (a server address and your token)</summary>
+        {!state.encryptionConfigured && (
+          <p className="hint danger-hint">
+            <code>FABRIKKA_ENCRYPTION_KEY</code> is not set, so credentials cannot be stored. Attaching
+            one will be refused rather than saved in plaintext.
+          </p>
+        )}
+        <form className="stack" onSubmit={attach}>
+          <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="slug, e.g. github" aria-label="Integration slug" />
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/mcp" aria-label="Server URL" />
+          <input
+            type="password"
+            value={credential}
+            onChange={(e) => setCredential(e.target.value)}
+            placeholder="bearer token (yours)"
+            aria-label="Credential"
+            autoComplete="off"
+          />
+          <button type="submit" disabled={!slug.trim() || !url.trim()}>
+            Attach
+          </button>
+        </form>
+      </details>
+
+      {error && <p className="error small">{error}</p>}
 
       {Object.entries(tools).map(([s, list]) => (
         <div key={s}>
@@ -2349,10 +2465,10 @@ function Timeline({
 }
 
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
     <section className="panel">
-      <h2>{title}</h2>
+      {title && <h2>{title}</h2>}
       {children}
     </section>
   );

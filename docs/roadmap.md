@@ -351,7 +351,7 @@ Three panes, each answering a different question
 
 | Pane | Question | Holds |
 | --- | --- | --- |
-| **Left — Setup** | *Who and what is in this session?* | Participants, members, invites, agents, integrations, tokens, session settings |
+| **Left — Setup** | *Who and what is in this session?* | Since M50, four tabs: People (members, guests, invites, read-along), Agents, Tools (connections), Room (name, organization, export, archive, delete) |
 | **Middle — Conversation** | *What are we saying?* | Timeline, activity, composer. **Never collapses** |
 | **Right — Output** | *What has this session produced?* | Session context (objective, decisions, facts, questions, constraints) and artifacts |
 
@@ -2211,7 +2211,7 @@ invite on the core):
 
 ## M50 — Setup, one question at a time
 
-> **Proposed 2026-10-15, for the owner's review before it is built.**
+> **Built 2026-10-15**, after the owner chose it over the stacked column.
 >
 > Setup is the left rail of a room ([ADR 0018](decisions/0018-session-screen-is-three-panes.md)):
 > *who and what is in this session?* Today it answers with **seven panels
@@ -2247,9 +2247,11 @@ invite on the core):
   Setup at all (M22), unchanged.
 - **Chats** ([ADR 0026](decisions/0026-chats-are-light-sessions.md)) keep their
   lighter Setup: People and Agents only.
-- **No new API.** Every control exists today; this milestone arranges them. The
-  one behavioural change is that the invite and manual attach forms are closed
-  until asked for.
+- **No new API, one new field.** Every control exists today; this milestone
+  arranges them. A member in the room's view now carries their participant
+  (`participantId`, `participantName`), so People is one list; the MCP
+  `list_participants` tool is untouched. The one behavioural change is that
+  the invite and manual attach forms are closed until asked for.
 
 **Test:**
 1. Open a room, open Setup: four tabs, People first. Nothing scrolls on a

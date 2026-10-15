@@ -421,9 +421,16 @@ export async function listMembers(
       email: users.email,
       displayName: users.displayName,
       role: sessionMembers.role,
+      // M50: People is one list, so a member row carries their participant.
+      participantId: participants.id,
+      participantName: participants.displayName,
     })
     .from(sessionMembers)
     .innerJoin(users, eq(users.id, sessionMembers.userId))
+    .leftJoin(
+      participants,
+      and(eq(participants.sessionId, sessionMembers.sessionId), eq(participants.userId, sessionMembers.userId), eq(participants.kind, 'human')),
+    )
     .where(eq(sessionMembers.sessionId, sessionId))
     .orderBy(asc(users.displayName));
 

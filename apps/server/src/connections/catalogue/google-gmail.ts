@@ -1,6 +1,6 @@
 /**
- * Gmail (M18, ADR 0024, ADR 0046). PREPARED, NOT LISTED: it isn't in registry.ts
- * until the owner has connected it for real ("verified, not documented").
+ * Gmail (M18, ADR 0024, ADR 0046). Listed on the owner's decision
+ * (2026-10-15), ahead of a real connection; the first one fills in its presets.
  *
  * Probed 2026-10-15, without signing in:
  *   - POST https://gmailmcp.googleapis.com/mcp/v1 answers 200 with no challenge
@@ -12,7 +12,7 @@
  *     (docs/operations.md, "Google"), marked for an AI-powered agent;
  *   - a refresh token only with access_type=offline and prompt=consent.
  *
- * Connects LAST (owner's decision, 2026-10-15): its scopes are Google's *restricted* tier, so they go on the consent screen in a second round, behind the four below.
+ * Its scopes are Google's *restricted* tier: they go on the consent screen in a second round, behind the four others (ADR 0046).
  * Presets come from the owner's real connection, once it exists.
  */
 import type { CatalogueEntry } from './types.ts';

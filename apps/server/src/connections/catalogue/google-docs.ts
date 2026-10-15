@@ -1,6 +1,6 @@
 /**
- * Google Docs (M18, ADR 0024, ADR 0046). PREPARED, NOT LISTED: it isn't in registry.ts
- * until the owner has connected it for real ("verified, not documented").
+ * Google Docs (M18, ADR 0024, ADR 0046). Listed on the owner's decision
+ * (2026-10-15), ahead of a real connection; the first one fills in its presets.
  *
  * Probed 2026-10-15, without signing in:
  *   - POST https://docsmcp.googleapis.com/mcp/v1 answers 200 with no challenge

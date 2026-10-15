@@ -1,6 +1,6 @@
 /**
- * Grafana Cloud (M18, ADR 0024). PREPARED, NOT LISTED: it isn't in registry.ts
- * until the owner has connected it for real ("verified, not documented").
+ * Grafana Cloud (M18, ADR 0024). Listed on the owner's decision
+ * (2026-10-15), ahead of a real connection; the first one fills in its presets.
  * Self-hosted Grafana (grafana/mcp-grafana, a service-account token) stays a
  * custom connection.
  *

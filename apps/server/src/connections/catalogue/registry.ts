@@ -21,15 +21,20 @@ import { notion } from './notion.ts';
 import { sentry } from './sentry.ts';
 import type { CatalogueEntry } from './types.ts';
 
-// One line per vendor, added once it has been connected for real.
-const BUILT_IN: CatalogueEntry[] = [github, jira, confluence, linear, sentry, notion, clickup, gitlab];
+// One line per vendor, added once it has been connected for real. Grafana Cloud
+// and the five Google products were listed on the owner's decision (2026-10-15)
+// before a real connection: their presets are filled in from the first one.
+const BUILT_IN: CatalogueEntry[] = [
+  github, jira, confluence, linear, sentry, notion, clickup, gitlab,
+  grafana, googleCalendar, googleDrive, googleSheets, googleDocs, googleGmail,
+];
 
 /**
  * Written from a real probe, not yet connected for real. Offered only where
  * FABRIKKA_PREPARED_VENDORS names them, so the owner can connect one and
  * verify it before it joins BUILT_IN (docs/operations.md, "A prepared vendor").
  */
-const PREPARED: CatalogueEntry[] = [grafana, googleCalendar, googleDrive, googleSheets, googleDocs, googleGmail];
+const PREPARED: CatalogueEntry[] = [];
 
 function preparedOffered(): CatalogueEntry[] {
   const ids = (process.env.FABRIKKA_PREPARED_VENDORS ?? '')

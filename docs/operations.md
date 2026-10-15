@@ -333,8 +333,9 @@ The record has no retention limit yet; it is one small row per call.
 
 Listed vendors connect with a click: *Settings → Personal integrations → Add a connection*.
 Most need no setup on the instance, because their MCP servers let Fabrikka
-register itself (Atlassian, Grafana Cloud). **GitHub doesn't**, so it appears
-only once the instance has a GitHub OAuth App:
+register itself (Atlassian, Linear, Grafana Cloud). **GitHub doesn't**, so it
+appears only once the instance has a GitHub OAuth App, and **Google doesn't**
+either (below):
 
 1. GitHub → Settings → Developer settings → **OAuth Apps → New OAuth App**.
 2. Homepage URL: your `PUBLIC_URL`. Redirect URI (older forms call it the

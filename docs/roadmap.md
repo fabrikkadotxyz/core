@@ -814,13 +814,16 @@ that connection's tool list, not from docs:
 | ClickUp | Issue tracker | `https://mcp.clickup.com/mcp` | OAuth: PKCE (S256), dynamic registration (public client), scopes `read write`, **no refresh grant** (probed 2026-10-13) | none | `catalogue/clickup.ts`, 61 tools. Its access token lasts ten years, so nothing to refresh in practice; an expired one means *needs reconnecting*. |
 | GitLab | Code host | `https://gitlab.com/api/v4/mcp` | OAuth: PKCE (S256), dynamic registration, scope `mcp`, refresh tokens; the token endpoint takes **no public client**, so the registered client is confidential (probed 2026-10-13) | none | `catalogue/gitlab.ts`, 36 tools. gitlab.com only; a self-managed GitLab is a custom connection. |
 
-**Prepared, not listed.** An entry written from a real probe, but kept out of
-`registry.ts` until it has been connected for real:
+**Listed on the owner's decision (2026-10-15), ahead of a real connection.**
+Each was written from a real probe and offered as a preview; the owner chose to
+list them for everyone without waiting for the first connection, so they carry
+no presets yet. The first real connection of each fills its presets in from
+that connection's tool list, the way the rows above got theirs:
 
 | Vendor | Category | MCP server | Sign-in | Operator setup | Entry |
 | --- | --- | --- | --- | --- | --- |
 | Grafana Cloud | Observability | `https://mcp.grafana.com/mcp` | OAuth 2.1: PKCE (S256), dynamic registration; the stack is a field, sent as `X-Grafana-URL` (probed 2026-10-12) | none | `catalogue/grafana.ts` |
-| Gmail | Email | `https://gmailmcp.googleapis.com/mcp/v1` | Google OAuth: PKCE (S256), **pre-registered client**, scopes `gmail.readonly gmail.compose`; refresh token with `access_type=offline prompt=consent` (probed 2026-10-15) | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` (docs/operations.md) | `catalogue/google-gmail.ts`. Connects last: restricted scopes. |
+| Gmail | Email | `https://gmailmcp.googleapis.com/mcp/v1` | Google OAuth: PKCE (S256), **pre-registered client**, scopes `gmail.readonly gmail.compose`; refresh token with `access_type=offline prompt=consent` (probed 2026-10-15) | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` (docs/operations.md) | `catalogue/google-gmail.ts`. Restricted scopes: its consent-screen entries land in a second round. |
 | Google Calendar | Calendar | `https://calendarmcp.googleapis.com/mcp/v1` | the same; scopes `calendar.calendarlist.readonly calendar.events.readonly calendar.events.freebusy` (Google offers no write scope yet) | the same client | `catalogue/google-calendar.ts` |
 | Google Drive | Docs | `https://drivemcp.googleapis.com/mcp/v1` | the same; scopes `drive.readonly drive.file` | the same client | `catalogue/google-drive.ts` |
 | Google Sheets | Docs | `https://sheetsmcp.googleapis.com/mcp/v1` | the same; scopes `spreadsheets drive.readonly drive.file` | the same client | `catalogue/google-sheets.ts` |
@@ -828,7 +831,8 @@ that connection's tool list, not from docs:
 
 A prepared vendor is offered on an instance whose `FABRIKKA_PREPARED_VENDORS`
 names it, marked *Preview* (`docs/operations.md`), and is listed for everyone once
-the owner has connected it; its presets come from that connection's tools.
+the owner has connected it; its presets come from that connection's tools. Nothing
+is prepared at the moment: the next wave below starts the cycle again.
 
 **Next wave (the owner's list, 2026-10-14), probed before any code.**
 Unauthenticated requests to each server and its OAuth metadata sort it into what

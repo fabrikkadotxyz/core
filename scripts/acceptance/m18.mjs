@@ -21,6 +21,7 @@ const INST = `http://localhost:${PORT}`;
 const A = 9211;
 const B = 9212;
 const C = 9214;
+const D = 9215;
 const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
 const PASSWORD = process.env.FABRIKKA_TEST_PASSWORD ?? 'fabrikka-dev-pw';
 
@@ -48,9 +49,10 @@ const procs = [
   spawn('node', ['scripts/fixtures/fake-oauth-mcp.mjs', String(A)], { stdio: 'ignore', detached: true }),
   spawn('node', ['scripts/fixtures/fake-oauth-mcp.mjs', String(B), '--no-registration', '--client', 'pre-id:pre-secret'], { stdio: 'ignore', detached: true }),
   spawn('node', ['scripts/fixtures/fake-oauth-mcp.mjs', String(C), '--confidential'], { stdio: 'ignore', detached: true }),
+  spawn('node', ['scripts/fixtures/fake-oauth-mcp.mjs', String(D), '--google-like', '--no-registration', '--client', 'pre-id:pre-secret'], { stdio: 'ignore', detached: true }),
   spawn('npx', ['tsx', '--env-file-if-exists=../../.env', '../../scripts/fixtures/catalogue-server.mts'], {
     cwd: 'apps/server',
-    env: { ...process.env, PORT: String(PORT), PUBLIC_URL: INST, FAKE_A: String(A), FAKE_B: String(B), FAKE_C: String(C), FABRIKKA_PREPARED_VENDORS: 'grafana', FAKE_PRE_CLIENT_ID: 'pre-id', FAKE_PRE_CLIENT_SECRET: 'pre-secret' },
+    env: { ...process.env, PORT: String(PORT), PUBLIC_URL: INST, FAKE_A: String(A), FAKE_B: String(B), FAKE_C: String(C), FAKE_D: String(D), FABRIKKA_PREPARED_VENDORS: 'grafana', FAKE_PRE_CLIENT_ID: 'pre-id', FAKE_PRE_CLIENT_SECRET: 'pre-secret' },
     stdio: 'ignore',
     detached: true,
   }),
@@ -65,7 +67,7 @@ const stopAll = () => {
   }
 };
 for (let i = 0; i < 60; i++) {
-  const up = await Promise.all([`${INST}/health`, `http://localhost:${A}/admin/stats`, `http://localhost:${B}/admin/stats`, `http://localhost:${C}/admin/stats`].map((u) => fetch(u).then((r) => r.ok).catch(() => false)));
+  const up = await Promise.all([`${INST}/health`, `http://localhost:${A}/admin/stats`, `http://localhost:${B}/admin/stats`, `http://localhost:${C}/admin/stats`, `http://localhost:${D}/admin/stats`].map((u) => fetch(u).then((r) => r.ok).catch(() => false)));
   if (up.every(Boolean)) break;
   await sleep(500);
 }
@@ -93,7 +95,7 @@ const connect = async (entry, fields) => {
   const a = await authorize(entry, fields);
   return a.callback ? land(a.callback) : `error=${a.error}`;
 };
-const slugs = ['fakehub', 'fakepre', 'fakesuite', 'fakegraf', 'fakeconf'];
+const slugs = ['fakehub', 'fakepre', 'fakesuite', 'fakegraf', 'fakeconf', 'fakegoog'];
 for (const s of slugs) await api(`/me/connections/${s}`, { method: 'DELETE' });
 
 /* ------------------------------------------------ 1. the catalogue */
@@ -136,6 +138,10 @@ check(
   'A VENDOR WITH NO PUBLIC CLIENTS AND NO REFRESH GRANT (GitLab-, ClickUp-like): registration follows its metadata, and the secret it returns is used at the token endpoint',
 );
 check((await json('/me/connections')).connections.find((c) => c.slug === 'fakeconf')?.status === 'ok', '…and the connection is usable without a refresh token');
+check(
+  (await connect('fakegoog')).includes('connected=fakegoog') && (await stats(D)).offline === 1,
+  'A GOOGLE-LIKE VENDOR (no challenge, OpenID metadata only, pre-registered client): discovery derives the metadata from the path, and the entry adds access_type=offline and prompt=consent',
+);
 
 /* ------------------------------------------------ 3. shared connection, fields */
 
@@ -253,7 +259,7 @@ check((await fetch(hoCallback, { redirect: 'manual', headers: { cookie: bound.sp
 await api(base, { method: 'DELETE' });
 for (const s of slugs) await api(`/me/connections/${s}`, { method: 'DELETE' });
 await run('pnpm', ['admin', 'delete-user', '--email', otherEmail]).catch(() => {});
-await sql(`delete from oauth_clients where issuer like 'http://localhost:${A}%' or issuer like 'http://localhost:${B}%' or issuer like 'http://localhost:${C}%'`);
+await sql(`delete from oauth_clients where issuer like 'http://localhost:${A}%' or issuer like 'http://localhost:${B}%' or issuer like 'http://localhost:${C}%' or issuer like 'http://localhost:${D}%'`);
 stopAll();
 
 if (failures) {

@@ -365,6 +365,9 @@ Three panes, each answering a different question
   **adjustable from the keyboard**: the handle is a focusable `separator`, arrow
   keys move it, Home/End go to the limits, double-click resets. A resizer only a
   mouse can reach is a control half the users do not have.
+- **The right pane opens in its own tab (M49, ADR 0045):** one button in the
+  room's header, the same pane full width and live, a new window in the desktop
+  app.
 - The right pane is **what the session produced**, which today means context and
   artifacts — both already real (M7). It is deliberately *not* a placeholder for a
   generate button: a pane that exists to be filled later is a pane that teaches
@@ -817,6 +820,11 @@ that connection's tool list, not from docs:
 | Vendor | Category | MCP server | Sign-in | Operator setup | Entry |
 | --- | --- | --- | --- | --- | --- |
 | Grafana Cloud | Observability | `https://mcp.grafana.com/mcp` | OAuth 2.1: PKCE (S256), dynamic registration; the stack is a field, sent as `X-Grafana-URL` (probed 2026-10-12) | none | `catalogue/grafana.ts` |
+| Gmail | Email | `https://gmailmcp.googleapis.com/mcp/v1` | Google OAuth: PKCE (S256), **pre-registered client**, scopes `gmail.readonly gmail.compose`; refresh token with `access_type=offline prompt=consent` (probed 2026-10-15) | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` (docs/operations.md) | `catalogue/google-gmail.ts`. Connects last: restricted scopes. |
+| Google Calendar | Calendar | `https://calendarmcp.googleapis.com/mcp/v1` | the same; scopes `calendar.calendarlist.readonly calendar.events.readonly calendar.events.freebusy` (Google offers no write scope yet) | the same client | `catalogue/google-calendar.ts` |
+| Google Drive | Docs | `https://drivemcp.googleapis.com/mcp/v1` | the same; scopes `drive.readonly drive.file` | the same client | `catalogue/google-drive.ts` |
+| Google Sheets | Docs | `https://sheetsmcp.googleapis.com/mcp/v1` | the same; scopes `spreadsheets drive.readonly drive.file` | the same client | `catalogue/google-sheets.ts` |
+| Google Docs | Docs | `https://docsmcp.googleapis.com/mcp/v1` | the same; scopes `documents drive.readonly drive.file` | the same client | `catalogue/google-docs.ts` |
 
 A prepared vendor is offered on an instance whose `FABRIKKA_PREPARED_VENDORS`
 names it, marked *Preview* (`docs/operations.md`), and is listed for everyone once
@@ -833,20 +841,14 @@ previewed, connected for real, then listed. In the order they can land:
 | Plaud | Meetings (new) | `https://mcp.plaud.ai/mcp` | OAuth: PKCE (S256), dynamic registration (a probe registration was accepted), refresh tokens, no scope asked for | none | ready to prepare |
 | Vocci | Meetings (new) | `https://mcp.vocci.ai/mcp` | OAuth: PKCE (S256), dynamic registration at `clerk.vocci.ai`, scopes `profile offline_access email`, refresh tokens | none | ready to prepare |
 | Slack | Chat (new) | `https://mcp.slack.com/mcp` | OAuth with **user** tokens (`slack.com/oauth/v2_user/authorize`): PKCE (S256), **no dynamic registration**, `client_secret_post`, refresh grant; the metadata lists the user scopes it takes (`channels:history`, `channels:read`, `chat:write`, `search:read.*`, `users:read`, …) | **A Slack app**, once per instance (`SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_CLIENT_SECRET`), with the callback as its redirect URL and those user scopes. Without one, Slack is absent, like GitHub. | needs the owner first |
-| Gmail | Email (new) | `https://gmailmcp.googleapis.com/mcp/v1` | Google OAuth (`accounts.google.com`): PKCE, **no dynamic registration**; the server's metadata lists `gmail.readonly`, `gmail.compose`, `gmail.send`, `gmail.modify`, …; a refresh token only with `access_type=offline` | **One Google Cloud OAuth client**, once per instance (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`), a *Web application* marked for an AI agent, with the callback as its redirect URI; the Workspace **Developer Preview Program**; and, before anyone but the project's test users can connect, Google's app verification (Gmail's scopes are restricted). | Google calls it a Developer Preview (page updated 2026-10-13); needs the owner first |
-| Google Calendar | Calendar (new) | `https://calendarmcp.googleapis.com/mcp/v1` | the same client; Google's scope list is read-only so far (`calendar.calendarlist.readonly`, `calendar.events.freebusy`, `calendar.events.readonly`) | the same Google client | the same |
-| Google Drive | Docs | `https://drivemcp.googleapis.com/mcp/v1` | the same client; `drive.readonly`, `drive.file` | the same | the same |
-| Google Sheets | Docs | `https://sheetsmcp.googleapis.com/mcp/v1` | the same client; `spreadsheets.readonly`, `spreadsheets`, plus Drive's | the same | the same |
-| Google Docs | Docs | `https://docsmcp.googleapis.com/mcp/v1` | the same client; `documents.readonly`, `documents`, plus Drive's | the same | the same. This makes Google Docs a **connection** after all, beside the M14 `gdoc` output kind. |
+| Gmail, Google Calendar, Google Drive, Google Sheets, Google Docs | Email, Calendar, Docs | one server per product under `*.googleapis.com/mcp/v1` | Google OAuth, pre-registered client | the owner's Google Cloud OAuth client (done 2026-10-15) | **prepared** (table below); Gmail connects last |
 
-Two things the Google rows settle when they land, in an ADR if they need one:
-each Google product is its own server with its own scopes, so each is its own
-connection, and whether one Google consent can serve several of them is the
-question to answer then; and the pre-registered client (`auth.client`) is
-exactly GitHub's mechanism, so nothing new in `oauth.ts`. Categories grow with
-the catalogue: *Meetings*, *Chat*, *Email* and *Calendar* join the four in
-`catalogue/types.ts` when their first entry is prepared, one line each, and the
-page builds its chips from the server's list.
+The Google rows are settled by [ADR 0046](decisions/0046-google-products-are-separate-connections.md):
+one connection per product, discovery that follows the spec where Google gives
+no hint, and per-entry authorization parameters. Categories grow with the
+catalogue: *Email* and *Calendar* joined the four on 2026-10-15; *Meetings* and
+*Chat* follow with their first entry. The page builds its chips from the
+server's list.
 
 **No entry, and why (2026-10-13):** Rollbar has no hosted MCP server, only a
 local `@rollbar/mcp-server` run with an access token, so it can't be connected
@@ -893,6 +895,12 @@ connection until Google hosted a Docs MCP server (see the next wave above); the
     where both are offered (Atlassian, Notion), no refresh grant where there is
     none (ClickUp), and a confidential client with `client_secret_post` where
     `none` isn't offered (GitLab), its secret sealed like a token (2026-10-13);
+  - where the server answers without a challenge (Google), the protected
+    resource metadata is looked up at the path-inserted well-known URL, then
+    the origin's; where the authorization server has no RFC 8414 document, its
+    OpenID configuration is read (2026-10-15, ADR 0046);
+  - an entry may add parameters to the authorization request
+    (`auth.authorizeParams`: Google's `access_type=offline`, `prompt=consent`);
   - PKCE (S256), and a single-use `state` bound to the person who started it;
   - the callback is on the instance's own origin
     (`/api/connections/oauth/callback`), so `localhost` works with no domain.
@@ -2100,6 +2108,53 @@ invite on the core):
    now offers that one and calls use it; in an Acme room, still the first.
 5. An agent bound before this milestone, in an organization's room, still
    answers and says *from Personal: add it for <org>*.
+
+## M49 — The output in its own tab
+
+> The right pane is what a room produced, and people want it on a second
+> screen, beside a terminal, or wider than a rail. The conversation stays where
+> it is. [ADR 0045](decisions/0045-a-rooms-output-opens-in-its-own-window.md).
+
+- **`/o/<owner>/s/<session>/output`** is the right pane alone: documents,
+  context, links and files, full width, live over the same stream, with the
+  same permissions (a viewer reads, a member edits). No sidebar, no
+  conversation.
+- **One button in the room's header**, beside *Output*: **↗ Open the output in
+  a new tab.** In a browser, a new tab. In the desktop app, a new window of the
+  app, through `open_output(path)`: a path on the instance shaped like the
+  address above, joined to the configured server in Rust. One window per
+  output; a second click focuses it. **On macOS it is a native tab** of the
+  main window (all the app's windows share a tabbing identifier), which the
+  person can drag out or merge back; on Windows and Linux, a window.
+- **Tabs inside it:** a strip across the top, *Documents* (the overview) and
+  one tab per open document with a close. Opening a document from the overview
+  adds a tab; ↗ in the room adds the document the room has open. Open tabs
+  are remembered per room on the device, apart from the room's own pane state,
+  so three things in progress are three tabs and the room is untouched.
+- **The page knows its room:** a thin line at the top names the room and links
+  back to it.
+- **The desktop window has no IPC.** The page in it can't call the app; links
+  to other sites still leave for the browser.
+
+**Test:**
+1. In a room with a document open, click **↗** in the header (**1 click**): a
+   new tab shows the right pane alone, full width, on that document. The
+   browser tab is titled after the room.
+2. An agent edits the document: the new tab updates without a reload. Add a
+   decision to the context in the room: it appears in the new tab.
+3. In the new tab, open two more documents from *Documents*: three tabs in the
+   strip, the overview still first. Close one with its ×; reload: the other
+   two are back, on the one you had active. The room still shows what it
+   showed.
+4. As a viewer: the new tab reads, and offers no edit.
+5. In the desktop app, **↗** opens the output signed in, no browser: on macOS
+   as a tab of the app's window, with the tab bar showing both; elsewhere as a
+   second window. Click **↗** again: the same one comes forward. A link to
+   another site in a document opens in the browser.
+6. Scripted: the address serves the app; the desktop command exists, is
+   listed in the app's manifest, and is granted to the instance's origin.
+
+**Clicks:** 1.
 
 ## Later — Resuming offline agents
 

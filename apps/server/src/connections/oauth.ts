@@ -84,13 +84,25 @@ export async function discover(mcpUrl: string): Promise<AuthServer> {
   const challenge = res?.headers.get('www-authenticate') ?? '';
   const resourceMetadata = /resource_metadata="([^"]+)"/.exec(challenge)?.[1];
 
-  let issuer = new URL(mcpUrl).origin;
-  if (resourceMetadata) {
-    const rm = await getJson(resourceMetadata);
+  // A server that gives no hint (Google answers without a challenge) has its
+  // resource metadata at the path-inserted well-known URL, then the origin's
+  // (RFC 9728 §3; ADR 0046).
+  const target = new URL(mcpUrl);
+  const path = target.pathname.replace(/\/$/, '');
+  const candidates = resourceMetadata
+    ? [resourceMetadata]
+    : [`${target.origin}/.well-known/oauth-protected-resource${path}`, `${target.origin}/.well-known/oauth-protected-resource`];
+  let issuer = target.origin;
+  for (const url of candidates) {
+    const rm = await getJson(url);
     const servers = rm?.authorization_servers;
-    if (Array.isArray(servers) && typeof servers[0] === 'string') issuer = servers[0];
+    if (Array.isArray(servers) && typeof servers[0] === 'string') {
+      issuer = servers[0];
+      break;
+    }
   }
-  const meta = await getJson(metadataUrl(issuer));
+  // RFC 8414 metadata, or the OpenID configuration where that's all there is.
+  const meta = (await getJson(metadataUrl(issuer))) ?? (await getJson(`${safeUrl(issuer).origin}${safeUrl(issuer).pathname.replace(/\/$/, '')}/.well-known/openid-configuration`));
   if (!meta || typeof meta.authorization_endpoint !== 'string' || typeof meta.token_endpoint !== 'string') {
     throw new OAuthError(`no OAuth metadata for ${new URL(mcpUrl).host}`);
   }
@@ -267,6 +279,8 @@ export async function startFlow(
   url.searchParams.set('code_challenge_method', 'S256');
   url.searchParams.set('resource', entry.mcpUrl);
   if (entry.auth.scopes?.length) url.searchParams.set('scope', entry.auth.scopes.join(' '));
+  // ADR 0046: what the entry adds (Google: access_type=offline, prompt=consent), never over the above.
+  for (const [k, v] of Object.entries(entry.auth.authorizeParams ?? {})) if (!url.searchParams.has(k)) url.searchParams.set(k, v);
   return url.href;
 }
 

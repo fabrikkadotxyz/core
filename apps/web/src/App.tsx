@@ -10,6 +10,7 @@ import { HomePage } from './pages/HomePage.tsx';
 import { PairPage } from './pages/PairPage.tsx';
 import { AppShell } from './shell/AppShell.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
+import { OutputPage } from './pages/OutputPage.tsx';
 import { useWorkspace, WorkspaceProvider } from './shell/workspace.tsx';
 import { SessionPage } from './pages/SessionPage.tsx';
 import { WelcomePage } from './pages/WelcomePage.tsx';
@@ -28,6 +29,8 @@ export default function App() {
         <Route path="/reset/:token" element={<ResetPasswordPage />} />
         {/* M47: once per account, before anything else. Outside the shell: no sidebar yet. */}
         <Route path="/welcome" element={<RequireAuth><WelcomePage /></RequireAuth>} />
+        {/* M49 (ADR 0045): a room's output alone, in its own tab or window. No shell: no sidebar. */}
+        <Route path="/o/:owner/s/:session/output" element={<RequireAuth><RequireWelcomed><OutputPage /></RequireWelcomed></RequireAuth>} />
         {/* M28: every signed-in page lives in one shell, beside one sidebar that
             stays mounted as you move between pages. */}
         <Route element={<Shell />}>

@@ -327,10 +327,68 @@ fn let_instance_open_folders(app: &AppHandle, server: &url::Url) {
         .permission("allow-open-folders")
         // M42 (ADR 0037): notifications and the badge, each limited in Rust.
         .permission("allow-notify")
-        .permission("allow-set-attention");
+        .permission("allow-set-attention")
+        // M49 (ADR 0045): a room's output in a window of its own, a path on the instance.
+        .permission("allow-open-output");
     if let Err(e) = app.add_capability(capability) {
         eprintln!("[fabrikka app] couldn't let {origin} open the Folders window: {e}");
     }
+}
+
+/// A room's output in a window of its own (M49, ADR 0045). `path` must be on
+/// the instance and shaped `/o/<owner>/s/<session>/output`; it is joined to the
+/// configured server, never taken as a URL. One window per output.
+#[tauri::command]
+fn open_output(app: AppHandle, path: String) -> Result<(), String> {
+    let path = instance_path(&path).ok_or("only a page on the instance")?;
+    if !is_output_path(path) {
+        return Err("only a room's output".into());
+    }
+    let server = stored_url(&app)
+        .and_then(|u| parse_server(&u).ok())
+        .ok_or("no instance configured")?;
+    let url = server.join(path).map_err(|e| e.to_string())?;
+    if url.origin() != server.origin() {
+        return Err("only a page on the instance".into());
+    }
+    // One window per room's output; a document asked for (`?doc=`) is opened in it.
+    let bare = path.split('?').next().unwrap_or(path);
+    let label: String = format!(
+        "output-{}",
+        bare.trim_matches('/').chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>()
+    );
+    if let Some(window) = app.get_webview_window(&label) {
+        if path.contains('?') {
+            let _ = window.navigate(url);
+        }
+        let _ = window.show();
+        return window.set_focus().map_err(|e| e.to_string());
+    }
+    instance_window(&app, &label, "Fabrikka — output", WebviewUrl::External(url), (980.0, 800.0), true)
+        .map_err(|e| e.to_string())
+}
+
+/// `/o/<owner>/s/<session>/output`, with at most `?doc=<id>`, and nothing else.
+fn is_output_path(path: &str) -> bool {
+    let (path, query) = match path.split_once('?') {
+        Some((p, q)) => (p, Some(q)),
+        None => (path, None),
+    };
+    let segs: Vec<&str> = path.trim_end_matches('/').split('/').collect();
+    let shape = segs.len() == 6
+        && segs[0].is_empty()
+        && segs[1] == "o"
+        && segs[3] == "s"
+        && segs[5] == "output"
+        && !segs[2].is_empty()
+        && !segs[4].is_empty();
+    let query_ok = match query {
+        None => true,
+        Some(q) => q.strip_prefix("doc=").is_some_and(|id| {
+            !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        }),
+    };
+    shape && query_ok
 }
 
 /* ------------------------------ commands: the instance's pages — needs you (M42) */
@@ -488,10 +546,24 @@ fn show_main(app: &AppHandle, at: Option<&str>) -> tauri::Result<()> {
         Some(url) => (WebviewUrl::External(url), (1200.0, 800.0), true),
         None => (WebviewUrl::App("index.html".into()), (520.0, 460.0), false),
     };
+    instance_window(app, "main", "Fabrikka", url, size, resizable)
+}
+
+/// A window showing the instance (or the app's own page), with the rules every
+/// such window follows: other sites leave for the browser, and the vendor
+/// sign-in handoff does too (ADR 0033).
+fn instance_window(
+    app: &AppHandle,
+    label: &str,
+    title: &str,
+    url: WebviewUrl,
+    size: (f64, f64),
+    resizable: bool,
+) -> tauri::Result<()> {
     let opener = app.clone();
     let handoff_opener = app.clone();
-    WebviewWindowBuilder::new(app, "main", url)
-        .title("Fabrikka")
+    let builder = WebviewWindowBuilder::new(app, label, url)
+        .title(title)
         .inner_size(size.0, size.1)
         .min_inner_size(480.0, 420.0)
         .resizable(resizable)
@@ -519,8 +591,13 @@ fn show_main(app: &AppHandle, at: Option<&str>) -> tauri::Result<()> {
                 eprintln!("[fabrikka app] couldn't open the sign-in in the browser: {e}");
             }
             false
-        })
-        .build()?;
+        });
+    // macOS: every window of the app shares one tabbing identifier, so a room's
+    // output opens as a native tab of the main window, not a loose window (ADR
+    // 0045). Other platforms have no such thing; there it stays a window.
+    #[cfg(target_os = "macos")]
+    let builder = builder.tabbing_identifier("fabrikka");
+    builder.build()?;
     Ok(())
 }
 
@@ -674,6 +751,7 @@ fn main() {
             host_stop,
             host_set_tool,
             open_folders,
+            open_output,
             notify,
             set_attention
         ])

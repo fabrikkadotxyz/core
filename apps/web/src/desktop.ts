@@ -17,6 +17,22 @@ export async function openFolders(): Promise<void> {
   await b.invoke('open_folders');
 }
 
+/**
+ * M49 (ADR 0045): a room's output in a window of its own. `path` is the output's
+ * address on the instance; the app joins it to the configured server and opens
+ * one window per output. Outside the app, or in an app without the command, a
+ * new browser tab.
+ */
+export function openOutput(path: string): void {
+  const b = bridge();
+  const tab = () => window.open(path, '_blank', 'noopener');
+  if (!b) {
+    tab();
+    return;
+  }
+  b.invoke('open_output', { path }).catch(tab);
+}
+
 /** M42: a system notification. The app caps text and rate, and opens only paths on the instance. */
 export async function notify(n: { title: string; body: string; path: string }): Promise<void> {
   const b = bridge();

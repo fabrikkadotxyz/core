@@ -10,6 +10,11 @@ import { confluence, jira } from './atlassian.ts';
 import { clickup } from './clickup.ts';
 import { github } from './github.ts';
 import { gitlab } from './gitlab.ts';
+import { googleCalendar } from './google-calendar.ts';
+import { googleDocs } from './google-docs.ts';
+import { googleDrive } from './google-drive.ts';
+import { googleGmail } from './google-gmail.ts';
+import { googleSheets } from './google-sheets.ts';
 import { grafana } from './grafana.ts';
 import { linear } from './linear.ts';
 import { notion } from './notion.ts';
@@ -24,7 +29,7 @@ const BUILT_IN: CatalogueEntry[] = [github, jira, confluence, linear, sentry, no
  * FABRIKKA_PREPARED_VENDORS names them, so the owner can connect one and
  * verify it before it joins BUILT_IN (docs/operations.md, "A prepared vendor").
  */
-const PREPARED: CatalogueEntry[] = [grafana];
+const PREPARED: CatalogueEntry[] = [grafana, googleCalendar, googleDrive, googleSheets, googleDocs, googleGmail];
 
 function preparedOffered(): CatalogueEntry[] {
   const ids = (process.env.FABRIKKA_PREPARED_VENDORS ?? '')

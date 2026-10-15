@@ -24,6 +24,10 @@ const NO_REG = process.argv.includes('--no-registration');
 // registered client gets a secret it must present.
 const CONFIDENTIAL = process.argv.includes('--confidential');
 const PRE = process.argv[process.argv.indexOf('--client') + 1]?.split(':');
+// Like Google: the MCP server answers without a challenge, the authorization
+// server has only an OpenID configuration, and a refresh token comes only with
+// access_type=offline and prompt=consent (ADR 0046).
+const GOOGLE_LIKE = process.argv.includes('--google-like');
 const BASE = `http://localhost:${PORT}`;
 const ISSUER = `${BASE}/oauth`;
 
@@ -32,7 +36,7 @@ if (PRE) clients.set(PRE[0], { secret: PRE[1], redirectUris: null }); // pre-reg
 const codes = new Map(); // code -> { clientId, redirectUri, challenge, resource }
 const access = new Map(); // token -> { expiresAt }
 const refreshes = new Map(); // token -> { clientId, revoked }
-const stats = { registrations: 0, codes: 0, refreshes: 0 };
+const stats = { registrations: 0, codes: 0, refreshes: 0, offline: 0 };
 let ttl = 3600;
 
 const token = () => randomBytes(24).toString('base64url');
@@ -42,8 +46,10 @@ const app = createMcpHonoApp();
 
 /* ---- discovery ---- */
 app.get('/.well-known/oauth-protected-resource/mcp', (c) => c.json({ resource: `${BASE}/mcp`, authorization_servers: [ISSUER] }));
-app.get('/.well-known/oauth-authorization-server/oauth', (c) =>
-  c.json({
+app.get('/.well-known/oauth-authorization-server/oauth', (c, next) => (GOOGLE_LIKE ? next() : c.json(metadata())));
+app.get('/.well-known/openid-configuration', (c) => (GOOGLE_LIKE ? c.json(metadata()) : c.notFound()));
+app.get('/oauth/.well-known/openid-configuration', (c) => (GOOGLE_LIKE ? c.json(metadata()) : c.notFound()));
+const metadata = () => ({
     issuer: ISSUER,
     authorization_endpoint: `${ISSUER}/authorize`,
     token_endpoint: `${ISSUER}/token`,
@@ -51,8 +57,7 @@ app.get('/.well-known/oauth-authorization-server/oauth', (c) =>
     code_challenge_methods_supported: ['S256'],
     grant_types_supported: CONFIDENTIAL ? ['authorization_code'] : ['authorization_code', 'refresh_token'],
     token_endpoint_auth_methods_supported: CONFIDENTIAL ? ['client_secret_post'] : ['none'],
-  }),
-);
+});
 
 /* ---- registration (RFC 7591) ---- */
 app.post('/oauth/register', async (c) => {
@@ -71,6 +76,10 @@ app.post('/oauth/register', async (c) => {
 
 /* ---- authorize: automatic consent ---- */
 app.get('/oauth/authorize', (c) => {
+  if (GOOGLE_LIKE) {
+    if (c.req.query('access_type') !== 'offline' || c.req.query('prompt') !== 'consent') return c.text('a refresh token needs access_type=offline and prompt=consent', 400);
+    stats.offline++;
+  }
   const q = c.req.query();
   const client = clients.get(q.client_id);
   const redirectOk = client && (client.redirectUris === null ? q.redirect_uri?.startsWith('http://localhost') : client.redirectUris.includes(q.redirect_uri));
@@ -143,7 +152,8 @@ app.all('/mcp', async (c) => {
   const bearer = c.req.header('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
   const valid = bearer && access.get(bearer)?.expiresAt > Date.now();
   if (!valid) {
-    c.header('www-authenticate', `Bearer resource_metadata="${BASE}/.well-known/oauth-protected-resource/mcp"`);
+    // Google-like: no hint at all; the client must derive the metadata URL from the path.
+    if (!GOOGLE_LIKE) c.header('www-authenticate', `Bearer resource_metadata="${BASE}/.well-known/oauth-protected-resource/mcp"`);
     return c.json({ error: 'unauthorized' }, 401);
   }
   return handler.fetch(c.req.raw, {

@@ -2433,3 +2433,48 @@ button.link:hover:not(:disabled) { background: none; box-shadow: none; }
 /* -------------------------------------------------- Settings: one screen, tabs (2026-10-14) */
 .settings-tabs { flex-wrap: wrap; margin: 0 0 1.25rem; }
 .settings-tabs .tab { text-decoration: none; }
+
+/* ------------------------------------- M49: the output in its own tab (ADR 0045) */
+.output-only-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.workspace.output-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+.workspace.output-only .rail.output {
+  grid-column: 1;
+  border-left: 0;
+  width: min(1100px, 100%);
+  margin: 0 auto;
+}
+@media (max-width: 1100px) {
+  /* Alone on the page, the rail is the page: never an overlay. */
+  .workspace.output-only .rail.output,
+  .workspace.output-only[data-doc='open'] .rail.output {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+  }
+}
+.pane-pop { padding-inline: 0.55rem; }
+.output-tabs {
+  padding: 0 0.75rem;
+  flex-wrap: wrap;
+  background: var(--bg);
+}
+.tab-closable { display: inline-flex; align-items: center; }
+.tab-closable .tab { padding-right: 0.25rem; }
+.tab-close {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.3rem 0.45rem 0.3rem 0.15rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.tab-close:hover { color: var(--text); }

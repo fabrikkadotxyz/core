@@ -345,6 +345,25 @@ only once the instance has a GitHub OAuth App:
 4. In `.env`: `GITHUB_OAUTH_CLIENT_ID=…` and `GITHUB_OAUTH_CLIENT_SECRET=…`.
    Restart the server.
 
+**Google (Gmail, Calendar, Drive, Sheets, Docs; ADR 0046).** One Google Cloud
+OAuth client per instance, read from `GOOGLE_OAUTH_CLIENT_ID` and
+`GOOGLE_OAUTH_CLIENT_SECRET`; without them the Google entries are absent.
+
+1. A Google Cloud project with the Workspace Developer Preview Program joined
+   (the MCP servers are preview-only), and these enabled: Gmail, Drive, Docs,
+   Sheets and Calendar APIs, plus their MCP services (`gmailmcp`, `drivemcp`,
+   `docsmcp`, `sheetsmcp`, `calendarmcp` `.googleapis.com`).
+2. Google Auth Platform → Branding (your instance's name and links), Audience
+   (*Internal* if the project belongs to your Workspace organization, which
+   skips verification; otherwise *External* with test users), Data Access (the
+   scopes each entry asks for, listed in `catalogue/google-*.ts`).
+3. Clients → Web application, **Use this client for an AI-powered agent**
+   ticked (it can't be added later), redirect URI
+   `<PUBLIC_URL>/api/connections/oauth/callback`.
+4. An *External* app must pass Google's verification before anyone but its
+   test users can connect; Gmail's scopes add the CASA assessment. In
+   *Testing* status refresh tokens expire after seven days.
+
 A GitHub OAuth App has one callback URL, so each instance, hosted or
 self-hosted, registers its own.
 

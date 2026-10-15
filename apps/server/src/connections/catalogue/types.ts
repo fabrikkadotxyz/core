@@ -2,13 +2,15 @@
  * A catalogue entry (M18, ADR 0024): one vendor's own MCP server, offered under
  * a category. Data, not code — adding a vendor is one file plus one registry line.
  */
-export type Category = 'code' | 'issues' | 'observability' | 'docs';
+export type Category = 'code' | 'issues' | 'observability' | 'docs' | 'email' | 'calendar';
 
 export const CATEGORY_NAMES: Record<Category, string> = {
   code: 'Code host',
   issues: 'Issue tracker',
   observability: 'Observability',
   docs: 'Docs',
+  email: 'Email',
+  calendar: 'Calendar',
 };
 
 /** Something the person fills in when connecting, sent as a header on every call. */
@@ -45,6 +47,11 @@ export interface CatalogueEntry {
      * (GitHub). Read from the environment; absent there, the entry isn't offered.
      */
     client?: { idEnv: string; secretEnv: string };
+    /**
+     * Extra parameters on the authorization request (ADR 0046): Google issues
+     * a refresh token only with access_type=offline and prompt=consent.
+     */
+    authorizeParams?: Record<string, string>;
   };
   fields?: CatalogueField[];
   /** Grant presets: upstream tool names, from a real connection's tool list. */

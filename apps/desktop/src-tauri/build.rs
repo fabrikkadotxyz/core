@@ -14,6 +14,7 @@ fn main() {
             "host_stop",
             "host_set_tool",
             "open_folders",
+            "open_output",
             "notify",
             "set_attention",
         ]),

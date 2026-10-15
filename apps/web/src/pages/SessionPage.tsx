@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Select, TeamInitial } from '../components/Select.tsx';
-import { inDesktopApp, openFolders } from '../desktop.ts';
+import { inDesktopApp, openFolders, openOutput as openOutputTab } from '../desktop.ts';
 import { AGENT_TOOLS, agentTool } from '@fabrikka/types';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
@@ -143,7 +143,7 @@ function clampWidth(px: number, doc = false): number {
  * (ADR 0018). Every access is guarded — storage can be disabled or cleared, and
  * a preference that throws must not take the session screen down with it.
  */
-function usePanes(
+export function usePanes(
   key: string,
 ): [PaneState, (next: PaneState | ((prev: PaneState) => PaneState)) => void] {
   const storageKey = `fabrikka.panes.${key}`;
@@ -772,6 +772,17 @@ export function SessionPage() {
                 onClick={() => togglePane('output')}
               >
                 Output
+              </button>
+            )}
+            {!isChat && (
+              // M49 (ADR 0045): the right pane alone, in a new tab (a new window in the desktop app).
+              <button
+                className="pane-toggle pane-pop"
+                aria-label="Open the output in a new tab"
+                title="Open the output in a new tab"
+                onClick={() => openOutputTab(`/o/${owner}/s/${session}/output${panes.openOutput ? `?doc=${encodeURIComponent(panes.openOutput)}` : ''}`)}
+              >
+                ↗
               </button>
             )}
           </header>
@@ -1664,7 +1675,7 @@ function AgentSetup({
  * Adds are appends, so typing here cannot delete what an agent recorded while you
  * were typing — and vice versa. See ADR 0013.
  */
-function ContextPanel({ ref_ }: { ref_: SessionRef }) {
+export function ContextPanel({ ref_ }: { ref_: SessionRef }) {
   const [context, setContext] = useState<SessionContext | null>(null);
   const [objective, setObjective] = useState('');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -1771,7 +1782,7 @@ const LINK_ICON: Record<LinkType, string> = {
  * status is whatever was last reported, with its age, because Fabrikka never
  * polls a vendor and should not look as if it did.
  */
-function LinksPanel({ ref_, version, readOnly = false }: { ref_: SessionRef; version: number; readOnly?: boolean }) {
+export function LinksPanel({ ref_, version, readOnly = false }: { ref_: SessionRef; version: number; readOnly?: boolean }) {
   const [list, setList] = useState<SessionLink[]>([]);
   const [url, setUrl] = useState('');
   const [type, setType] = useState<LinkType>('issue');
@@ -1861,7 +1872,7 @@ function LinksPanel({ ref_, version, readOnly = false }: { ref_: SessionRef; ver
   );
 }
 
-function ArtifactsPanel({ ref_, readOnly = false }: { ref_: SessionRef; readOnly?: boolean }) {
+export function ArtifactsPanel({ ref_, readOnly = false }: { ref_: SessionRef; readOnly?: boolean }) {
   const [list, setList] = useState<Artifact[]>([]);
   const [linkUrl, setLinkUrl] = useState('');
   const [error, setError] = useState<string | null>(null);

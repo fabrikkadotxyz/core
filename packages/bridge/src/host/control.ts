@@ -170,7 +170,7 @@ const PAGE = `<!doctype html>
     </form>
     <p class="muted" id="policyhelp"></p>
     <p class="muted">A folder is for one organization's rooms, or Personal rooms. For two organizations, grant it twice.</p>
-    <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code agents read only inside the folder.</p>
+    <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code and OpenCode agents read only inside the folder.</p>
     <p class="error" id="adderror"></p>
   </div>
   <h2>Agent tools on this computer</h2>

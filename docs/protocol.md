@@ -654,6 +654,64 @@ older docs implied, each found by running it rather than reading about it:
 
 Resume is a subcommand, not a flag: `codex exec resume <options> <id> <prompt>`.
 
+### OpenCode
+
+```bash
+OPENCODE_CONFIG_CONTENT='<policy and server, JSON>' \
+FABRIKKA_RUN_TOKEN=<run token> \
+XDG_CONFIG_HOME=<empty per-run directory> \     # read and edit only
+opencode run --format json --pure --dir <folder> \
+  -s <session id> \                              # when continuing
+  "<session preamble>\n\n<prompt>"
+```
+
+**OpenCode's policies** (M16, [ADR 0047](decisions/0047-opencode-on-the-host-is-confined-by-a-per-run-config.md))
+are a permission config passed per run, in the environment, never written to
+the folder:
+
+| Policy | `tools` off | `permission` | Also |
+| --- | --- | --- | --- |
+| `read` | `bash` `edit` `write` `patch` `webfetch` `websearch` `task` | `*` deny; `read` `glob` `grep` `list` allow; `fabrikka_session_*` allow | empty `XDG_CONFIG_HOME` |
+| `edit` (default) | `bash` `webfetch` `websearch` `task` | as `read`, plus `edit` allow, `external_directory` deny | empty `XDG_CONFIG_HOME` |
+| `full` | none | the user's own | `--auto` |
+
+Every run's config also carries the session's server:
+
+```json
+{
+  "mcp": {
+    "fabrikka_session": {
+      "type": "remote",
+      "url": "https://<host>/mcp/o/<owner_id>/s/<session_id>",
+      "headers": { "Authorization": "Bearer {env:FABRIKKA_RUN_TOKEN}" }
+    }
+  }
+}
+```
+
+`{env:…}` is substituted by OpenCode, so the token is in the environment only.
+The key is `fabrikka_session`, as for Codex: a project's own `opencode.json`
+may already name a `fabrikka` server, and OpenCode merges config by key. Tools
+therefore arrive as `fabrikka_session_post_message`.
+
+Verified against opencode `1.18.35` by real runs judged by the disk
+(`scripts/spikes/m16-opencode-policies.mjs`):
+
+- **Reads are confined**, unlike Codex: `external_directory: "deny"` refuses a
+  read one level above the folder, so OpenCode carries no caveat.
+- **A permission that would prompt is auto-rejected** in headless mode, so a
+  forgotten key fails closed. `--auto` approves what is not denied: `full`.
+- **`-s` resumes a session** and the resumed run remembers the earlier turn.
+- **No sign-in is required.** Without a provider OpenCode runs on its own free
+  models, slowly. `-m provider/model` chooses another (M16's pass-through, not
+  yet built); the model used is in `opencode export <id>`, not the stream.
+- **`--pure` skips the user's plugins**, and the empty config directory keeps
+  their MCP servers, agents and commands out of a confined run.
+- **`--dir` is not optional.** OpenCode takes its working directory from the
+  inherited `PWD` variable, not the process's real one; without `--dir` a run
+  started by the host would work in the host's own directory. The runner sets
+  `PWD` too.
+
 ### What the runner reports as activity
 
 Both runners parse the agent's own event stream **incrementally** — a line is
@@ -664,6 +722,7 @@ proceeds. What each stream offers differs:
 | --- | --- | --- |
 | Claude Code | `{"type":"assistant"}` events, each `tool_use` block | One event per call; no de-duplication needed |
 | Codex | `{"type":"item.started"}` events, `command_execution` and `mcp_tool_call` items | **`item.completed` repeats the same item `id`** and is ignored, or every step would appear twice |
+| OpenCode | `{"type":"tool_use"}` events, `part.tool` and `part.state.input` | `part.state.output` is the tool's result and is never read (ADR 0015); MCP tools arrive as `fabrikka_session_<tool>` |
 
 Codex's `item.completed` also carries `aggregated_output` — the command's actual
 stdout. **It is never read.** Tool output is not streamed by design (ADR 0015),
@@ -709,7 +768,7 @@ that position is a standing liability.
 
 ### Unattended execution
 
-Headless runs cannot stop at permission prompts, so prompts are answered by policy instead: Claude Code runs under the folder's policy, **`edit` by default** (files in the folder only; no shell, no web), or `--dangerously-skip-permissions` (no sandbox) where a folder is granted `full`; Codex runs with `--approve-for-me` (workspace-write sandbox). **This is only safe because of mention-gating and trust tiers** — a spawn is triggered only by a participant authorized to drive that agent. See `docs/security.md`. Never relax one without re-reading the other.
+Headless runs cannot stop at permission prompts, so prompts are answered by policy instead: Claude Code runs under the folder's policy, **`edit` by default** (files in the folder only; no shell, no web), or `--dangerously-skip-permissions` (no sandbox) where a folder is granted `full`; Codex runs with `--approve-for-me` (workspace-write sandbox); OpenCode runs under a per-run permission config, `--auto` only in `full`. **This is only safe because of mention-gating and trust tiers** — a spawn is triggered only by a participant authorized to drive that agent. See `docs/security.md`. Never relax one without re-reading the other.
 
 Poll cadence for pending mentions: 5 s, exponential backoff on failure.
 

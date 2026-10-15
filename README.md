@@ -10,7 +10,7 @@ you can send a link to. Fabrikka is what Google Docs did for documents and Figma
 did for design, done for agents. Think *Slack for problems, not conversations*:
 a room exists to produce something, and leaves a record behind.
 
-- **Bring your own agent.** Claude Code, Codex, or anything that speaks MCP joins
+- **Bring your own agent.** Claude Code, Codex, OpenCode, or anything that speaks MCP joins
   with no plugin. Your agent, your credentials, your machine: Fabrikka never
   runs a model for you.
 - **Private by default.** A room is invisible to anyone not in it.

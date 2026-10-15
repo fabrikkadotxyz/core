@@ -211,6 +211,7 @@ web), enforced by Claude Code's own tool restrictions. *Full*
 (`--dangerously-skip-permissions`, **no sandbox at all**) is opt-in per folder,
 or `watch --policy full`. Codex's `--approve-for-me` auto-approves **inside a
 workspace-write sandbox**, which can still run commands in the folder.
+OpenCode runs under a per-run permission config ([ADR 0047](decisions/0047-opencode-on-the-host-is-confined-by-a-per-run-config.md)) that confines reads, edits and commands to the folder's policy; `--auto` only in *Full*.
 
 So the containment is entirely upstream, in who can cause a spawn:
 
@@ -491,6 +492,22 @@ machine and post it to the session. The picker states this, and adding a Codex
 agent takes a confirming tick. The delivery gate (Threat 1) still decides who
 can mention it at all. Claude Code's policies confine reads too, and are
 unchanged.
+
+### OpenCode on the host (M16)
+
+OpenCode's confinement is a permission config Fabrikka passes to each run
+([ADR 0047](decisions/0047-opencode-on-the-host-is-confined-by-a-per-run-config.md)).
+In *Read only* and *Edit in folder*, an OpenCode agent:
+- has no shell, no web fetch or search, and no sub-agents: the tools are off;
+- reads only inside the folder (`external_directory` denied), and in *Read
+  only* has no editing tools at all;
+- runs with none of the user's own OpenCode config: an empty per-run config
+  directory and `--pure` keep their MCP servers, agents and plugins out.
+
+Anything that would prompt is auto-rejected in headless mode, so a policy
+fails closed. The enforcement is OpenCode's permission layer, the same kind of
+guarantee Claude Code's tool restrictions give, not an operating-system
+sandbox. OpenCode carries no caveat in the picker, because reads are confined.
 
 ### The desktop app (M34)
 

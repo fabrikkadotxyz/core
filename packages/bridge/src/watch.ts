@@ -79,14 +79,14 @@ export async function startRunner(
   if (!isSupported(opts.provider)) {
     log(
       `provider "${opts.provider}" cannot be spawned. ` +
-        'Supported: claude-code, codex. Use a live session instead.',
+        'Supported: claude-code, codex, opencode. Use a live session instead.',
     );
     return null;
   }
   if (!policyVerified(opts.provider, policy)) {
     log(
       `${opts.provider} has no verified "${policy}" policy yet (ADR 0027). Use --policy full to run it ` +
-        (opts.provider === 'codex' ? "under Codex's own workspace-write sandbox." : 'with no sandbox.'),
+        (opts.provider === 'codex' ? "under Codex's own workspace-write sandbox." : opts.provider === 'opencode' ? 'with --auto: anything not denied is approved.' : 'with no sandbox.'),
     );
     return null;
   }
@@ -106,6 +106,12 @@ export async function startRunner(
             : policy === 'edit'
               ? 'edit in folder — Codex changes only this folder; no network, none of your other Codex tools'
               : 'full — codex exec --approve-for-me (workspace-write sandbox)'
+          : opts.provider === 'opencode'
+            ? policy === 'read'
+              ? 'read only — OpenCode reads this folder only; no shell, no web, none of your own OpenCode setup'
+              : policy === 'edit'
+                ? 'edit in folder — OpenCode reads and edits this folder only; no shell, no web, none of your own OpenCode setup'
+                : 'full — opencode run --auto (your own OpenCode setup)'
           : policy === 'read'
             ? 'read only — reads files in this folder, changes nothing'
             : policy === 'edit'

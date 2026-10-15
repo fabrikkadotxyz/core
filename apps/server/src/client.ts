@@ -171,7 +171,8 @@ main() {
   found=""
   command -v claude >/dev/null 2>&1 && found="$found Claude Code"
   command -v codex >/dev/null 2>&1 && found="$found Codex"
-  if [ -n "$found" ]; then say "agent tools found:$found"; else say "no agent tools found yet: install Claude Code or Codex to run agents here"; fi
+  command -v opencode >/dev/null 2>&1 && found="$found OpenCode"
+  if [ -n "$found" ]; then say "agent tools found:$found"; else say "no agent tools found yet: install Claude Code, Codex or OpenCode to run agents here"; fi
 
   if [ "$connect" = 1 ]; then
     say "connecting this computer to $FABRIKKA_SERVER: your browser will open"

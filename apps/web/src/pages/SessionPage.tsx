@@ -1630,6 +1630,14 @@ function AgentSetup({
                 tools — but it can read files anywhere on this computer. Only mentions
                 from you can trigger them.
               </>
+            ) : agent.provider === 'opencode' ? (
+              <>
+                <strong>Runs start without approval prompts, in Edit in folder</strong>: OpenCode
+                reads and edits that folder only, with no shell, no web and none of your
+                own OpenCode setup. It runs on OpenCode's free models until you sign in
+                to a provider (<code>opencode auth login</code>). Only mentions from you
+                can trigger them.
+              </>
             ) : (
               <>
                 <strong>Runs start without permission prompts, in Edit in folder
@@ -1651,7 +1659,9 @@ function AgentSetup({
               ? 'Registers the session with the Codex CLI. '
               : agent.provider === 'claude-code'
                 ? 'Registers the session with Claude Code. '
-                : 'Point any MCP client at this endpoint. '}
+                : agent.provider === 'opencode'
+                  ? 'Registers the session with OpenCode. '
+                  : 'Point any MCP client at this endpoint. '}
             The agent can read and post, but <strong>cannot be woken</strong>: it
             participates only while it happens to be running.
           </p>

@@ -640,6 +640,55 @@ Not on the list, deliberately: **Cursor IDE, the Antigravity IDE, Cline,
 Windsurf.** IDEs and extensions with no headless CLI of their own (the Antigravity
 CLI is slot 1 and ships separately from the IDE). They get Lane A today and need nothing from us.
 
+> **Built 2026-10-15: slot 2, OpenCode** ([ADR 0047](decisions/0047-opencode-on-the-host-is-confined-by-a-per-run-config.md)).
+> Verified first, by real `opencode run` runs judged by the disk
+> (`scripts/spikes/m16-opencode-policies.mjs`, opencode 1.18.35). What landed:
+> - **OpenCode policies**, a permission config passed per run in the
+>   environment, never written to the folder:
+>   - *Read only:* shell, editing, web and sub-agent tools off; everything
+>     denied except reading, globbing, grepping, listing and the session's own
+>     tools.
+>   - *Edit in folder:* the same, with editing allowed and reads outside the
+>     folder denied.
+>   - *Full:* `--auto`, the user's own config.
+>   - **All three:** `--format json --pure --dir <folder>` (OpenCode follows the
+>     inherited `PWD`, not the real working directory; `--dir` wins), the
+>     session's server as
+>     `fabrikka_session` with the token from the environment
+>     (`{env:FABRIKKA_RUN_TOKEN}`). *Read only* and *Edit in folder* also run
+>     with an empty per-run `XDG_CONFIG_HOME`, so none of the user's own
+>     OpenCode servers, agents or plugins load.
+>   - **Reads are confined**, unlike Codex, so OpenCode has no caveat and no
+>     confirming tick.
+> - **The registry gains OpenCode** (`AGENT_TOOLS`): the host offers it where
+>   `opencode` is installed; an agent is `opencode-<you>`. Resume works
+>   (`-s`), so M15 steering can use it.
+> - **No sign-in needed:** without a provider OpenCode runs on its own free
+>   models, slowly. The setup hint says so and points at `opencode auth login`.
+>   `-m` waits for the model pass-through below.
+>
+> **Slot 1, Antigravity CLI, verified in part the same day** (agy 1.3.0):
+> `-p` with `--output-format stream-json` works, the result carries a
+> conversation id and `--conversation` resumes it, and tools needing approval
+> are soft-denied rather than hung. Blocked: MCP servers and permission
+> allow-rules live only in the user-level config, with no per-run override
+> found yet. Until there is one, an adapter would have to edit the user's own
+> config, which ADR 0002 forbids. Antigravity stays Lane A.
+>
+> **Test (OpenCode).**
+> 1. In a session: **Setup → Add my agent →** a folder **→ OpenCode → Add**:
+>    **4 clicks**, counted from the session. The agent is `opencode-<you>`.
+> 2. Mention it in an *Edit in folder* folder asking to fix a typo: the file
+>    is fixed and the answer is posted.
+> 3. In a *Read only* folder: the same request changes nothing, and the
+>    answer still arrives.
+> 4. Scripted, with `FABRIKKA_TEST_SPAWN=1` (real OpenCode runs), through the
+>    runner exactly as the host runs it: an *Edit* run fixes the typo and can't
+>    read or write outside its folder; *Read only* writes nothing; the
+>    session's tools work in both; the answer reaches the session.
+> 5. Scripted, always: each policy's OpenCode config, the registry entry, the
+>    event stream's summariser, and the setup commands for an OpenCode agent.
+
 ### Model pass-through
 
 See [ADR 0017](decisions/0017-model-selection-is-spawn-only.md). The short version

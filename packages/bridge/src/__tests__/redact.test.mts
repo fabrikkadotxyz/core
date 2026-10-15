@@ -1,5 +1,5 @@
 import { redact, summarise } from '../redact.ts';
-import { codexActivity } from '../spawn.ts';
+import { codexActivity, opencodeActivity } from '../spawn.ts';
 
 let fails = 0;
 const eq = (label: string, got: unknown, want: unknown) => {
@@ -80,6 +80,17 @@ eq('codex thread events are not activity', codexActivity('{"type":"thread.starte
 eq('codex agent_message is not activity', codexActivity('{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"the number is 8471"}}'), null);
 eq('a non-JSON line is ignored', codexActivity('Reading additional input from stdin...'), null);
 eq('malformed JSON is ignored', codexActivity('{"type":"item.started"'), null);
+
+// OpenCode (ADR 0047): one tool_use event per call; part.state.output is never read.
+const opencodeRead = '{"type":"tool_use","timestamp":1,"sessionID":"ses_1","part":{"type":"tool","tool":"read","callID":"c1","state":{"status":"completed","input":{"filePath":"/work/note.txt"},"output":"<content>\\nthe number is 8471\\n</content>"}}}';
+eq('opencode reports a read step with its path', opencodeActivity(opencodeRead), { tool: 'Read', detail: '/work/note.txt' });
+lacks('opencode never carries the tool output', JSON.stringify(opencodeActivity(opencodeRead)), '8471');
+eq('opencode shell steps keep the program only', opencodeActivity('{"type":"tool_use","part":{"type":"tool","tool":"bash","state":{"status":"completed","input":{"command":"curl -H \\"Authorization: Bearer sk-abcdefghijklmnopqrstuvwxyz\\" https://x"}}}}'), { tool: 'Bash', detail: 'curl' });
+eq('opencode edits name the file', opencodeActivity('{"type":"tool_use","part":{"type":"tool","tool":"edit","state":{"status":"completed","input":{"filePath":"/work/typo.txt","oldString":"teh","newString":"the"}}}}'), { tool: 'Edit', detail: '/work/typo.txt' });
+eq('opencode mcp tools arrive under their server prefix, name only', opencodeActivity('{"type":"tool_use","part":{"type":"tool","tool":"fabrikka_session_post_message","state":{"status":"completed","input":{"content":"done"}}}}'), { tool: 'fabrikka_session_post_message', detail: null });
+eq('opencode text events are not activity', opencodeActivity('{"type":"text","part":{"type":"text","text":"4242"}}'), null);
+eq('opencode step events are not activity', opencodeActivity('{"type":"step_finish","part":{"type":"step-finish","reason":"stop"}}'), null);
+eq('opencode malformed JSON is ignored', opencodeActivity('{"type":"tool_use"'), null);
 
 console.log(fails === 0 ? '\nredaction: PASS' : `\nredaction: ${fails} FAILURE(S)`);
 process.exit(fails === 0 ? 0 : 1);

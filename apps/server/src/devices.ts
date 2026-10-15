@@ -32,7 +32,7 @@ import type { DeviceSummary } from '@fabrikka/types';
 import { addAgentToSession } from './agents.ts';
 
 const PAIRING_TTL_MS = 10 * 60_000;
-/** Agent tools whose host policies were verified (ADR 0027). Codex isn't, yet. */
+/** Agent tools whose host policies were verified: Claude Code (ADR 0027), Codex (ADR 0032), OpenCode (ADR 0047). */
 /** Agent tools the host may run: the registry (M37), each with verified policies (ADR 0027, 0032). */
 export const HOST_PROVIDERS = AGENT_TOOLS.map((t) => t.id);
 
@@ -258,7 +258,7 @@ export async function bindAgent(
     throw new DeviceError(`${provider} can't run from the host: its folder policies aren't verified`);
   }
 
-  // claude-<you>, codex-<you>, …: the tool's short name.
+  // claude-<you>, codex-<you>, opencode-<you>, …: the tool's short name.
   const prefix = provider === 'claude-code' ? 'claude' : provider;
   const base = (opts.displayName ?? `${prefix}-${opts.user.displayName}`).replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 40);
   let created: Awaited<ReturnType<typeof addAgentToSession>> | null = null;

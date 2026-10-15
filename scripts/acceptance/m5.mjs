@@ -415,6 +415,69 @@ if (!DEEP) {
     cchild.kill();
     await rm(cdir, { recursive: true, force: true });
   }
+
+  /* ---- the same, with OpenCode, when it is installed (M16, ADR 0047) ---- */
+
+  const hasOpencode = await new Promise((r) =>
+    execFileCb('sh', ['-c', 'command -v opencode'], (e) => r(!e)),
+  );
+  if (!hasOpencode) {
+    skip('opencode spawn — opencode CLI not found on PATH');
+  } else {
+    const ocAgent = (
+      await req(`${base}/agents`, {
+        method: 'POST',
+        body: { displayName: 'opencode-x', provider: 'opencode' },
+        jar: fede,
+      })
+    ).json;
+
+    const odir = await mkdtemp(join(tmpdir(), 'm5-opencode-'));
+    await writeFile(join(odir, 'VALUE.txt'), `the opencode number is ${stamp}\n`);
+
+    const ochild = spawn(
+      'node',
+      ['packages/bridge/dist/cli.js', 'watch', '--dir', odir, '--provider', 'opencode'],
+      {
+        env: {
+          ...process.env,
+          FABRIKKA_URL: `http://localhost:9090/mcp/o/${S.ownerSlug}/s/${S.publicId}`,
+          FABRIKKA_TOKEN: ocAgent.token,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    let olog = '';
+    ochild.stdout.on('data', (d) => (olog += d.toString()));
+    ochild.stderr.on('data', (d) => (olog += d.toString()));
+
+    await req(`${base}/messages`, {
+      method: 'POST',
+      body: { content: `@opencode-x read VALUE.txt and report the opencode number` },
+      jar: fede,
+    });
+
+    // OpenCode's free models are slow; the runner allows ten minutes.
+    const odeadline = Date.now() + 600_000;
+    while (Date.now() < odeadline && !/run done|run failed/.test(olog)) {
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    check(/run done/.test(olog), 'the OpenCode run completed');
+    check(
+      /fabrikka_session_post_message/.test(olog),
+      'OPENCODE REACHED THE SESSION ENDPOINT — the per-run config injection works',
+    );
+    const omessages = (await req(`${base}/messages`, { jar: fede })).json;
+    check(
+      omessages.some(
+        (m) => m.author.displayName === 'opencode-x' && m.content.includes(String(stamp)),
+      ),
+      'the OpenCode run read a real file and its answer reached the session',
+    );
+
+    ochild.kill();
+    await rm(odir, { recursive: true, force: true });
+  }
 }
 
 /** Codex's desktop app bundles its CLI outside PATH. */
@@ -436,6 +499,7 @@ async function findCodex() {
 for (const [provider, expected] of [
   ['claude-code', ['bridge', 'runner', 'remote']],
   ['codex', ['runner', 'remote']],
+  ['opencode', ['runner', 'remote']],
   ['other', ['remote']],
 ]) {
   const made = (
@@ -472,6 +536,20 @@ check(
   codexSetup.remoteCommand.includes('codex mcp add') &&
     !codexSetup.remoteCommand.includes('claude mcp add'),
   'A CODEX AGENT GETS CODEX INSTRUCTIONS, never a claude command',
+);
+
+// M16 (ADR 0047): the same for OpenCode.
+const opencodeSetup = (
+  await req(`${base}/agents`, {
+    method: 'POST',
+    body: { displayName: `ocsetup-${stamp}`.slice(0, 40), provider: 'opencode' },
+    jar: fede,
+  })
+).json.setup;
+check(
+  opencodeSetup.remoteCommand.includes('opencode mcp add fabrikka') &&
+    opencodeSetup.runnerCommand.includes('--provider opencode'),
+  'AN OPENCODE AGENT GETS OPENCODE INSTRUCTIONS: opencode mcp add, and a runner with --provider opencode',
 );
 check(
   codexSetup.runnerCommand.includes('--provider codex') &&

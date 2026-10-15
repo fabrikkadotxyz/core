@@ -49,7 +49,7 @@ async function main(): Promise<void> {
         '    Run your agents on this computer, in folders you grant here.\n' +
         '    Pairs with your account once (no token to paste). Recommended.\n' +
         '\n' +
-        'fabrikka watch --dir <project> [--provider claude-code|codex] [--policy read|edit|full]\n' +
+        'fabrikka watch --dir <project> [--provider claude-code|codex|opencode] [--policy read|edit|full]\n' +
         '    Spawn a headless run for each mention, in <project>. Policy\n' +
         '    defaults to edit: files in <project> only, no shell, no web.\n' +
         '\n' +

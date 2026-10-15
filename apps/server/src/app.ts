@@ -2651,9 +2651,9 @@ export function createApp(options: CreateAppOptions = {}) {
   FABRIKKA_TOKEN=${token} \\
   ` +
       `${BRIDGE_COMMAND.join(' ')} watch --dir .` +
-      // Both tools get the default policy, `edit`: verified for Claude Code (ADR
-      // 0027) and, with its read caveat, for Codex (ADR 0032).
-      (provider === 'codex' ? ' --provider codex' : '');
+      // Every tool gets the default policy, `edit`: verified for Claude Code (ADR
+      // 0027), with its read caveat for Codex (ADR 0032), and for OpenCode (ADR 0047).
+      (provider === 'codex' || provider === 'opencode' ? ` --provider ${provider}` : '');
 
     // Phrased for the provider's own CLI. Codex takes the token from the
     // environment because it rejects a literal `bearer_token`, which conveniently
@@ -2667,12 +2667,14 @@ export function createApp(options: CreateAppOptions = {}) {
     --bearer-token-env-var FABRIKKA_TOKEN`
         : provider === 'claude-code'
           ? `claude mcp add --transport http fabrikka ${mcpUrl} --header "Authorization: Bearer ${token}"`
-          : `Streamable HTTP MCP endpoint:\n  ${mcpUrl}\n\nAuthorization: Bearer ${token}`;
+          : provider === 'opencode'
+            ? `opencode mcp add fabrikka --url ${mcpUrl} --header "Authorization=Bearer ${token}"`
+            : `Streamable HTTP MCP endpoint:\n  ${mcpUrl}\n\nAuthorization: Bearer ${token}`;
 
     const lanes: SetupLane[] =
       provider === 'claude-code'
         ? ['bridge', 'runner', 'remote']
-        : provider === 'codex'
+        : provider === 'codex' || provider === 'opencode'
           ? ['runner', 'remote']
           : ['remote'];
 

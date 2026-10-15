@@ -7,7 +7,7 @@
  * installed can't be switched on.
  *
  * Requires: the core server on :9090, the test account, the bridge built, and
- * Claude Code and Codex installed on this machine.
+ * every registry tool (Claude Code, Codex, OpenCode) installed on this machine.
  */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -77,6 +77,10 @@ check(/export const AGENT_TOOLS: readonly AgentTool\[\] = \[/.test(read('package
 check(/HOST_PROVIDERS = AGENT_TOOLS\.map/.test(read('apps/server/src/devices.ts')), 'the server reads it');
 check(/AGENT_TOOLS\.filter\(\(t\) => has\(t\.command\)\)/.test(read('packages/bridge/src/host/host.ts')), 'the host detects tools from it');
 check(/agentTool\(p\)/.test(read('apps/web/src/pages/SessionPage.tsx')) && /<Select\s+label="Agent tool"/.test(read('apps/web/src/pages/SessionPage.tsx')), "the picker's Which agent? is the app's selector, filled from it");
+// The registry's ids, in order, read from the one place they're declared.
+const registryBlock = /AGENT_TOOLS: readonly AgentTool\[\] = \[([\s\S]*?)\n\];/.exec(read('packages/types/src/index.ts'))?.[1] ?? '';
+const REGISTRY = [...registryBlock.matchAll(/\bid: '([a-z0-9-]+)'/g)].map((m) => m[1]);
+check(REGISTRY.length >= 3 && REGISTRY.includes('opencode'), `the registry lists ${REGISTRY.join(', ')}`);
 const hardcoded = ['apps/server/src/devices.ts', 'packages/bridge/src/host/host.ts', 'apps/web/src/pages/SessionPage.tsx'].filter((f) => /\[\s*'claude-code',\s*'codex'\s*\]/.test(read(f)));
 check(hardcoded.length === 0, "NO OTHER HARD-CODED LIST OF TOOLS");
 
@@ -85,7 +89,7 @@ check(hardcoded.length === 0, "NO OTHER HARD-CODED LIST OF TOOLS");
 const project = mkdtempSync(join(tmpdir(), 'm37-project-'));
 const host = await startHost();
 let st = (await host.ask({ op: 'state' })).state;
-check(st?.tools?.map((t) => t.id).join(',') === 'claude-code,codex' && st.tools.every((t) => t.installed && t.enabled), 'Agent tools lists every registry tool: installed here, and offered by default');
+check(st?.tools?.map((t) => t.id).join(',') === REGISTRY.join(',') && st.tools.every((t) => t.installed && t.enabled), 'Agent tools lists every registry tool: installed here, and offered by default');
 const grant = (await host.ask({ op: 'grant', path: project, policy: 'edit' })).grant;
 const deviceFor = async () => (await (await api('/devices')).json()).find((d) => d.grants.some((g) => g.id === grant?.id));
 let dev = null;
@@ -94,7 +98,7 @@ for (let i = 0; i < 20; i++) {
   if (dev?.grants.find((g) => g.id === grant.id)?.providers.includes('codex')) break;
   await sleep(250);
 }
-check(dev?.grants.find((g) => g.id === grant?.id)?.providers.join(',') === 'claude-code,codex', 'the server sees both offered for the folder');
+check(dev?.grants.find((g) => g.id === grant?.id)?.providers.join(',') === REGISTRY.join(','), 'the server sees every tool offered for the folder');
 
 const S = await (await api('/sessions', { method: 'POST', body: JSON.stringify({ title: `M37 ${Date.now()}` }) })).json();
 const base = `/o/${S.ownerSlug}/s/${S.publicId}`;
@@ -107,10 +111,10 @@ check((await host.ask({ op: 'tool', tool: 'codex', enabled: false })).ok, 'SWITC
 let providers = '';
 for (let i = 0; i < 20; i++) {
   providers = (await deviceFor())?.grants.find((g) => g.id === grant.id)?.providers.join(',');
-  if (providers === 'claude-code') break;
+  if (providers === REGISTRY.filter((t) => t !== 'codex').join(',')) break;
   await sleep(250);
 }
-check(providers === 'claude-code', '…makes the server see only Claude Code offered, so the picker asks no Which agent?');
+check(providers === REGISTRY.filter((t) => t !== 'codex').join(','), '…makes the server see the other tools offered, and Codex gone from the picker');
 check((await agentActive()) === false, "…stops the Codex agent that's already bound");
 const refused = await api(`${base}/agents/host`, { method: 'POST', body: JSON.stringify({ deviceId: dev.id, grantId: grant.id, provider: 'codex' }) });
 check(refused.status !== 201, '…and a new Codex agent cannot be added there');
@@ -125,7 +129,7 @@ check((await host.ask({ op: 'tool', tool: 'cursor', enabled: true })).error === 
 
 const bare = await startHost(['/usr/bin', '/bin', dirname(process.execPath)].join(':'));
 const bareState = (await bare.ask({ op: 'state' })).state;
-check(bareState?.tools?.every((t) => !t.installed && !t.enabled), 'with neither tool on the PATH, both show as not installed and not offered');
+check(bareState?.tools?.every((t) => !t.installed && !t.enabled), 'with no tool on the PATH, all show as not installed and not offered');
 check(/not installed/.test((await bare.ask({ op: 'tool', tool: 'claude-code', enabled: true })).error ?? ''), 'A TOOL THAT ISN\'T INSTALLED CANNOT BE SWITCHED ON');
 bare.stop();
 

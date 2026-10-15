@@ -166,12 +166,12 @@ check(hostPerms(caps.find((c) => c.windows.includes('main')) ?? { permissions: [
 const mainRs = readFileSync('apps/desktop/src-tauri/src/main.rs', 'utf8');
 const runtimeGrants = [...mainRs.matchAll(/\.permission\("([^"]+)"\)/g)].map((m) => m[1]);
 // ADR 0031 granted one command; ADR 0037 (M42) adds notify and set_attention,
-// each limited in Rust. Never a host command.
+// ADR 0045 (M49) open_output, each limited in Rust. Never a host command.
 check(
-  JSON.stringify(runtimeGrants) === '["allow-open-folders","allow-notify","allow-set-attention"]' &&
+  JSON.stringify(runtimeGrants) === '["allow-open-folders","allow-notify","allow-set-attention","allow-open-output"]' &&
     /\.remote\(format!\("\{origin\}\/\*"\)\)/.test(mainRs) &&
     /\.window\("main"\)/.test(mainRs),
-  "THE INSTANCE'S PAGES GET open_folders, notify AND set_attention, NO HOST COMMAND, FOR ITS OWN ORIGIN ONLY, granted at runtime",
+  "THE INSTANCE'S PAGES GET open_folders, notify, set_attention AND open_output, NO HOST COMMAND, FOR ITS OWN ORIGIN ONLY, granted at runtime",
 );
 check(/fn open_folders\(app: AppHandle\)/.test(mainRs), 'open_folders takes no argument: no path, no policy');
 const manifest = readFileSync('apps/desktop/src-tauri/build.rs', 'utf8');

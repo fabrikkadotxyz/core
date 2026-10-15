@@ -193,7 +193,7 @@ export interface AgentSummary {
  *
  * - `bridge` — real-time push into a session that is already running. Claude Code
  *   only: `claude/channel` is proprietary and stdio-only.
- * - `runner`  — spawn a headless run per mention. Claude Code and Codex.
+ * - `runner`  — spawn a headless run per mention. Claude Code, Codex and OpenCode.
  * - `remote`  — plain MCP client, pull-only. Anything that speaks MCP.
  */
 export type SetupLane = 'bridge' | 'runner' | 'remote';
@@ -677,6 +677,8 @@ export const AGENT_TOOLS: readonly AgentTool[] = [
     caveat:
       'Codex can read files anywhere on this computer. In Read only and Edit-in-folder folders it changes nothing outside the folder, has no network, and none of your other Codex tools.',
   },
+  // ADR 0047: confined by a per-run permission config, reads included; no caveat.
+  { id: 'opencode', name: 'OpenCode', command: 'opencode' },
 ];
 
 export const agentTool = (id: string): AgentTool | undefined => AGENT_TOOLS.find((t) => t.id === id);

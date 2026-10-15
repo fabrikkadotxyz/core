@@ -16,7 +16,7 @@ import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export type Provider = 'claude-code' | 'codex' | string;
+export type Provider = 'claude-code' | 'codex' | 'opencode' | string;
 
 /**
  * What an agent may do on this machine (ADR 0027). Enforced by the agent tool
@@ -32,12 +32,13 @@ export type Policy = 'read' | 'edit' | 'full';
 export const POLICIES: Policy[] = ['read', 'edit', 'full'];
 
 /**
- * Every policy is verified for both tools: Claude Code in M31 (ADR 0027), Codex
+ * Every policy is verified for each tool: Claude Code in M31 (ADR 0027), Codex
  * in M35 (ADR 0032) — whose read/edit confine writes, network and its other
- * tools, but not reads, as its picker says.
+ * tools, but not reads, as its picker says — and OpenCode in M16 (ADR 0047),
+ * whose per-run permission config confines reads too.
  */
 export function policyVerified(provider: Provider, policy: Policy): boolean {
-  return POLICIES.includes(policy) && (provider === 'claude-code' || provider === 'codex');
+  return POLICIES.includes(policy) && (provider === 'claude-code' || provider === 'codex' || provider === 'opencode');
 }
 
 /** Codex features that reach beyond its sandboxed shell: off in read and edit (ADR 0032). */
@@ -120,7 +121,7 @@ export interface SpawnResult {
 
 /** Providers this build knows how to launch. */
 export function isSupported(provider: Provider): boolean {
-  return provider === 'claude-code' || provider === 'codex';
+  return provider === 'claude-code' || provider === 'codex' || provider === 'opencode';
 }
 
 export async function runAgent(req: SpawnRequest): Promise<SpawnResult> {
@@ -129,12 +130,13 @@ export async function runAgent(req: SpawnRequest): Promise<SpawnResult> {
     return { ok: false, text: '', error: `${req.provider} has no verified "${req.policy}" policy yet (ADR 0027)` };
   }
   if (req.provider === 'codex') return runCodex(req);
+  if (req.provider === 'opencode') return runOpencode(req);
   if (req.provider === 'claude-code') return runClaude(req);
   return {
     ok: false,
     text: '',
     error:
-      `provider "${req.provider}" cannot be spawned. Supported: claude-code, codex. ` +
+      `provider "${req.provider}" cannot be spawned. Supported: claude-code, codex, opencode. ` +
       'Attach it as a live session instead.',
   };
 }
@@ -427,6 +429,219 @@ function emitCodexActivity(line: string, req: SpawnRequest): void {
 }
 
 /* -------------------------------------------------------------------------- */
+/* OpenCode                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The name the session endpoint is registered under inside an OpenCode run.
+ * The same key as Codex, for the same reason: config merges by key, and a
+ * project's own opencode.json may already name a `fabrikka` server. Tools
+ * arrive as `fabrikka_session_<tool>` (ADR 0047).
+ */
+const OPENCODE_MCP_KEY = 'fabrikka_session';
+
+/** OpenCode tools that reach beyond reading the folder: off in read (ADR 0047). */
+const OPENCODE_OFF_READ = ['bash', 'edit', 'write', 'patch', 'webfetch', 'websearch', 'task'];
+/** In edit, the editing tools come back; the shell, the web and sub-agents stay off. */
+const OPENCODE_OFF_EDIT = ['bash', 'webfetch', 'websearch', 'task'];
+
+/**
+ * The OpenCode config for a policy, passed per run as OPENCODE_CONFIG_CONTENT
+ * and never written to the folder. Exactly what
+ * scripts/spikes/m16-opencode-policies.mjs verified by the disk (opencode 1.18.35):
+ *
+ * - `tools` removes a tool outright: the model has no shell to ask for.
+ * - `permission` is matched by name, last rule wins, so `*` comes first. It
+ *   covers MCP tools too, which is what keeps a project's own servers out of a
+ *   confined run; the session's are re-admitted by prefix.
+ * - `external_directory: deny` refuses reads and writes outside the folder.
+ * - A rule that would prompt is auto-rejected in headless mode, so a forgotten
+ *   key fails closed.
+ *
+ * `full` carries only the session's server: the user's own config applies, and
+ * `--auto` approves whatever it doesn't deny.
+ */
+export function opencodePolicyConfig(policy: Policy, mcp?: { url: string }): Record<string, unknown> {
+  const config: Record<string, unknown> = {};
+  if (mcp) {
+    config.mcp = {
+      [OPENCODE_MCP_KEY]: {
+        type: 'remote',
+        url: mcp.url,
+        enabled: true,
+        // Substituted by OpenCode from the environment: the token is in no file
+        // and on no command line.
+        headers: { Authorization: 'Bearer {env:FABRIKKA_RUN_TOKEN}' },
+      },
+    };
+  }
+  if (policy === 'full') return config;
+
+  config.tools = Object.fromEntries((policy === 'read' ? OPENCODE_OFF_READ : OPENCODE_OFF_EDIT).map((t) => [t, false]));
+  config.permission = {
+    '*': 'deny',
+    read: 'allow',
+    glob: 'allow',
+    grep: 'allow',
+    list: 'allow',
+    ...(policy === 'edit' ? { edit: 'allow' } : {}),
+    external_directory: 'deny',
+    [`${OPENCODE_MCP_KEY}_*`]: 'allow',
+  };
+  return config;
+}
+
+/** The `opencode run` flags for a policy: only `full` approves on its own. */
+export function opencodePolicyArgs(policy: Policy): string[] {
+  return policy === 'full' ? ['--auto'] : [];
+}
+
+/**
+ * OpenCode.
+ *
+ * Verified against opencode 1.18.35 (ADR 0047). `run --format json` prints one
+ * event per line, each carrying the `sessionID`; `-s` resumes it, and unlike
+ * Codex the policy is config rather than a flag a resume would reject, so
+ * resuming is used. No sign-in is required: without a provider OpenCode runs on
+ * its own free models, slowly.
+ */
+async function runOpencode(req: SpawnRequest): Promise<SpawnResult> {
+  const dir = await mkdtemp(join(tmpdir(), 'fabrikka-run-'));
+
+  try {
+    const policy = req.policy ?? 'full';
+    // read and edit: an empty config directory, so none of the user's own
+    // OpenCode servers, agents or commands load (ADR 0047, finding 9). `full`
+    // keeps theirs, as it does for Codex.
+    const configHome = policy === 'full' ? null : join(dir, 'xdg');
+    if (configHome) await mkdir(join(configHome, 'opencode'), { recursive: true, mode: 0o700 });
+
+    // --pure: none of the user's plugins, which run outside the permission layer.
+    // --dir: OpenCode takes its working directory from the inherited PWD variable,
+    // not from the process's real cwd (ADR 0047, finding 10). A child started with
+    // `cwd` alone would run in the host's own directory. Both are set, below.
+    const args = ['run', '--format', 'json', '--pure', '--dir', req.cwd, ...opencodePolicyArgs(policy)];
+    if (req.resumeId) args.push('-s', req.resumeId);
+    args.push(`${req.systemPreamble}\n\n${req.prompt}`);
+
+    const out = await execute(
+      'opencode',
+      args,
+      req,
+      {
+        OPENCODE_CONFIG_CONTENT: JSON.stringify(opencodePolicyConfig(policy, req.mcp)),
+        PWD: req.cwd,
+        ...(req.mcp ? { FABRIKKA_RUN_TOKEN: req.mcp.token } : {}),
+        ...(configHome ? { XDG_CONFIG_HOME: configHome } : {}),
+      },
+      (line) => emitOpencodeActivity(line, req),
+    );
+
+    // Activity streamed above; this pass extracts the outcome: the session to
+    // resume, the text of the last message, and any error event.
+    let sessionId: string | undefined;
+    let error: string | undefined;
+    let lastMessage: string | undefined;
+    const texts = new Map<string, string[]>();
+    for (const line of out.text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('{')) continue;
+      let event: Record<string, unknown>;
+      try {
+        event = JSON.parse(trimmed) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      if (typeof event.sessionID === 'string') sessionId = event.sessionID;
+      if (event.type === 'error') {
+        const e = event.error as { name?: string; data?: { message?: string } } | undefined;
+        error = e?.data?.message ?? e?.name ?? 'OpenCode reported an error';
+      }
+      if (event.type === 'text') {
+        const part = event.part as { messageID?: string; text?: string } | undefined;
+        if (!part?.text) continue;
+        const key = part.messageID ?? '';
+        lastMessage = key;
+        texts.set(key, [...(texts.get(key) ?? []), part.text]);
+      }
+    }
+    // A free model sometimes leaks its reasoning delimiter into the text.
+    const text = (texts.get(lastMessage ?? '') ?? []).join('\n').replace(/^(?:<\/?think>\s*)+/, '').trim();
+
+    if (!out.ok) return { ok: false, text: '', error: error ?? out.error, resumeId: sessionId };
+    if (error && !text) return { ok: false, text: '', error, resumeId: sessionId };
+    return { ok: true, text, resumeId: sessionId };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** OpenCode's tool names, as the summariser knows them. Anything else is named and nothing more. */
+const OPENCODE_TOOLS: Record<string, string> = {
+  read: 'Read',
+  edit: 'Edit',
+  write: 'Write',
+  patch: 'Edit',
+  glob: 'Glob',
+  grep: 'Grep',
+  bash: 'Bash',
+  webfetch: 'WebFetch',
+  websearch: 'WebSearch',
+  task: 'Task',
+  todowrite: 'TodoWrite',
+};
+
+/**
+ * One line of `opencode run --format json`, as an activity line or nothing.
+ *
+ * Pure, so the stream shape can be unit-tested against captured lines. Verified
+ * against opencode 1.18.35: one `tool_use` event per call, carrying the tool's
+ * name and input in `part.state`. **`part.state.output` is the tool's result and
+ * is never read** (ADR 0015). OpenCode names its arguments differently from
+ * Claude Code (`filePath`, not `file_path`), so the one descriptor each
+ * summariser case reads is mapped here, and only that one.
+ */
+export function opencodeActivity(line: string): ActivityLine | null {
+  if (!line.startsWith('{')) return null;
+
+  let event: Record<string, unknown>;
+  try {
+    event = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (event.type !== 'tool_use') return null;
+
+  const part = event.part as { tool?: string; state?: { input?: Record<string, unknown> } } | undefined;
+  if (!part?.tool) return null;
+  const input = part.state?.input ?? {};
+  const name = OPENCODE_TOOLS[part.tool];
+  // MCP tools (fabrikka_session_post_message) and anything unknown: the name only.
+  if (!name) return summarise({ name: part.tool });
+
+  const args =
+    name === 'Bash'
+      ? { command: input.command }
+      : name === 'Glob' || name === 'Grep'
+        ? { pattern: input.pattern }
+        : name === 'WebFetch'
+          ? { url: input.url }
+          : name === 'WebSearch'
+            ? { query: input.query }
+            : name === 'Task' || name === 'TodoWrite'
+              ? {}
+              : { file_path: input.filePath };
+  return summarise({ name, args });
+}
+
+function emitOpencodeActivity(line: string, req: SpawnRequest): void {
+  const activity = opencodeActivity(line);
+  if (!activity) return;
+  req.onLog?.(`tool: ${activity.tool}`);
+  req.onActivity?.(activity);
+}
+
+/* -------------------------------------------------------------------------- */
 /* Process plumbing                                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -539,7 +754,7 @@ function execute(
 /**
  * Resolve an agent binary.
  *
- * `CODEX_BIN` / `CLAUDE_BIN` win, so a user with an unusual install can say so.
+ * `CODEX_BIN` / `CLAUDE_BIN` / `OPENCODE_BIN` win, so a user with an unusual install can say so.
  * Otherwise fall back to PATH — except that the Codex desktop app bundles its CLI
  * somewhere PATH never sees, and that is a common enough install to be worth
  * finding rather than failing on.

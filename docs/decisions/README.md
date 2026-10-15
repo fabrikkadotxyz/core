@@ -76,3 +76,6 @@ What we rejected and why.
 | [0042](0042-people-see-organization-the-code-says-team.md) | People see "organization"; the code still says "team" | Proposed |
 | [0043](0043-folders-and-personal-connections-belong-to-one-organization.md) | A folder, and a personal connection, belongs to one organization | Proposed |
 | [0044](0044-a-reload-paints-from-what-the-tab-last-showed.md) | A reload paints from what the tab last showed | Proposed |
+| [0045](0045-a-rooms-output-opens-in-its-own-window.md) | A room's output opens in its own window | Proposed |
+| [0046](0046-google-products-are-separate-connections.md) | Google products are separate connections | Proposed |
+| [0047](0047-opencode-on-the-host-is-confined-by-a-per-run-config.md) | OpenCode on the local host is confined by a per-run config, reads included | Proposed |

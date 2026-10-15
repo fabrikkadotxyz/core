@@ -80,7 +80,7 @@
         </div>
         <p class="muted">A folder is for one organization's rooms, or Personal rooms. For two organizations, add it twice.</p>
         <p class="muted" id="policyHelp">Edit in folder: read and edit files here only — no shell, no web.</p>
-        <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code agents read only inside the folder.</p>
+        <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code and OpenCode agents read only inside the folder.</p>
       </section>
 
       <section>
@@ -132,7 +132,7 @@
       function render(s) {
         $('dot').className = 'dot' + (s.connected ? ' on' : '');
         $('who').textContent = s.deviceName + ' · ' + (s.connected ? 'connected to ' + s.server : 'connecting…') +
-          (s.providers.length ? ' · ' + s.providers.join(', ') : ' · no agent tools found — install Claude Code or Codex');
+          (s.providers.length ? ' · ' + s.providers.join(', ') : ' · no agent tools found — install Claude Code, Codex or OpenCode');
         $('update').hidden = !s.updateAvailable;
         if (s.updateAvailable) $('update').innerHTML = '<strong>Update available</strong> <span class="muted">' + esc(s.version) + ' → ' + esc(s.latestVersion) + '. Install the new app from your Fabrikka site.</span>';
         $('grants').innerHTML = s.grants.length

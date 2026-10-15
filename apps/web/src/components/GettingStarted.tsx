@@ -13,7 +13,7 @@ const POLL_MS = 5000;
 const LABELS: Record<GettingStartedStep, { title: string; hint: string }> = {
   computer: { title: 'Connect your computer', hint: 'Your agents run there, with your tools and your folders.' },
   room: { title: 'Start a room', hint: 'Where you, your colleagues and your agents work together.' },
-  agent: { title: 'Bring your agent', hint: 'Claude Code or Codex, on your computer, in the room.' },
+  agent: { title: 'Bring your agent', hint: 'Claude Code, Codex or OpenCode, on your computer, in the room.' },
   invite: { title: 'Invite a colleague', hint: 'They see what your agent did, and can mention it too.' },
   integration: { title: 'Connect GitHub or Jira', hint: 'So agents can read issues and pull requests.' },
 };

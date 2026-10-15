@@ -2209,6 +2209,70 @@ invite on the core):
 
 **Clicks:** 1.
 
+## M50 — Setup, one question at a time
+
+> **Proposed 2026-10-15, for the owner's review before it is built.**
+>
+> Setup is the left rail of a room ([ADR 0018](decisions/0018-session-screen-is-three-panes.md)):
+> *who and what is in this session?* Today it answers with **seven panels
+> stacked in one scrolling column**: Participants, Agents, Integrations,
+> Members, Organization, Invites, Settings. The manual attach form (slug, URL,
+> token) is always open, so the connections above it wrap their *attach*
+> buttons onto new lines; the invite form is always open; people appear twice
+> (Participants and Members); and with Setup and Output both open the
+> conversation is a sliver. It accumulated. This designs it.
+
+- **Four tabs across the top of the rail: People · Agents · Tools · Room.** One
+  shows at a time, with a small count where it helps (*People 3*, *Agents 2*,
+  *Tools 1*). The rail no longer scrolls for an ordinary room on a laptop. The
+  tab last used is remembered with the rail's open state, per room.
+- **People** answers *who is here*: one list, not two. Each row is a person with
+  their role (*owner*, *member*, *guest · view only*, *via organization*,
+  *you*). Rename and remove appear on the row, for those allowed. Under the
+  list, one **Invite** button opens the invite form inline (email restriction,
+  guest toggle, *Create invite link*); closed again after the link is copied.
+  The organization's read-along switch (*Everyone on <org> can read along*)
+  lives here, because it is about who can see.
+- **Agents** is the panel M37 built: **Add my agent** first, then the room's
+  agents with their presence and lane, and *Connect another way* behind a
+  disclosure, as today.
+- **Tools** answers *what can the agents use*: the attached connections first,
+  each with its scope and a *detach*; then **your connections, one row each
+  with Attach right-aligned**, never wrapping; *Connect by hand* (slug, URL,
+  token) behind a disclosure; and a line to *Settings → Integrations* to add
+  one. The *Use in* and scope rules of ADR 0043 are unchanged.
+- **Room** is the owner's: the name (rename inline), the organization selector,
+  *Export*, *Archive*, and *Delete* last, in the danger colour. Non-owners
+  don't get the tab, as they have no Settings panel today. Viewers have no
+  Setup at all (M22), unchanged.
+- **Chats** ([ADR 0026](decisions/0026-chats-are-light-sessions.md)) keep their
+  lighter Setup: People and Agents only.
+- **No new API.** Every control exists today; this milestone arranges them. The
+  one behavioural change is that the invite and manual attach forms are closed
+  until asked for.
+
+**Test:**
+1. Open a room, open Setup: four tabs, People first. Nothing scrolls on a
+   1440×900 window with Output closed.
+2. People: you appear once, as *owner · you*. Click **Invite**, create a link,
+   copy it: the form closes. **3 clicks** to a copied invite link, counted from
+   the room.
+3. Agents: **Setup → Agents → Add my agent → a folder → Add**: **4 clicks**,
+   counted from the room, as M35 counted.
+4. Tools: attach a connection from its row (**Setup → Tools → Attach**: 3
+   clicks); it moves to the attached list with a *detach*. Open *Connect by
+   hand*: the three fields appear; close it: gone.
+5. Room: rename inline; the title in the header and the sidebar follow. Delete
+   is last and red, and still confirms.
+6. Reload: Setup opens on the tab you left. Open a chat: only People and
+   Agents.
+7. As a member who isn't the owner: no Room tab, and People shows no remove
+   buttons. As a viewer: no Setup.
+8. Narrow to a phone width: the tabs become a row you can scroll, the panes
+   stack, nothing is clipped.
+
+**Clicks:** 3 for an invite link, 4 for an agent, 3 to attach a connection.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

@@ -51,7 +51,10 @@ const allowed = (path: string) =>
   path.endsWith('apps/server/src/outputs/registry.ts') ||
   // Built-in templates (M25) are data that name a kind the way a stored output
   // row does — "start with a doc called Pitch". No code there branches on a kind.
-  path.startsWith(join(ROOT, 'apps/server/src/templates/builtin') + '/');
+  path.startsWith(join(ROOT, 'apps/server/src/templates/builtin') + '/') ||
+  // The output page (M49, ADR 0045) reads `?doc=<id>`: a query parameter that
+  // names a document, which happens to spell a kind's id. No branch on a kind.
+  path.endsWith('apps/web/src/pages/OutputPage.tsx');
 
 const literal = new RegExp(`(['"\`])(${registered.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\1`);
 

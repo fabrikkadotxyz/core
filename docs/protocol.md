@@ -8,6 +8,36 @@ Three surfaces:
 2. [Bridge channel contract](#2-bridge-channel-contract) (lane B) — Claude Code, real-time push
 3. [Spawn invocations](#3-spawn-invocations) — headless runs when no live session is attached
 
+## How this contract may change
+
+The bridge updates itself and the server moves faster than any bridge, host or
+MCP client in the wild, so every surface below (the MCP tools, the bridge and
+host sockets, the stdio control, the browser event stream, the spawn
+invocations) evolves under four rules. Written 2026-10-16, after herdr's
+manifests showed what a contract between a fast server and slow clients needs
+to say out loud.
+
+1. **A published frame, tool or field is immutable.** Its name, its meaning
+   and the type of every field it has stay what they are. To change one, add a
+   new one and keep the old, or retire the old in a later version with notice
+   in this doc; never repurpose it.
+2. **Every new field is optional, with a defined absence.** A sender that
+   does not know it omits it; a receiver that sees it missing behaves as it did
+   before the field existed. This doc says what "absent" means for each
+   (*older bridges ignore it*, *null for Personal*, and so on).
+3. **Every enumerated value has an unknown fallback.** A receiver that meets
+   a value it does not know treats it as the fallback this doc names for that
+   enum, or ignores the frame when none is named, and never closes the
+   connection or fails the call over it. A sender may introduce a value only
+   once this doc names it.
+4. **A missing capability disables one action, never the connection.** A tool
+   a server does not offer, a frame a host does not handle, a command an older
+   app does not know: the thing that needed it does not happen, and everything
+   else goes on. Nothing checks a version number to decide whether to talk.
+
+A change that cannot keep these rules is a new surface with a new path, not a
+change to this one.
+
 ---
 
 ## 1. Remote session MCP endpoint

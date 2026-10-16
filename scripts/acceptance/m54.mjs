@@ -43,6 +43,8 @@ check(/Some\("open_folders"\)/.test(rs) && /state\["preselectOrg"\]/.test(rs), '
 check(/s\.preselectOrg && orgs\.some\(\(o\) => o\.id === s\.preselectOrg\)/.test(read('apps/desktop/src/folders.html')), 'the Folders window preselects it in For');
 check(/`\{ type: 'open_folders', org \}`/.test(read('docs/protocol.md')) && /`\{ event: 'open_folders', org \}`/.test(read('docs/protocol.md')), 'docs/protocol.md has the frame and the event');
 check(/open-folders/.test(read('docs/security.md')) && /ADR 0052/.test(read('docs/security.md')), 'docs/security.md says what travels and what does not');
+const proto = read('docs/protocol.md');
+check(/## How this contract may change/.test(proto) && /is immutable\.\*\*/.test(proto) && /new field is optional/.test(proto) && /unknown fallback/.test(proto) && /never the connection/.test(proto), 'THE PROTOCOL DOC STATES ITS FOUR COMPATIBILITY RULES (herdr item 6)');
 
 /* ------------------------------------------------ 2. the route */
 

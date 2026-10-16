@@ -99,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const side = useSidebarWidth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { sessions, team, selectTeam, refresh } = useWorkspace();
+  const { sessions, teams, team, selectTeam, refresh } = useWorkspace();
 
   /*
    * ADR 0048: the place follows the page. Clicking another place while a room
@@ -140,8 +140,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     const m = /^\/o\/([^/]+)\/s\/([^/]+)/.exec(location.pathname);
     if (!m) return;
     const open = sessions.find((s) => s.ownerSlug === m[1] && s.publicId === m[2]);
-    if (open?.team && open.team.id !== team?.id) selectTeam(open.team.id);
-  }, [location.pathname, sessions, team, selectTeam]);
+    if (!open?.team || open.team.id === team?.id) return;
+    // M55 (ADR 0053): a one-off session you were invited to belongs to someone else's Self: it lives under yours.
+    const mine = teams.find((t) => t.id === open.team!.id);
+    const own = teams.find((t) => t.own);
+    if (mine) selectTeam(mine.id);
+    else if (own && own.id !== team?.id) selectTeam(own.id);
+  }, [location.pathname, sessions, teams, team, selectTeam]);
 
   return (
     <div className={drawer ? 'shell drawer-open' : 'shell'} style={{ '--side-w': `${side.width}px` } as React.CSSProperties}>

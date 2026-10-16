@@ -2487,6 +2487,46 @@ organization session.
 **Clicks:** 4 in the browser to a bound agent with a fresh folder, counting
 the picker as one.
 
+## M55 — One-off sessions
+
+> **Built 2026-10-16** ([ADR 0053](decisions/0053-a-one-off-session-is-one-link-to-one-person.md)).
+>
+> Working with one person who is in none of your organizations took a
+> session, then Setup, then an invite link, and the other side had to find
+> the app. This gives it one name, one card and one heading.
+
+- **A card on the Self home, "One-off session":** a title and **Start a
+  one-off session**. One click makes the session in your Self and a
+  single-use member invite, and shows the link to copy with the sentence to
+  send and a button to open the room.
+- **One-off sessions in the sidebar.** In Self, the first heading reads
+  *One-off sessions* instead of *Organization sessions*: the sessions in your
+  Self that are not only you, plus the sessions you are in whose organization
+  is none of yours. Both people see the session under their own Self. The
+  **+** beside it starts one, like the card.
+- **The invite page says so:** *<Name> invited you to a one-off session:
+  <title>. You join this session, nothing else.* Under the form, **Get the
+  app** when the instance serves it, and the one-line install.
+- Nothing new in the protocol or the data model: a session, an invite, and
+  the inviter's name on the invite preview.
+
+**Test:**
+1. In Self, Home: the card. Type a title, **Start a one-off session**: the
+   link appears; **Copy**. **2 clicks and a title.** *Open the session*
+   opens the room.
+2. Open the link in a private window: *<you> invited you to a one-off
+   session: <title>*, the account form, and *Get the app* below it. Make the
+   account: the room opens, Setup → People shows two people, and the sidebar
+   shows the session under One-off sessions of the new account's Self, with
+   no other organization anywhere.
+3. Back as you: the session is under One-off sessions in Self, not under
+   Individual sessions. Switch to another organization: it is not there.
+4. From the sidebar, **+** beside One-off sessions does the same as the card.
+5. Setup → People → remove the person: they lose the session; it moves back
+   to Individual sessions for you.
+
+**Clicks:** 2 and a title to a link in hand.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

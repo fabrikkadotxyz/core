@@ -237,7 +237,10 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
   // Sessions and chats are different things (ADR 0026): each is a place of its own (ADR 0048).
   // M53 (ADR 0051): every session is in an organization. Individual = only you in it.
   const work = active.filter((s) => (s.kind ?? 'session') === 'session' && s.team?.id === team?.id);
-  const teamSessions = team ? work.filter((s) => !s.individual).sort(byActivity) : [];
+  // M55 (ADR 0053): in Self, the shared ones are one-off sessions, and so are the
+  // sessions you are in whose organization is none of yours (the other side of one).
+  const foreign = team?.own ? active.filter((s) => (s.kind ?? 'session') === 'session' && s.team && !teams.some((t) => t.id === s.team!.id)) : [];
+  const teamSessions = team ? [...work.filter((s) => !s.individual), ...foreign].sort(byActivity) : [];
   const personal = team ? work.filter((s) => s.individual).sort(byActivity) : [];
   const teamChats = team
     ? active.filter((s) => s.kind === 'chat' && s.team?.id === team.id).sort((a, b) => a.title.localeCompare(b.title))
@@ -286,7 +289,25 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
         )}
       </div>
 
-      {place === 'sessions' && team && (
+      {place === 'sessions' && team && team.own && (
+        <section className="side-section" aria-label="One-off sessions">
+          {/* M55 (ADR 0053): in Self, a shared session is a one-off session; the + starts one from the home card. */}
+          <SectionHead title="One-off sessions" label="Start a one-off session" onAdd={() => { navigate('/?one-off=1'); onNavigate(); }} />
+          {teamSessions.length === 0 && <p className="side-empty">Sessions with one person, by link. None yet.</p>}
+          {teamSessions.map((s) => (
+            <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
+          ))}
+          <NavLink
+            to={`/teams/${team.id}/sessions`}
+            className={({ isActive }) => (isActive ? 'side-item side-more on' : 'side-item side-more')}
+            onClick={onNavigate}
+          >
+            All, archived too
+          </NavLink>
+        </section>
+      )}
+
+      {place === 'sessions' && team && !team.own && (
         <section className="side-section" aria-label="Organization sessions">
           <SectionHead title="Organization sessions" label={`New session ${team.name} can read along`} onAdd={() => setCreating('team')} />
           <NewSession teamId={team.id} visibility="team" open={creating === 'team'} onClose={() => setCreating(null)} onCreated={open} />

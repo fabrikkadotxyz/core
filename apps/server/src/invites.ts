@@ -217,13 +217,19 @@ export async function describeInvite(
   invitedEmail: string | null;
   /** M22: a guest invite lets you read one session, not take part in it. */
   guest: boolean;
+  /** M55 (ADR 0053): who sent it, by display name. */
+  inviter: string | null;
+  /** M55: a session in the inviter's own organization (Self): a one-off session. */
+  oneOff: boolean;
 } | null> {
   const [row] = await db
     .select({
       sessionTitle: sessionsPublicId.title,
+      sessionTeamId: sessionsPublicId.teamId,
       teamName: teams.name,
       invitedEmail: sessionInvites.invitedEmail,
       role: sessionInvites.role,
+      createdBy: sessionInvites.createdByUserId,
       redeemedAt: sessionInvites.redeemedAt,
       revokedAt: sessionInvites.revokedAt,
       expiresAt: sessionInvites.expiresAt,
@@ -240,8 +246,12 @@ export async function describeInvite(
 
   const kind = row.teamName !== null ? 'team' : 'session';
   const title = row.teamName ?? row.sessionTitle ?? '';
+  // M55 (ADR 0053): who sent it, and whether the session is in their own organization (a one-off session).
+  const [inviter] = row.createdBy ? await db.select({ name: users.displayName }).from(users).where(eq(users.id, row.createdBy)).limit(1) : [];
+  const [sessionTeam] = row.sessionTeamId ? await db.select({ ownOf: teams.ownOfUserId }).from(teams).where(eq(teams.id, row.sessionTeamId)).limit(1) : [];
+  const oneOff = kind === 'session' && !!row.createdBy && sessionTeam?.ownOf === row.createdBy;
   // `sessionTitle` stays for clients written before teams; it is the title either way.
-  return { kind, title, sessionTitle: title, invitedEmail: row.invitedEmail, guest: row.role === 'guest' };
+  return { kind, title, sessionTitle: title, invitedEmail: row.invitedEmail, guest: row.role === 'guest', inviter: inviter?.name ?? null, oneOff };
 }
 
 function toSummary(row: typeof sessionInvites.$inferSelect): InviteSummary {

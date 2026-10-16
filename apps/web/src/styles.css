@@ -2569,3 +2569,9 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, 0.5); }
 .folders-list li > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .folders-list .folders-here { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modal-main .card-hint { margin: 0.75rem 0 0.5rem; }
+
+/* ---- M55: a one-off session, from the Self home (ADR 0053) ---- */
+.one-off h2 { margin: 0 0 4px; }
+.one-off .inline-form { margin-top: 8px; }
+.one-off .copy-row { align-items: center; }
+.one-off .endpoint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

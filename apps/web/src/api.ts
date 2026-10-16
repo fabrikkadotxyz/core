@@ -154,7 +154,7 @@ export interface InviteDestination {
 export const invites = {
   /** Unauthenticated preview, so the invite page can name what it joins. */
   preview: (token: string) =>
-    call<{ kind: 'session' | 'team'; title: string; invitedEmail: string | null; guest?: boolean }>(`/invites/${token}`),
+    call<{ kind: 'session' | 'team'; title: string; invitedEmail: string | null; guest?: boolean; inviter?: string | null; oneOff?: boolean }>(`/invites/${token}`),
   redeem: (token: string) => call<InviteDestination>(`/invites/${token}/redeem`, { method: 'POST' }),
 };
 
@@ -170,7 +170,8 @@ export const chats = {
 
 /** M33: the command that installs this instance's client and connects a computer, or null if it serves none. */
 export const client = {
-  get: () => call<{ installCommand: string | null; version: string | null }>('/client'),
+  /** M55: `appUrl` is the desktop app for this computer's platform when the instance serves one. */
+  get: () => call<{ installCommand: string | null; version: string | null; appUrl?: string | null }>('/client'),
 };
 
 /** M31: your paired computers (the local host). Labels only, never paths. */

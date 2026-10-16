@@ -84,3 +84,4 @@ What we rejected and why.
 | [0050](0050-a-sessions-organization-is-fixed-at-creation.md) | A session's organization is fixed at creation | Proposed |
 | [0051](0051-every-session-belongs-to-an-organization-and-an-account-has-its-own.md) | Every session belongs to an organization, and an account has its own | Proposed |
 | [0052](0052-a-room-asks-your-computer-to-open-its-folders-window.md) | A room asks your computer to open its Folders window | Proposed |
+| [0053](0053-a-one-off-session-is-one-link-to-one-person.md) | A one-off session is one link to one person, in your Self | Proposed |

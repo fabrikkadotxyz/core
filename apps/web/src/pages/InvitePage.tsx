@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { auth, invites, type InviteDestination } from '../api.ts';
+import { auth, client, invites, type InviteDestination } from '../api.ts';
 import { AuthStage, Eyebrow } from '../components/AuthStage.tsx';
 import { useAuth } from '../auth-context.tsx';
 
@@ -17,13 +17,18 @@ export function InvitePage() {
   const { user, loading, setUser } = useAuth();
 
   const [preview, setPreview] = useState<
-    { kind: 'session' | 'team'; title: string; invitedEmail: string | null; guest?: boolean } | null | 'invalid'
+    { kind: 'session' | 'team'; title: string; invitedEmail: string | null; guest?: boolean; inviter?: string | null; oneOff?: boolean } | null | 'invalid'
   >(null);
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // M55 (ADR 0053): the app, for whoever was invited to a one-off session.
+  const [app, setApp] = useState<{ appUrl?: string | null; installCommand: string | null } | null>(null);
+  useEffect(() => {
+    client.get().then(setApp).catch(() => setApp(null));
+  }, []);
 
   useEffect(() => {
     invites
@@ -98,8 +103,9 @@ export function InvitePage() {
       <AuthStage>
         <div className="card">
           <Eyebrow>Invitation</Eyebrow>
-          <h1>{preview.kind === 'team' ? `Join the organization “${preview.title}”` : preview.guest ? `View “${preview.title}”` : `Join “${preview.title}”`}</h1>
+          <h1>{preview.kind === 'team' ? `Join the organization “${preview.title}”` : preview.guest ? `View “${preview.title}”` : preview.oneOff ? `${preview.inviter ?? 'Someone'} invited you to a one-off session: “${preview.title}”` : `Join “${preview.title}”`}</h1>
           {preview.guest && <p className="hint">You're invited as a guest: you can read this session and nothing else.</p>}
+          {preview.oneOff && !preview.guest && <p className="hint">You join this session, nothing else: no organization, nothing to set up.</p>}
           <p className="muted">
             You're signed in as {user.email}.
             {preview.invitedEmail && preview.invitedEmail !== user.email && (
@@ -123,8 +129,9 @@ export function InvitePage() {
     <AuthStage>
       <form className="card" onSubmit={signup}>
         <Eyebrow>Invitation</Eyebrow>
-        <h1>{preview.kind === 'team' ? `Join the organization “${preview.title}”` : preview.guest ? `View “${preview.title}”` : `Join “${preview.title}”`}</h1>
+        <h1>{preview.kind === 'team' ? `Join the organization “${preview.title}”` : preview.guest ? `View “${preview.title}”` : preview.oneOff ? `${preview.inviter ?? 'Someone'} invited you to a one-off session: “${preview.title}”` : `Join “${preview.title}”`}</h1>
         {preview.guest && <p className="hint">You're invited as a guest: you can read this session and nothing else.</p>}
+          {preview.oneOff && !preview.guest && <p className="hint">You join this session, nothing else: no organization, nothing to set up.</p>}
         <p className="muted">Create an account to {preview.guest ? 'view' : 'join'} this {preview.kind === 'team' ? 'team' : 'session'}.</p>
 
         <label>
@@ -166,6 +173,17 @@ export function InvitePage() {
 
         {error && <p className="error">{error}</p>}
 
+        {preview.oneOff && app && (app.appUrl || app.installCommand) && (
+          <p className="hint">
+            {app.appUrl ? (
+              <>
+                <a href={app.appUrl}>Get the app</a> to run your own agents here, once you have an account.
+              </>
+            ) : (
+              <>Once you have an account, connect your computer from Settings → Your devices.</>
+            )}
+          </p>
+        )}
         <button type="submit" disabled={busy}>
           {busy ? 'Creating…' : 'Create account and join'}
         </button>

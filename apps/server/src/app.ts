@@ -353,7 +353,9 @@ export function createApp(options: CreateAppOptions = {}) {
   /** For "Your devices": the command to copy, or null when this instance has no client to serve. */
   app.get('/api/client', async (c) => {
     const release = await clientRelease();
-    return c.json(release ? { installCommand: installCommand(PUBLIC_URL), version: release.version } : { installCommand: null, version: null });
+    // M55: the desktop app's download, when this instance serves one (M34).
+    const appUrl = (await appRelease()) ? `${PUBLIC_URL}/downloads/${APP_ZIP_NAME}` : null;
+    return c.json(release ? { installCommand: installCommand(PUBLIC_URL), version: release.version, appUrl } : { installCommand: null, version: null, appUrl });
   });
 
 

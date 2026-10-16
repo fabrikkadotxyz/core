@@ -78,7 +78,7 @@
           <span class="segmented" role="radiogroup" aria-label="What agents may do in the new folder" id="newPolicy"></span>
           <button class="primary" id="add">Add folder…</button>
         </div>
-        <p class="muted">A folder is for one organization's rooms, or Personal rooms. For two organizations, add it twice.</p>
+        <p class="muted">A folder is for one organization's rooms, your own included. For two organizations, add it twice.</p>
         <p class="muted" id="policyHelp">Edit in folder: read and edit files here only — no shell, no web.</p>
         <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code and OpenCode agents read only inside the folder.</p>
       </section>
@@ -113,7 +113,7 @@
         ).join('');
       let newPolicy = 'edit';
       let newOrg = '';
-      let orgs = [{ id: '', name: 'Personal' }];
+      let orgs = [];
       const drawOrg = () => {
         $('org').innerHTML = orgs.map((o) =>
           '<button type="button" role="radio" data-seg="org" data-value="' + esc(o.id) + '" aria-checked="' + (o.id === newOrg) + '" tabindex="' + (o.id === newOrg ? 0 : -1) + '">' + esc(o.name) + '</button>'
@@ -143,9 +143,9 @@
               (g.policy === 'full' ? '<div class="warn">Full: agents can run any command on this computer from this folder.</div>' : '') +
               '</div>').join('')
           : '<p class="muted">No folders yet. Add one, then use “Add my agent” in a session.</p>';
-        // ADR 0043: "For": Personal, or one of your organizations. Keeps the current choice.
-        orgs = [{ id: '', name: 'Personal' }].concat(s.organizations || []);
-        if (!orgs.some((o) => o.id === newOrg)) newOrg = '';
+        // ADR 0043, M53: "For": one of your organizations (no Personal since ADR 0051). Keeps the current choice.
+        orgs = s.organizations || [];
+        if (!orgs.some((o) => o.id === newOrg)) newOrg = orgs[0]?.id ?? '';
         drawOrg();
         $('tools').innerHTML = s.tools.map((t) =>
           '<div class="card"><div class="grow"><strong>' + esc(t.name) + '</strong> <span class="muted">' +
@@ -199,7 +199,7 @@
         choose(b.dataset.seg, next).then(() => document.querySelector('[data-seg="' + b.dataset.seg + '"][data-value="' + next + '"]')?.focus());
       });
       drawNew();
-      // Personal is always a choice, even before the host has the organizations (or is paired).
+      // Nothing to choose until the host has the organizations (paired and connected).
       drawOrg();
 
       $('add').addEventListener('click', async () => {
@@ -209,7 +209,8 @@
           showError('Full lets agents run any command from that folder. Choose the folder only if that is what you want.');
         }
         try {
-          await invoke('host_add_folder', { policy, org: newOrg || null });
+          if (!newOrg) return showError('Choose which organization the folder is for. Connect first if none is listed.');
+          await invoke('host_add_folder', { policy, org: newOrg });
           await refresh();
         } catch (e) {
           showError(String(e));

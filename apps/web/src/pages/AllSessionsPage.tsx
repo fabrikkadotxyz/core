@@ -1,6 +1,6 @@
 /**
- * Every session, filterable (M28): a team's (from the sidebar's "All team
- * sessions"), your personal ones, or all of them. Archived ones on request.
+ * Every session, filterable (M28): an organization's (from the sidebar's "All"),
+ * its individual ones (M53: only you in them), or all of them. Archived ones on request.
  */
 import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
@@ -10,14 +10,14 @@ import { byActivity, useWorkspace } from '../shell/workspace.tsx';
 export function AllSessionsPage() {
   const { id: teamId } = useParams();
   const [params] = useSearchParams();
-  const personalOnly = params.get('personal') === '1';
+  const individualOnly = params.get('individual') === '1';
   const { sessions, teams } = useWorkspace();
   const [filter, setFilter] = useState('');
   const [showArchived, setShowArchived] = useState(false);
 
   const team = teams.find((t) => t.id === teamId);
   const scope = sessions
-    .filter((s) => (teamId ? s.team?.id === teamId : personalOnly ? !s.team : true))
+    .filter((s) => (teamId ? s.team?.id === teamId && (!individualOnly || s.individual) : true))
     .filter((s) => showArchived || s.status === 'active')
     .filter((s) => s.title.toLowerCase().includes(filter.trim().toLowerCase()))
     .sort(byActivity);
@@ -25,7 +25,7 @@ export function AllSessionsPage() {
   return (
     <div className="page">
       <main className="column">
-        <h1>{team ? `${team.name} — all sessions` : personalOnly ? 'Personal sessions' : 'All sessions'}</h1>
+        <h1>{team ? `${team.name} — ${individualOnly ? 'individual sessions' : 'all sessions'}` : 'All sessions'}</h1>
         <input
           className="filter"
           value={filter}

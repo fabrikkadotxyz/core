@@ -82,3 +82,4 @@ What we rejected and why.
 | [0048](0048-the-workspace-is-an-icon-rail-of-four-places.md) | The workspace is an icon rail of four places | Proposed |
 | [0049](0049-grants-are-set-in-a-dialog-and-a-connection-remembers-your-default.md) | Grants are set in a dialog, and a connection remembers your default | Proposed |
 | [0050](0050-a-sessions-organization-is-fixed-at-creation.md) | A session's organization is fixed at creation | Proposed |
+| [0051](0051-every-session-belongs-to-an-organization-and-an-account-has-its-own.md) | Every session belongs to an organization, and an account has its own | Proposed |

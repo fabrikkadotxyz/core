@@ -2391,6 +2391,59 @@ invite on the core):
 **Clicks:** 4 to grant a tool; 5 to save a default; 0 to have it in the next
 room you attach the connection to as owner.
 
+## M53 — Every session in an organization; individual sessions
+
+> **Built 2026-10-16** ([ADR 0051](decisions/0051-every-session-belongs-to-an-organization-and-an-account-has-its-own.md)).
+>
+> *Personal sessions*, in no organization, were the one exception to the
+> rule that the organization at the top left is the one everything assumes.
+> The owner renamed them **individual sessions** and put them in an
+> organization like everything else.
+
+- **Every session and chat is in an organization.** Only a direct message
+  between two people is in none. Creating a session names the organization;
+  the API defaults to your own.
+- **Each account has its own organization**, made with the account and
+  named after the person. Renamable; People, integrations, folders and a
+  *#general* like any other; you cannot leave it. Existing accounts get
+  theirs in the migration, and their sessions in no organization move into
+  it with their members, guests and visibility untouched.
+- **Individual sessions are the ones only you are in**: one member, no
+  guest, private. The sidebar shows, for the chosen organization,
+  **Organization sessions** (the organization reads along, or more than one
+  person is in it) and **Individual sessions**. The **+** beside Individual
+  starts a private one; the **+** beside Organization starts one the
+  organization can read along. Let someone in, or let the organization read
+  along, and an individual session becomes an organization session.
+- **No *Personal* folder scope.** The Folders window offers your
+  organizations, the own one included. A folder granted *Personal* earlier
+  is listed as no longer used until it is granted for an organization.
+- **The switcher lists your own organization first.**
+
+**Test:**
+1. Sign up a new account: the switcher shows an organization named after
+   you, with *#general*. Under Sessions, two headings: Organization sessions
+   and Individual sessions, both empty.
+2. **+** beside Individual sessions, a title, Enter: the session opens and is
+   listed under Individual. Setup → People: only you. **2 clicks and a
+   title.**
+3. **+** beside Organization sessions: the session is listed under
+   Organization sessions, and Setup → People shows the organization can read
+   along.
+4. In the individual session, Setup → People → Invite, and have someone
+   join: it moves to Organization sessions.
+5. Settings → People: *Leave organization* is not offered for your own.
+   Rename it there: the switcher follows.
+6. Folders window: *For* offers your organizations and no *Personal*. An
+   older Personal folder is tagged no longer used; *Add my agent* in your
+   individual session offers only folders granted for your organization.
+7. An existing account after the migration: its former personal sessions
+   are under Individual sessions of its own organization, with the same
+   people in them.
+
+**Clicks:** 2 and a title to an individual session; the same for an
+organization session.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

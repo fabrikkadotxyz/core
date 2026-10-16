@@ -232,6 +232,20 @@
       "when": 1792120035723,
       "tag": "0032_grant_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792124035635,
+      "tag": "0033_own_organizations",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792124682512,
+      "tag": "0034_rooms_go_with_their_organization",
+      "breakpoints": true
     }
   ]
 }

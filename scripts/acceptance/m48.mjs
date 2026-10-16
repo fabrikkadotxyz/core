@@ -120,7 +120,7 @@ try {
   const s = await state();
   const acmeGrant = s.grants.find((g) => g.org === acme.id);
   const personalGrant = s.grants.find((g) => g.org === null);
-  check(acmeGrant?.orgName === acme.name && personalGrant?.orgName === 'Personal', 'the host lists each folder with its organization');
+  check(acmeGrant?.orgName === acme.name && /^Personal/.test(personalGrant?.orgName ?? ''), 'the host lists each folder with its organization (a Personal one as no longer used, M53)');
 
   const seen = await until(async () => {
     const d = (await req('/devices', { jar: me })).json.find((x) => x.id === dev.id);
@@ -140,12 +140,19 @@ try {
   const status = () => req(base, { jar: me }).then((r) => r.json?.participants.find((p) => p.displayName === agentName)?.status);
   check(!!(await until(async () => ['connected', 'idle'].includes(await status()))), '…and the host connects the agent');
 
-  const mine = (await req('/sessions', { method: 'POST', body: { title: `Personal room ${stamp}` }, jar: me })).json;
-  // ADR 0043 (amended 2026-10-16): a personal room uses Personal folders only; an organization's folder is refused there too.
+  // M53 (ADR 0051): a room created with no organization named is in your own organization; it takes that organization's folders only.
+  const ownOrg = (await req('/teams', { jar: me })).json.find((t) => t.own);
+  const mine = (await req('/sessions', { method: 'POST', body: { title: `Own room ${stamp}` }, jar: me })).json;
+  check(!!ownOrg && mine.team?.id === ownOrg.id, 'a room with no organization named lands in your own organization');
   const acmeInMine = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: acmeGrant.id }, jar: me });
-  check(acmeInMine.status === 400 && new RegExp(`for ${acme.name}`).test(acmeInMine.json?.error ?? ''), "ACME'S FOLDER IS REFUSED IN A PERSONAL ROOM, saying why");
-  const inMine = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: personalGrant.id }, jar: me });
-  check(inMine.status === 201, '…and the Personal folder is accepted there');
+  check(acmeInMine.status === 400 && new RegExp(`for ${acme.name}`).test(acmeInMine.json?.error ?? ''), "ACME'S FOLDER IS REFUSED IN YOUR OWN ORGANIZATION'S ROOM, saying why");
+  const personalInMine = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: personalGrant.id }, jar: me });
+  check(personalInMine.status === 400, 'a folder granted Personal serves no room any more (ADR 0051)');
+  const forOwn = await grant({ org: ownOrg.id, policy: 'read' });
+  check(forOwn.status === 201, 'the repo is granted For: your own organization');
+  const ownGrant = await until(async () => (await req('/devices', { jar: me })).json.find((d) => d.id === dev.id)?.grants.find((g) => g.org === ownOrg.id));
+  const inMine = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: ownGrant.id }, jar: me });
+  check(inMine.status === 201, '…and that folder is accepted there');
   const mineStatus = () =>
     req(`/o/${mine.ownerSlug}/s/${mine.publicId}`, { jar: me }).then((r) => r.json?.participants.find((p) => p.displayName === inMine.json?.agent?.displayName)?.status);
   check(!!(await until(async () => ['connected', 'idle'].includes(await mineStatus()))), '…and the host runs it there');

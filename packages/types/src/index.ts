@@ -439,8 +439,10 @@ export interface SessionSummary {
   role: SessionRole | 'viewer';
   memberCount: number;
   createdAt: string;
-  /** The team it belongs to (M21), if any. */
+  /** The organization it belongs to (M21). Every session has one since M53 (ADR 0051); only a direct message has none. */
   team?: { id: string; name: string } | null;
+  /** M53: private and only you in it (one member, no guest). Derived on listing. */
+  individual?: boolean;
   /** The latest message, or creation if there is none (M28). */
   lastActivityAt?: string;
   /** session | chat | direct (M29). */
@@ -531,6 +533,8 @@ export interface TeamSummary {
   name: string;
   role: TeamRole;
   memberCount: number;
+  /** M53 (ADR 0051): the caller's own organization, made with their account. Listed first; cannot be left. */
+  own?: boolean;
   /** A deployment's notice on this team (ADR 0041), e.g. a limit it set. */
   notice?: TeamNotice | null;
 }

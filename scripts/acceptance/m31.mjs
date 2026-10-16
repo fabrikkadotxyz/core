@@ -153,7 +153,9 @@ try {
   check(rebound === 403, 'a request under another host name is refused (DNS rebinding)');
   check((await local('/api/grants', { method: 'POST', body: JSON.stringify({ path: homedir() }) })).status === 400, 'your home folder cannot be granted');
   check((await local('/api/grants', { method: 'POST', body: JSON.stringify({ path: '/' }) })).status === 400, 'nor a whole disk');
-  const granted = await local('/api/grants', { method: 'POST', body: JSON.stringify({ path: demo, policy: 'edit' }) });
+  // M53 (ADR 0051): a folder is for an organization; a room with none named is in your own.
+  const own = (await req('/teams', { jar: me })).json.find((t) => t.own);
+  const granted = await local('/api/grants', { method: 'POST', body: JSON.stringify({ path: demo, policy: 'edit', org: own.id }) });
   check(granted.status === 201, 'a project folder is granted, as Edit in folder');
   const grant = (await granted.json()).grants[0];
 
@@ -227,7 +229,7 @@ try {
 
   // A host reports its grants as soon as the socket opens, before the server has
   // looked up the device. That frame must not be dropped: it's what brings the bindings.
-  const reported = (await req('/devices', { jar: me })).json.find((d) => d.id === dev.id).grants.map((g) => ({ id: g.id, label: g.label, providers: g.providers }));
+  const reported = (await req('/devices', { jar: me })).json.find((d) => d.id === dev.id).grants.map((g) => ({ id: g.id, label: g.label, providers: g.providers, org: g.org }));
   const early = await new Promise((resolve) => {
     const ws = new WebSocket(`${ORIGIN.replace(/^http/, 'ws')}/host`, { headers: { Authorization: `Bearer ${cfg.deviceToken}` } });
     const done = (v) => (clearTimeout(t), ws.close(), resolve(v));

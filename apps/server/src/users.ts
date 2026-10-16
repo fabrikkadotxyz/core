@@ -7,7 +7,7 @@
 import { checkNewAccount } from './gates.ts';
 import { asc, eq } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
-import { hashPassword, users } from '@fabrikka/db';
+import { hashPassword, teamMembers, teams, users } from '@fabrikka/db';
 import type { AuthUser } from '@fabrikka/types';
 import { logoutAll } from './auth.ts';
 
@@ -65,6 +65,10 @@ export async function createUser(
       emailVerifiedAt: input.emailVerified ? new Date() : null,
     })
     .returning();
+
+  // M53 (ADR 0051): an account has its own organization, named after the person.
+  const [own] = await db.insert(teams).values({ name: displayName, createdByUserId: row!.id, ownOfUserId: row!.id }).returning({ id: teams.id });
+  await db.insert(teamMembers).values({ teamId: own!.id, userId: row!.id, role: 'owner' });
 
   return {
     ok: true,

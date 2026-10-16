@@ -871,7 +871,7 @@ Host → server:
 
 | Frame | Meaning |
 | --- | --- |
-| `{ type: 'grants', grants: [{ id, label, providers, org }] }` | What this machine may use. *(ADR 0043)* `org` is the organization whose rooms may use the grant (an id from `organizations` below), or null/absent for Personal rooms. The server ignores a grant for an organization its owner isn't in, as if it weren't sent. Also sent in answer to every `organizations` frame. Sent on connect and whenever the user changes a grant or a tool. Labels only, never paths. `providers` is the agent tools **installed and switched on** in this computer's *Agent tools* (M37); ids from `AGENT_TOOLS`. A host may send it the moment the socket opens: the server holds frames until it has authenticated the device, and never drops them |
+| `{ type: 'grants', grants: [{ id, label, providers, org }] }` | What this machine may use. *(ADR 0043)* `org` is the organization whose rooms may use the grant (an id from `organizations` below). Null/absent meant Personal rooms; since M53 (ADR 0051) every room is an organization's, so such a grant serves no room and is listed as no longer used. The server ignores a grant for an organization its owner isn't in, as if it weren't sent. Also sent in answer to every `organizations` frame. Sent on connect and whenever the user changes a grant or a tool. Labels only, never paths. `providers` is the agent tools **installed and switched on** in this computer's *Agent tools* (M37); ids from `AGENT_TOOLS`. A host may send it the moment the socket opens: the server holds frames until it has authenticated the device, and never drops them |
 
 Server → host:
 
@@ -905,7 +905,7 @@ stdout. Logs go to stderr only.
 | Request (stdin) | Reply (stdout) |
 | --- | --- |
 | `{ id, op: 'state' }` | `{ id, ok: true, state }`: the same object the local page shows. *(ADR 0043)* It includes `organizations`, and each grant's `org` and `orgName` |
-| `{ id, op: 'grant', path, policy, label?, org? }` | `{ id, ok: true, grant }`, or `{ id, ok: false, error }` for a refused path (home, root, an ancestor of home, missing). *(ADR 0043)* `org`: one of the `organizations` in `state`, or null for Personal; the same path may be granted once per organization |
+| `{ id, op: 'grant', path, policy, label?, org? }` | `{ id, ok: true, grant }`, or `{ id, ok: false, error }` for a refused path (home, root, an ancestor of home, missing). *(ADR 0043)* `org`: one of the `organizations` in `state`; null is accepted for older callers and serves no room since M53; the same path may be granted once per organization |
 | `{ id, op: 'policy', grantId, policy }` | `{ id, ok: true }` |
 | `{ id, op: 'remove', grantId }` | `{ id, ok: true }` |
 | `{ id, op: 'stop' }` | `{ id, ok: true }`: every run stopped |

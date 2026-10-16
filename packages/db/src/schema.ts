@@ -82,6 +82,11 @@ export const teams = pgTable(
      * policy can name every possible answer.
      */
     callRecordDays: integer('call_record_days').notNull().default(90),
+    /**
+     * M53 (ADR 0051): the account whose own organization this is. Created with
+     * the account, named after the person; they cannot be removed from it.
+     */
+    ownOfUserId: uuid('own_of_user_id').unique().references(() => users.id, { onDelete: 'cascade' }),
   },
   (t) => [check('teams_call_record_days', sql`${t.callRecordDays} in (30, 60, 90, 180, 365)`)],
 );
@@ -110,8 +115,13 @@ export const sessions = pgTable('sessions', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
-  /** Optional (M21). Decides who can be added from the roster — not who can see. */
-  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
+  /**
+   * The organization it is in (M21). Decides who can be added from the roster,
+   * not who can see. Required since M53 (ADR 0051) for sessions and chats;
+   * null only for a direct message between two people. An organization's rooms
+   * go with it when it is deleted: they cannot become rooms in none.
+   */
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'cascade' }),
   /** private | team (M22). `team` makes every teammate a viewer; needs a team. */
   visibility: text('visibility').notNull().default('private'),
   /** The template it started from (M25): "builtin:<id>" or a session_templates id. */
@@ -133,7 +143,10 @@ export const sessions = pgTable('sessions', {
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+},
+  // M53 (ADR 0051): every session and chat is in an organization; only a direct message is in none.
+  (t) => [check('sessions_in_organization', sql`${t.kind} = 'direct' or ${t.teamId} is not null`)],
+);
 
 /**
  * One id space for humans AND agents, so author and mention never branch on

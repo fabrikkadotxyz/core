@@ -37,12 +37,20 @@ export async function listTeamsForUser(db: Database, userId: string): Promise<Te
       name: teams.name,
       role: teamMembers.role,
       memberCount: sql<number>`(select count(*) from ${teamMembers} tm where tm.team_id = ${teams.id})`,
+      ownOf: teams.ownOfUserId,
     })
     .from(teamMembers)
     .innerJoin(teams, eq(teams.id, teamMembers.teamId))
     .where(eq(teamMembers.userId, userId))
-    .orderBy(asc(teams.name));
-  return rows.map((r) => ({ ...r, role: r.role as TeamRole, memberCount: Number(r.memberCount) }));
+    // M53: your own organization first, then the others by name.
+    .orderBy(sql`case when ${teams.ownOfUserId} = ${userId} then 0 else 1 end`, asc(teams.name));
+  return rows.map(({ ownOf, ...r }) => ({ ...r, role: r.role as TeamRole, memberCount: Number(r.memberCount), own: ownOf === userId }));
+}
+
+/** M53 (ADR 0051): the account's own organization. Every account has one; null only for a row older than the migration that made them. */
+export async function ownOrganizationOf(db: Database, userId: string): Promise<{ id: string; name: string } | null> {
+  const [row] = await db.select({ id: teams.id, name: teams.name }).from(teams).where(eq(teams.ownOfUserId, userId)).limit(1);
+  return row ?? null;
 }
 
 /** The caller's role on a team, or null — which every route must answer with 404. */
@@ -95,6 +103,9 @@ export async function addTeamMember(
  * team nobody can manage is worse than one with a reluctant owner.
  */
 export async function removeTeamMember(db: Database, teamId: string, userId: string): Promise<void> {
+  // M53 (ADR 0051): nobody leaves their own organization; the account is never without one.
+  const [own] = await db.select({ id: teams.id }).from(teams).where(and(eq(teams.id, teamId), eq(teams.ownOfUserId, userId))).limit(1);
+  if (own) throw new TeamError('this is your own organization: you cannot leave it');
   const owners = await db
     .select({ userId: teamMembers.userId })
     .from(teamMembers)

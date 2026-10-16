@@ -256,7 +256,8 @@ team_members
   created_at      timestamptz not null
   primary key (team_id, user_id)
 
-sessions          + team_id      uuid -> teams.id   -- optional; null = no team
+sessions          + team_id      uuid -> teams.id on delete cascade  -- required since M53 (ADR 0051), except kind = 'direct'; the rooms go with the organization
+teams             + own_of_user_id uuid -> users.id unique null  -- M53: the account's own organization
 session_members   + via_team_id  uuid -> teams.id   -- set when added from the roster
 session_invites   + team_id      uuid -> teams.id   -- a team invite; session_id is then null
                   (exactly one of session_id, team_id)
@@ -273,10 +274,17 @@ exactly those memberships, and access from a direct invite is untouched. If a
 roster-added member later redeems a direct invite, the membership becomes direct
 (`via_team_id` cleared): the stronger grant wins.
 
-**A session belongs to at most one team, and the team decides only who can be
-added.** Belonging to a team doesn't make a session visible to anyone (that's
-M22's `visibility`). Moving a session to another team, or out of one, removes the
-memberships the previous team granted.
+**A session belongs to exactly one team (M53, ADR 0051; direct messages to
+none), and the team decides only who can be added.** Belonging to a team
+doesn't make a session visible to anyone (that's M22's `visibility`). The team
+is set at creation and never changes (ADR 0050). `check (kind = 'direct' or
+team_id is not null)` holds it.
+
+**Each account has its own team** (`teams.own_of_user_id`, unique), created
+with the account and named after the person. Its person cannot be removed
+from it. Sessions created without naming a team go there. A session is
+*individual* when it is private and has one member and no guest; that is
+derived on listing, never stored.
 
 ### M22 — who can see a session
 

@@ -246,6 +246,10 @@ export async function listSessionsForUser(
         select count(*) from ${sessionMembers} sm
         where sm.session_id = ${sessions.id}
       )`,
+      // M53 (ADR 0051): individual = private, one member, no guest.
+      individual: sql<boolean>`${sessions.visibility} = 'private'
+        and (select count(*) from ${sessionMembers} sm where sm.session_id = ${sessions.id}) = 1
+        and not exists (select 1 from ${sessionGuests} g where g.session_id = ${sessions.id})`,
       lastActivityAt: sql<Date>`coalesce((select max(m.created_at) from ${messages} m where m.session_id = ${sessions.id}), ${sessions.createdAt})`,
       kind: sessions.kind,
       peer: sql<string | null>`(select p.display_name from ${participants} p where p.session_id = ${sessions.id} and p.kind = 'human' and p.user_id <> ${userId} limit 1)`,
@@ -268,6 +272,7 @@ export async function listSessionsForUser(
     role: r.role as SessionRole,
     memberCount: Number(r.memberCount),
     team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
+    individual: (r.kind ?? 'session') === 'session' && !!r.individual,
     createdAt: r.createdAt.toISOString(),
     lastActivityAt: new Date(r.lastActivityAt).toISOString(),
     kind: r.kind as SessionKind,
@@ -318,6 +323,8 @@ export async function listSessionsForUser(
       role: 'viewer' as const,
       memberCount: Number(r.memberCount),
       team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
+      // A viewer is never alone in it: a session you only read is an organization session.
+      individual: false,
       createdAt: r.createdAt.toISOString(),
       lastActivityAt: new Date(r.lastActivityAt).toISOString(),
       kind: r.kind as SessionKind,
@@ -338,7 +345,7 @@ export async function createSession(
   db: Database,
   owner: { id: string; displayName: string; ownerSlug: string },
   title: string,
-  opts: { teamId?: string | null; kind?: SessionKind; directKey?: string } = {},
+  opts: { teamId?: string | null; kind?: SessionKind; directKey?: string; visibility?: 'private' | 'team' } = {},
 ): Promise<SessionSummary> {
   return db.transaction(async (tx) => {
     const [session] = await tx
@@ -348,6 +355,7 @@ export async function createSession(
         ownerId: owner.id,
         title,
         teamId: opts.teamId ?? null,
+        visibility: opts.visibility ?? 'private',
         kind: opts.kind ?? 'session',
         directKey: opts.directKey ?? null,
       })
@@ -366,6 +374,8 @@ export async function createSession(
       displayName: owner.displayName,
     });
 
+    // M53 (ADR 0051): the answer says where it landed, and that it is individual while only you are in it.
+    const [team] = session!.teamId ? await tx.select({ id: teams.id, name: teams.name }).from(teams).where(eq(teams.id, session!.teamId)).limit(1) : [];
     return {
       publicId: session!.publicId,
       ownerSlug: owner.ownerSlug,
@@ -373,6 +383,8 @@ export async function createSession(
       status: session!.status as Session['status'],
       role: 'owner' as SessionRole,
       memberCount: 1,
+      team: team ?? null,
+      individual: (session!.kind ?? 'session') === 'session' && session!.visibility === 'private',
       createdAt: session!.createdAt.toISOString(),
       lastActivityAt: session!.createdAt.toISOString(),
       kind: session!.kind as SessionKind,

@@ -90,7 +90,9 @@ check(!teamOnes().slice(0, 5).some((s) => s.title === `S1 ${stamp}`), 'the oldes
 await req(`/o/${made[0].ownerSlug}/s/${made[0].publicId}/messages`, { method: 'POST', body: { content: 'bump' }, jar: fede });
 list = (await req('/sessions', { jar: fede })).json;
 check(teamOnes()[0].title === `S1 ${stamp}`, 'a message moves the oldest session to the top');
-check(list.find((s) => s.publicId === personal.publicId)?.team === null, 'a personal session has no team, so it shows whichever team is chosen');
+const own = (await req('/teams', { jar: fede })).json.find((t) => t.own);
+check(!!own && list.find((s) => s.publicId === personal.publicId)?.team?.id === own.id, 'M53: a session created with no organization named is in your own organization, which the switcher lists first');
+check(list.find((s) => s.publicId === personal.publicId)?.individual === true && teamOnes()[0].individual === true, '…and a session only you are in is individual (ADR 0051)');
 
 /* ------------------------------------------------- personal integrations */
 

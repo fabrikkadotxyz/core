@@ -46,7 +46,7 @@ export function HomePage() {
 
         <p className="muted small">
           Start a session with the <strong>+</strong> beside <em>Organization sessions</em> or{' '}
-          <em>Personal sessions</em> in the sidebar.
+          <em>Individual sessions</em> in the sidebar.
         </p>
         {error && <p className="error">{error}</p>}
 

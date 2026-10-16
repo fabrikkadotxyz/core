@@ -90,7 +90,10 @@ const project = mkdtempSync(join(tmpdir(), 'm37-project-'));
 const host = await startHost();
 let st = (await host.ask({ op: 'state' })).state;
 check(st?.tools?.map((t) => t.id).join(',') === REGISTRY.join(',') && st.tools.every((t) => t.installed && t.enabled), 'Agent tools lists every registry tool: installed here, and offered by default');
-const grant = (await host.ask({ op: 'grant', path: project, policy: 'edit' })).grant;
+// M53 (ADR 0051): a folder is for an organization; the room below is in your own.
+const own = (await (await api('/teams')).json()).find((t) => t.own);
+for (let i = 0; i < 40 && !(await host.ask({ op: 'state' })).state?.organizations?.some((o) => o.id === own.id); i++) await sleep(250);
+const grant = (await host.ask({ op: 'grant', path: project, policy: 'edit', org: own.id })).grant;
 const deviceFor = async () => (await (await api('/devices')).json()).find((d) => d.grants.some((g) => g.id === grant?.id));
 let dev = null;
 for (let i = 0; i < 20; i++) {

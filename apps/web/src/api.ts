@@ -306,8 +306,9 @@ const base = ({ owner, session }: SessionRef) =>
 
 export const sessions = {
   list: () => call<SessionSummary[]>('/sessions'),
-  create: (title: string, teamId?: string, templateRef?: string) =>
-    call<SessionSummary>('/sessions', { method: 'POST', body: { title, teamId, templateRef } }),
+  /** M53 (ADR 0051): in an organization (unnamed: your own); `team` visibility starts one the organization reads along. */
+  create: (title: string, teamId?: string, visibility: 'private' | 'team' = 'private', templateRef?: string) =>
+    call<SessionSummary>('/sessions', { method: 'POST', body: { title, teamId, visibility, templateRef } }),
   /** M29: start a session from a chat — it links back; nothing is copied. */
   spinOff: (ref: SessionRef, title: string) =>
     call<SessionSummary>(`${base(ref)}/spin-off`, { method: 'POST', body: { title } }),

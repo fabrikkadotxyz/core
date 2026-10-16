@@ -138,6 +138,7 @@ import {
   sessionTeam,
   TeamError,
   teamRole,
+  ownOrganizationOf,
 } from './teams.ts';
 import { cachedRepos, LinkError, linkedRepos, listLinks, removeLink, saveLink } from './links.ts';
 import { addComment, listComments, reply, setResolved, threadAuthor } from './outputs/comments.ts';
@@ -606,18 +607,24 @@ export function createApp(options: CreateAppOptions = {}) {
   }
 
   app.post('/api/sessions', requireUser(db), async (c) => {
-    const { title, teamId, templateRef } = await c.req.json<{ title?: string; teamId?: string; templateRef?: string }>();
+    const body = await c.req.json<{ title?: string; teamId?: string; templateRef?: string; visibility?: string }>();
+    const { title, templateRef } = body;
     const trimmed = title?.trim();
     if (!trimmed) return c.json({ error: 'title is required' }, 400);
     // A team you aren't on is indistinguishable from one that doesn't exist.
-    if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such organization' }, 404);
-    const gated = await gateWrite(c, { teamId: teamId ?? null, ownerUserId: c.get('user').id }, 'room');
+    if (body.teamId && !(await teamRole(db, body.teamId, c.get('user').id))) return c.json({ error: 'no such organization' }, 404);
+    // M53 (ADR 0051): every session is in an organization; unnamed, it is your own.
+    const teamId = body.teamId ?? (await ownOrganizationOf(db, c.get('user').id))?.id ?? null;
+    if (!teamId) return c.json({ error: 'a session belongs to an organization' }, 400);
+    if (body.visibility !== undefined && body.visibility !== 'private' && body.visibility !== 'team') return c.json({ error: 'visibility is private or team' }, 400);
+    const gated = await gateWrite(c, { teamId, ownerUserId: c.get('user').id }, 'room');
     if (gated) return gated;
 
     // M25: a template you can't use is indistinguishable from one that doesn't exist.
     const template = templateRef ? await findTemplate(db, c.get('user').id, templateRef) : null;
     if (templateRef && !template) return c.json({ error: 'no such template' }, 404);
-    const created = await createSession(db, c.get('user'), trimmed, { teamId: teamId ?? null });
+    // M53: the + beside Organization sessions starts one the organization reads along from the start.
+    const created = await createSession(db, c.get('user'), trimmed, { teamId, visibility: body.visibility === 'team' ? 'team' : 'private' });
     if (template) {
       const s = await resolveSessionForUser(db, created.ownerSlug, created.publicId, c.get('user').id);
       await applyTemplate(db, { sessionId: s!.id, participantId: s!.participantId, template });

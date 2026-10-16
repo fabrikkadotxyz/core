@@ -186,9 +186,11 @@ const alice = await signupWith((await req(`/teams/${T}/invites`, { method: 'POST
 const lone = (await req('/sessions', { method: 'POST', body: { title: `Elsewhere ${stamp}` }, jar: fede })).json;
 const carol = await signupWith((await req(`/o/${lone.ownerSlug}/s/${lone.publicId}/invites`, { method: 'POST', body: {}, jar: fede })).json.token, 'carol');
 
-const noTeam = (await req('/sessions', { method: 'POST', body: { title: `No team ${stamp}` }, jar: fede })).json;
-const refused = await req(`/o/${noTeam.ownerSlug}/s/${noTeam.publicId}`, { method: 'PATCH', body: { visibility: 'team' }, jar: fede });
-check(refused.status === 400, '"team" visibility needs a team');
+// M53 (ADR 0051): every session is in an organization, so "team visibility needs a team" has no path any more;
+// a session created with none named is in your own organization and can be read along by it.
+const noTeam = (await req('/sessions', { method: 'POST', body: { title: `Own org ${stamp}` }, jar: fede })).json;
+const allowed = await req(`/o/${noTeam.ownerSlug}/s/${noTeam.publicId}`, { method: 'PATCH', body: { visibility: 'team' }, jar: fede });
+check(allowed.status === 200 && !!noTeam.team, 'a session with no organization named is in your own, and that organization may read along');
 
 const S = (await req('/sessions', { method: 'POST', body: { title: `Team-visible ${stamp}`, teamId: T }, jar: fede })).json;
 const base = `/o/${S.ownerSlug}/s/${S.publicId}`;

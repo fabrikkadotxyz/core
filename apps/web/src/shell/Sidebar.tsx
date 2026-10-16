@@ -83,17 +83,20 @@ function SessionLink({ s, onNavigate }: { s: SessionSummary; onNavigate: () => v
 }
 
 /**
- * Start a session where the sessions are (M28): in the current team, or just
- * for you. A title; Enter starts it and opens it. (Session types — templates —
+ * Start a session where the sessions are (M28): in the current organization,
+ * for it to read along or for you alone (M53). A title; Enter starts it and opens it. (Session types — templates —
  * are parked for now: the server keeps them, the UI doesn't offer them.)
  */
 function NewSession({
   teamId,
+  visibility,
   open,
   onClose,
   onCreated,
 }: {
-  teamId: string | null;
+  teamId: string;
+  /** M53: `team` starts one the organization reads along; `private`, an individual one. */
+  visibility: 'private' | 'team';
   open: boolean;
   onClose: () => void;
   onCreated: (s: SessionSummary) => void;
@@ -109,7 +112,7 @@ function NewSession({
         if (!title.trim()) return;
         setError(null);
         try {
-          const s = await sessionsApi.create(title.trim(), teamId ?? undefined);
+          const s = await sessionsApi.create(title.trim(), teamId, visibility);
           setTitle('');
           onCreated(s);
         } catch (err) {
@@ -232,14 +235,15 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
   const { refresh } = useWorkspace();
   const active = sessions.filter((s) => s.status === 'active');
   // Sessions and chats are different things (ADR 0026): each is a place of its own (ADR 0048).
-  const work = active.filter((s) => (s.kind ?? 'session') === 'session');
-  const teamSessions = team ? work.filter((s) => s.team?.id === team.id).sort(byActivity) : [];
-  const personal = work.filter((s) => !s.team).sort(byActivity);
+  // M53 (ADR 0051): every session is in an organization. Individual = only you in it.
+  const work = active.filter((s) => (s.kind ?? 'session') === 'session' && s.team?.id === team?.id);
+  const teamSessions = team ? work.filter((s) => !s.individual).sort(byActivity) : [];
+  const personal = team ? work.filter((s) => s.individual).sort(byActivity) : [];
   const teamChats = team
     ? active.filter((s) => s.kind === 'chat' && s.team?.id === team.id).sort((a, b) => a.title.localeCompare(b.title))
     : [];
   const directs = active.filter((s) => s.kind === 'direct').sort(byActivity);
-  const [creating, setCreating] = useState<'team' | 'personal' | null>(null);
+  const [creating, setCreating] = useState<'team' | 'individual' | null>(null);
   const open = (s: SessionSummary) => {
     setCreating(null);
     refresh();
@@ -284,9 +288,9 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
 
       {place === 'sessions' && team && (
         <section className="side-section" aria-label="Organization sessions">
-          <SectionHead title="Organization sessions" label={`New session in ${team.name}`} onAdd={() => setCreating('team')} />
-          <NewSession teamId={team.id} open={creating === 'team'} onClose={() => setCreating(null)} onCreated={open} />
-          {teamSessions.length === 0 && <p className="side-empty">No sessions in {team.name} yet.</p>}
+          <SectionHead title="Organization sessions" label={`New session ${team.name} can read along`} onAdd={() => setCreating('team')} />
+          <NewSession teamId={team.id} visibility="team" open={creating === 'team'} onClose={() => setCreating(null)} onCreated={open} />
+          {teamSessions.length === 0 && <p className="side-empty">None yet: sessions {team.name} reads along, or with more than one person.</p>}
           {teamSessions.map((s) => (
             <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
           ))}
@@ -300,15 +304,15 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
         </section>
       )}
 
-      {place === 'sessions' && (
-        <section className="side-section" aria-label="Personal sessions">
-          <SectionHead title="Personal sessions" label="New personal session" onAdd={() => setCreating('personal')} />
-          <NewSession teamId={null} open={creating === 'personal'} onClose={() => setCreating(null)} onCreated={open} />
-          {personal.length === 0 && <p className="side-empty">Sessions in no organization show here.</p>}
+      {place === 'sessions' && team && (
+        <section className="side-section" aria-label="Individual sessions">
+          <SectionHead title="Individual sessions" label={`New individual session in ${team.name}`} onAdd={() => setCreating('individual')} />
+          <NewSession teamId={team.id} visibility="private" open={creating === 'individual'} onClose={() => setCreating(null)} onCreated={open} />
+          {personal.length === 0 && <p className="side-empty">Sessions only you are in show here.</p>}
           {personal.map((s) => (
             <SessionLink key={s.publicId} s={s} onNavigate={onNavigate} />
           ))}
-          <NavLink to="/sessions?personal=1" className="side-item side-more" onClick={onNavigate}>
+          <NavLink to={`/teams/${team.id}/sessions?individual=1`} className="side-item side-more" onClick={onNavigate}>
             All, archived too
           </NavLink>
         </section>

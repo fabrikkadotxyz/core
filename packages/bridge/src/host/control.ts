@@ -169,7 +169,7 @@ const PAGE = `<!doctype html>
       <button>Grant folder</button>
     </form>
     <p class="muted" id="policyhelp"></p>
-    <p class="muted">A folder is for one organization's rooms, or Personal rooms. For two organizations, grant it twice.</p>
+    <p class="muted">A folder is for one organization's rooms, your own included. For two organizations, grant it twice.</p>
     <p class="muted">With Codex, these policies confine changes, network and its other tools, but not reading: Codex agents can read files anywhere on this computer (ADR 0032). Claude Code and OpenCode agents read only inside the folder.</p>
     <p class="error" id="adderror"></p>
   </div>
@@ -204,9 +204,8 @@ function render(s) {
     '<span class="segmented" role="radiogroup" aria-label="What agents may do in ' + esc(g.label) + '">' + segmented(g.id, g.policy) + '</span>' +
     '<button class="link" data-remove="' + g.id + '">Remove</button>' + (g.policy === 'full' ? '<div class="warn" style="flex-basis:100%">Full: agents can run any command on this computer from this folder.</div>' : '') + '</div>').join('')
     : '<p class="muted">No folders yet. Grant one below, then use “Add my agent” in a session.</p>';
-  // ADR 0043: "For": Personal, or one of your organizations. Keeps the current choice.
-  orgs = [{ id: '', name: 'Personal' }].concat(s.organizations);
-  if (!orgs.some((o) => o.id === newOrg)) newOrg = '';
+  // ADR 0043, M53: "For": one of your organizations (no Personal since ADR 0051). Keeps the current choice.
+  orgs = s.organizations; if (!orgs.some((o) => o.id === newOrg)) newOrg = orgs[0]?.id ?? '';
   drawOrg();
   $('tools').innerHTML = s.tools.map((t) => '<div class="card row"><div class="grow"><strong>' + esc(t.name) + '</strong> <span class="muted">' + (t.installed ? (t.enabled ? 'offered in Add my agent' : 'installed, not offered') : 'not installed') + '</span></div>' +
     '<button class="switch" role="switch" aria-label="Offer ' + esc(t.name) + '" data-tool="' + esc(t.id) + '" aria-checked="' + t.enabled + '"' + (t.installed ? '' : ' disabled') + '></button></div>').join('');
@@ -216,7 +215,7 @@ function render(s) {
 }
 async function refresh() { try { render(await api('GET', '/api/state')); } catch {} }
 let newPolicy = 'edit';
-let newOrg = ''; let orgs = [{ id: '', name: 'Personal' }];
+let newOrg = ''; let orgs = [];
 const drawOrg = () => { $('org').innerHTML = orgs.map((o) => '<button type="button" role="radio" data-seg="org" data-value="' + esc(o.id) + '" aria-checked="' + (o.id === newOrg) + '" tabindex="' + (o.id === newOrg ? 0 : -1) + '">' + esc(o.name) + '</button>').join(''); };
 const drawNew = () => { $('policy').innerHTML = segmented('new', newPolicy); $('policyhelp').textContent = HELP[newPolicy]; };
 drawNew(); drawOrg();

@@ -66,7 +66,8 @@ export class Host {
   organizations: { id: string; name: string }[] = [];
 
   scopeName(org: string | null | undefined): string {
-    if (!org) return 'Personal';
+    // M53 (ADR 0051): a Personal folder serves no room any more.
+    if (!org) return 'Personal · no longer used';
     return this.organizations.find((o) => o.id === org)?.name ?? 'an organization you have left';
   }
 

@@ -99,7 +99,10 @@ for (let i = 0; i < 40 && !st?.connected; i++) {
   st = (await ask({ op: 'state' })).state;
   await sleep(300);
 }
-const grant = (await ask({ op: 'grant', path: project, policy: 'edit' })).grant;
+// M53 (ADR 0051): a folder is for an organization; the room below is in your own.
+const own = (await (await api('/teams')).json()).find((t) => t.own);
+for (let i = 0; i < 40 && !(await ask({ op: 'state' })).state?.organizations?.some((o) => o.id === own.id); i++) await sleep(250);
+const grant = (await ask({ op: 'grant', path: project, policy: 'edit', org: own.id })).grant;
 check(st?.providers.includes('codex') && !!grant, 'the host reports Codex installed, and a folder is granted (Edit in folder)');
 
 const S = (await (await api('/sessions', { method: 'POST', body: JSON.stringify({ title: `M35 ${Date.now()}` }) })).json());

@@ -56,9 +56,9 @@ function ConnectCommand({ first }: { first: boolean }) {
 
 export function Devices() {
   const [list, setList] = useState<DeviceSummary[] | null>(null);
-  // ADR 0043: each folder is for one organization's rooms, or Personal.
+  // ADR 0043: each folder is for one organization's rooms. Personal (M53, ADR 0051) serves no room any more.
   const { teams } = useWorkspace();
-  const orgName = (id: string | null) => (id ? (teams.find((t) => t.id === id)?.name ?? 'an organization') : 'Personal');
+  const orgName = (id: string | null) => (id ? (teams.find((t) => t.id === id)?.name ?? 'an organization') : 'Personal · no longer used');
   const load = useCallback(() => {
     devices.list().then(setList).catch(() => setList([]));
   }, []);

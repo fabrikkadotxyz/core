@@ -13,7 +13,7 @@ import { useWorkspace } from '../shell/workspace.tsx';
  * M33 (ADR 0030): this instance's own installer. Once per computer, so a paste
  * here is the one-time setup the five-click rule allows.
  */
-function ConnectCommand({ first }: { first: boolean }) {
+export function ConnectCommand({ first }: { first: boolean }) {
   const [command, setCommand] = useState<string | null | undefined>(undefined);
   const [copied, setCopied] = useState(false);
   useEffect(() => {

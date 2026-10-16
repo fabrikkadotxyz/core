@@ -145,6 +145,8 @@
           : '<p class="muted">No folders yet. Add one, then use “Add my agent” in a session.</p>';
         // ADR 0043, M53: "For": one of your organizations (no Personal since ADR 0051). Keeps the current choice.
         orgs = s.organizations || [];
+        // M54 (ADR 0052): a room asked for a folder for one organization: preselect it.
+        if (s.preselectOrg && orgs.some((o) => o.id === s.preselectOrg)) newOrg = s.preselectOrg;
         if (!orgs.some((o) => o.id === newOrg)) newOrg = orgs[0]?.id ?? '';
         drawOrg();
         $('tools').innerHTML = s.tools.map((t) =>

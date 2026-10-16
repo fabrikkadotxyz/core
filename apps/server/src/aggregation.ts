@@ -15,6 +15,7 @@ import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { Database } from '@fabrikka/db';
 import { freshAccessToken } from './connections/oauth.ts';
+import { teamRole } from './teams.ts';
 import {
   mcpServers,
   open as openSealed,
@@ -228,7 +229,10 @@ export async function attachServer(
   const scope = await roomScopeOf(db, opts.sessionId);
   let server: AttachedServer;
   if (opts.url) {
-    const saved = await saveConnection(db, { ...opts, url: opts.url, teamId: scope });
+    // Saved by hand from a room: for the room's organization when you are on it
+    // (M53: every room has one), otherwise for all your rooms, as a guest member's is.
+    const onIt = scope ? !!(await teamRole(db, scope, opts.userId)) : false;
+    const saved = await saveConnection(db, { ...opts, url: opts.url, teamId: onIt ? scope : null });
     if (!saved.ok) return saved;
     server = saved.server;
   } else {

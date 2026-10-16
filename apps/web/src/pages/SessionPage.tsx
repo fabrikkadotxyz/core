@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Select, TeamInitial } from '../components/Select.tsx';
 import { Modal } from '../components/Modal.tsx';
+import { ConnectCommand } from './DevicesPage.tsx';
 import { inDesktopApp, openFolders, openOutput as openOutputTab } from '../desktop.ts';
 import { AGENT_TOOLS, agentTool } from '@fabrikka/types';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -1386,6 +1387,19 @@ function AgentsPanel({
       setChoice(first ?? '');
     }).catch(() => setMyDevices([]));
   };
+  // M54 (ADR 0052): the Folders dialog for this room's organization.
+  const [foldersOpen, setFoldersOpen] = useState(false);
+  // While picking, a folder granted on the machine should appear here without a reload.
+  useEffect(() => {
+    if (!picking) return;
+    const tick = () =>
+      devices.list().then((d) => {
+        setMyDevices(d);
+        setChoice((c) => (c ? c : (d.flatMap((x) => x.grants.filter((g) => g.usable && (g.org ?? null) === (roomOrg?.id ?? null)).map((g) => `${x.id}|${g.id}`))[0] ?? '')));
+      }).catch(() => {});
+    const id = window.setInterval(tick, foldersOpen ? 2000 : 5000);
+    return () => window.clearInterval(id);
+  }, [picking, foldersOpen, roomOrg]);
   useEffect(() => {
     if (startAdding) startPicking();
     // Once, when the panel opens from Get started.
@@ -1426,18 +1440,24 @@ function AgentsPanel({
               ) : (
                 <>
                   {elsewhere
-                    ? `No folder for ${scopeName} yet on ${myDevices.map((d) => d.name).join(', ')}: add one with “For: ${roomOrg ? roomOrg.name : 'Personal'}”. `
+                    ? `No folder for ${scopeName} yet on ${myDevices.map((d) => d.name).join(', ')}. `
                     : `No folder granted yet on ${myDevices.map((d) => d.name).join(', ')}. `}
-                  {inDesktopApp() ? (
-                    <button className="link small" onClick={() => openFolders().catch(() => {})}>
-                      Add folders…
-                    </button>
-                  ) : (
-                    <>On that computer: the Fabrikka app's menu-bar icon → Folders….</>
-                  )}
+                  <button className="link small" onClick={() => setFoldersOpen(true)}>
+                    Add a folder…
+                  </button>
                 </>
               )}
             </p>
+          )}
+          {myDevices !== null && myDevices.length > 0 && folders.length > 0 && (
+            <p className="muted small">
+              <button className="link small" onClick={() => setFoldersOpen(true)}>
+                Add a folder…
+              </button>
+            </p>
+          )}
+          {foldersOpen && roomOrg && (
+            <FoldersDialog org={roomOrg} devices={myDevices ?? []} onClose={() => setFoldersOpen(false)} />
           )}
           {folders.length > 0 && (
             <>
@@ -2409,6 +2429,79 @@ function Timeline({
   );
 }
 
+
+/**
+ * M54 (ADR 0052): the Folders dialog from Add my agent, for the room's
+ * organization: your computers, each with the folders it offers here and an
+ * "Add a folder…" that opens the Folders window on that computer with the
+ * organization preselected (the app directly; a browser through the server
+ * and the host). No path, no policy travels. And "Connect another computer".
+ */
+function FoldersDialog({ org, devices: list, onClose }: { org: { id: string; name: string }; devices: DeviceSummary[]; onClose: () => void }) {
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const ask = async (d: DeviceSummary) => {
+    setError(null);
+    setNote(null);
+    try {
+      if (inDesktopApp()) await openFolders(org.id);
+      else await devices.openFolders(d.id, org.id);
+      setNote(`The Folders window opened on ${d.name}, with “For: ${org.name}” chosen. Pick the folder there; it appears here in a moment.`);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+  return (
+    <Modal label={`Folders for ${org.name}`} onClose={onClose}>
+      <header className="modal-head">
+        <h2>Folders for {org.name}</h2>
+        <button className="modal-close" aria-label="Close" onClick={onClose}>
+          ×
+        </button>
+      </header>
+      <div className="modal-main">
+        <p className="hint">
+          A folder is chosen on the computer itself, in the app's own window: nothing here can name a path. The window
+          opens with the organization set.
+        </p>
+        {list.length === 0 && <p className="muted small">No computer connected yet.</p>}
+        <ul className="participants folders-list">
+          {list.map((d) => {
+            const here = d.grants.filter((g) => (g.org ?? null) === org.id);
+            return (
+              <li key={d.id}>
+                <span>
+                  {d.name} <span className={d.online ? 'status on' : 'status off'}>{d.online ? 'online' : 'offline'}</span>
+                  <span className="muted small folders-here">
+                    {here.length === 0 ? `no folder for ${org.name} yet` : here.map((g) => g.label).join(', ')}
+                  </span>
+                </span>
+                <span className="row-end">
+                  {d.online ? (
+                    <button className="link small" onClick={() => ask(d)}>
+                      Add a folder…
+                    </button>
+                  ) : (
+                    <span className="muted small">start the app there</span>
+                  )}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        {note && <p className="muted small">{note}</p>}
+        {error && <p className="error small">{error}</p>}
+        <ConnectCommand first={list.length === 0} />
+      </div>
+      <footer className="modal-foot">
+        <span className="spacer" />
+        <button className="small" onClick={onClose}>
+          Done
+        </button>
+      </footer>
+    </Modal>
+  );
+}
 
 /**
  * M52 (ADR 0049): what this session allows one integration to do, in a dialog

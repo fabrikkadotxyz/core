@@ -173,7 +173,7 @@ check(
     /\.window\("main"\)/.test(mainRs),
   "THE INSTANCE'S PAGES GET open_folders, notify, set_attention AND open_output, NO HOST COMMAND, FOR ITS OWN ORIGIN ONLY, granted at runtime",
 );
-check(/fn open_folders\(app: AppHandle\)/.test(mainRs), 'open_folders takes no argument: no path, no policy');
+check(/fn open_folders\(app: AppHandle, org: Option<String>\)/.test(mainRs) && !/fn open_folders\([^)]*(path|policy)/.test(mainRs), 'open_folders takes at most an organization to preselect: no path, no policy (ADR 0052)');
 const manifest = readFileSync('apps/desktop/src-tauri/build.rs', 'utf8');
 check(['host_state', 'host_add_folder', 'host_policy', 'host_remove', 'host_stop'].every((c) => manifest.includes(`"${c}"`)), 'every host command is in the app manifest, so none is callable without a permission');
 

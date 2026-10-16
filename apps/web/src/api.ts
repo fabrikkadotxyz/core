@@ -175,6 +175,8 @@ export const client = {
 
 /** M31: your paired computers (the local host). Labels only, never paths. */
 export const devices = {
+  /** M54 (ADR 0052): ask one of your online computers to open its Folders window with an organization preselected. */
+  openFolders: (deviceId: string, teamId: string) => call<{ ok: true }>(`/devices/${deviceId}/open-folders`, { method: 'POST', body: { teamId } }),
   list: () => call<DeviceSummary[]>('/devices'),
   revoke: (id: string) => call<{ ok: true }>(`/devices/${id}`, { method: 'DELETE' }),
   pairing: (code: string) => call<{ deviceName: string }>(`/devices/pair/${encodeURIComponent(code)}`),

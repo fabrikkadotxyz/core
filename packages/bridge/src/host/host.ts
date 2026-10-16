@@ -87,6 +87,8 @@ export class Host {
 
   /** The client version the server serves (M33): newer than ours means "update available". */
   latestVersion: string | null = null;
+  /** M54: what to do when a room asks for the Folders window (the app shows it; a terminal host says where it is). */
+  onOpenFolders?: (org: string) => void;
 
   constructor(
     cfg: HostConfig,
@@ -119,6 +121,7 @@ export class Host {
         code?: string;
         version?: string;
         organizations?: { id: string; name: string }[];
+        org?: string;
       };
       try {
         frame = JSON.parse(String(data));
@@ -129,6 +132,8 @@ export class Host {
       if (frame.type === 'binding' && frame.binding) this.add(frame.binding);
       if (frame.type === 'client' && frame.version) this.clientVersion(frame.version);
       if (frame.type === 'organizations' && Array.isArray(frame.organizations)) this.organizationsChanged(frame.organizations);
+      // M54 (ADR 0052): a room asks for the Folders window, with its organization preselected. Nothing else travels.
+      if (frame.type === 'open_folders' && typeof frame.org === 'string' && this.organizations.some((o) => o.id === frame.org)) this.onOpenFolders?.(frame.org);
       if (frame.type === 'revoked' || (frame.type === 'error' && frame.code === 'unauthenticated')) this.forget();
     });
     ws.on('close', () => {
@@ -345,9 +350,11 @@ export async function runHost(argv: string[], say: (...a: unknown[]) => void): P
   if (channel) {
     // The app's Folders window is the control surface: no page, no port (ADR 0031).
     channel.attach(host);
+    host.onOpenFolders = (org) => send({ event: 'open_folders', org });
   } else {
     const control = await startControl(host, say);
     say(`folders and runs: ${control.url}`);
+    host.onOpenFolders = (org) => say(`a room asked for a folder for ${host.scopeName(org)}: open ${control.url} and add one`);
     if (cfg.grants.length === 0 || argv.includes('--open')) openBrowser(control.url);
   }
 

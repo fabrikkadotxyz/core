@@ -1040,6 +1040,21 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.get('/api/devices', requireUser(db), async (c) => c.json(await listDevices(db, c.get('user').id, hostHub.online)));
 
+  /**
+   * M54 (ADR 0052): ask one of your online computers to open its Folders window
+   * with an organization preselected. No path, no policy travels: the person
+   * chooses both on the machine.
+   */
+  app.post('/api/devices/:id/open-folders', requireUser(db), async (c) => {
+    const { teamId } = await c.req.json<{ teamId?: string }>();
+    if (!teamId || !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such organization' }, 404);
+    const device = (await listDevices(db, c.get('user').id, hostHub.online)).find((d) => d.id === c.req.param('id'));
+    if (!device) return c.notFound();
+    if (!device.online) return c.json({ error: `${device.name} is offline` }, 409);
+    hostHub.send(device.id, { type: 'open_folders', org: teamId });
+    return c.json({ ok: true });
+  });
+
   app.delete('/api/devices/:id', requireUser(db), async (c) => {
     const done = await revokeDevice(db, c.get('user').id, c.req.param('id'));
     if (!done) return c.notFound();

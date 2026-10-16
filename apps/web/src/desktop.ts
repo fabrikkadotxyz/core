@@ -11,10 +11,11 @@ const bridge = (): TauriBridge | null =>
 
 export const inDesktopApp = (): boolean => bridge() !== null;
 
-export async function openFolders(): Promise<void> {
+/** M54 (ADR 0052): `org` preselects the organization in the window's "For"; no path, no policy ever travels. */
+export async function openFolders(org?: string): Promise<void> {
   const b = bridge();
   if (!b) throw new Error('only the Fabrikka desktop app can open its Folders window');
-  await b.invoke('open_folders');
+  await b.invoke('open_folders', { org: org ?? null });
 }
 
 /**

@@ -2444,6 +2444,46 @@ room you attach the connection to as owner.
 **Clicks:** 2 and a title to an individual session; the same for an
 organization session.
 
+## M54 — Add a folder from Add my agent
+
+> **Built 2026-10-16** ([ADR 0052](decisions/0052-a-room-asks-your-computer-to-open-its-folders-window.md)).
+>
+> With a computer paired but no folder for the room's organization, *Add my
+> agent* said where to go. Now it takes you there.
+
+- **A "Folders" dialog from Add my agent**, for the room's organization:
+  your computers, each with the folders it offers here and an **Add a
+  folder…** button when online; **Connect another computer** with the
+  one-line install command (M33). The picker refreshes while the dialog is
+  open, so a folder granted on the machine appears and is selected.
+- **Add a folder… opens the Folders window on that computer, with *For* set
+  to the organization.** In the desktop app, directly; from a browser,
+  through the server and the host (`open_folders`, a frame that carries the
+  organization and nothing else). The folder and its policy are still chosen
+  in the window, on the machine (ADR 0027, ADR 0031).
+- A computer that is offline cannot be asked; the button says so.
+
+**Test:**
+1. In a browser, in a room of an organization with no folder yet: Setup →
+   Agents → Add my agent → **Add a folder…** → the dialog lists your
+   computer, online. Click **Add a folder…** on it: the Folders window
+   appears on that computer with *For: <organization>* chosen. Pick a folder,
+   Edit in folder, Add. Back in the browser the dialog and the picker show it
+   within a few seconds; **Add** binds the agent. **Setup → Agents → Add my
+   agent → Add a folder… → Add a folder… → (the picker) → Add: the browser
+   part is 4 clicks.**
+2. In the desktop app: the same, and the window opens at once.
+3. Quit the app on that computer: the dialog shows it offline, and *Add a
+   folder…* is not offered for it. *Connect another computer* shows the
+   install command with Copy.
+4. A host run from a terminal (`fabrikka host`): asking from the browser
+   makes it print where its Folders page is; nothing else happens.
+5. The window shows the organization it was asked for; choosing another in
+   *For* still works.
+
+**Clicks:** 4 in the browser to a bound agent with a fresh folder, counting
+the picker as one.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

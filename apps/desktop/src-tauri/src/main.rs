@@ -86,6 +86,8 @@ struct Host {
     quitting: AtomicBool,
     /// Why the host isn't running, when it chose not to (another host holds the lock).
     blocked: Mutex<Option<String>>,
+    /// M54 (ADR 0052): the organization the Folders window should preselect, taken once by its page.
+    preselect: Mutex<Option<String>>,
 }
 
 /// Start the host for the saved server, unless one is running already.
@@ -231,6 +233,13 @@ fn on_host_message(app: &AppHandle, message: Value) {
         }
         return;
     }
+    // M54 (ADR 0052): a room asked for the Folders window, with an organization to preselect.
+    // The frame carries no path and no policy; the person chooses both here.
+    if message.get("event").and_then(Value::as_str) == Some("open_folders") {
+        *app.state::<Host>().preselect.lock().unwrap() = message.get("org").and_then(Value::as_str).map(str::to_owned);
+        let _ = show_folders(app);
+        return;
+    }
     if let Some(id) = message.get("id").and_then(Value::as_u64) {
         if let Some(reply) = app.state::<Host>().pending.lock().unwrap().remove(&id) {
             let _ = reply.send(message);
@@ -273,7 +282,12 @@ async fn ask(app: &AppHandle, mut request: Value) -> Result<Value, String> {
 
 #[tauri::command]
 async fn host_state(app: AppHandle) -> Result<Value, String> {
-    Ok(ask(&app, json!({ "op": "state" })).await?["state"].take())
+    let mut state = ask(&app, json!({ "op": "state" })).await?["state"].take();
+    // M54: the organization a room asked for, handed to the page once.
+    if let Some(org) = app.state::<Host>().preselect.lock().unwrap().take() {
+        state["preselectOrg"] = Value::String(org);
+    }
+    Ok(state)
 }
 
 /// The path comes from the native picker, here in Rust — never from a page.
@@ -310,10 +324,11 @@ async fn host_stop(app: AppHandle) -> Result<Value, String> {
 /* ------------------------------------- command: the instance's own pages, only */
 
 /// Open the Folders window. The ONE command the remote web app may call (its
-/// "Add folders…" button): no argument, so it can't name a path or a policy —
-/// the person chooses in the app's own window (ADR 0031).
+/// "Add a folder…" button): at most the organization to preselect (ADR 0052),
+/// never a path or a policy — the person chooses in the app's own window (ADR 0031).
 #[tauri::command]
-fn open_folders(app: AppHandle) -> Result<(), String> {
+fn open_folders(app: AppHandle, org: Option<String>) -> Result<(), String> {
+    *app.state::<Host>().preselect.lock().unwrap() = org;
     show_folders(&app).map_err(|e| e.to_string())
 }
 

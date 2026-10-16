@@ -2564,3 +2564,8 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, 0.5); }
 
 /* ---- ADR 0050: the room's organization is a fact, not a control ---- */
 .room-org { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; }
+
+/* ---- M54: the Folders dialog from Add my agent (ADR 0052) ---- */
+.folders-list li > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.folders-list .folders-here { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modal-main .card-hint { margin: 0.75rem 0 0.5rem; }

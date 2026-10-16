@@ -138,7 +138,7 @@ check(true, `fabrikka report with nothing set exits 0 and says so (${out.trim().
 
 // Any command as an agent: a shell command answers a mention with its stdout.
 const cmdAgent = (await req(`${base}/agents`, { method: 'POST', body: { displayName: `shell-${stamp}`, provider: 'other' }, cookie: fede })).json;
-check(cmdAgent.setup?.lanes?.includes('command') && / run --dir \. -- <your command>/.test(cmdAgent.setup?.commandCommand ?? ''), 'SETUP OFFERS THE ANY COMMAND LANE for an unknown provider, with the line to run');
+check(cmdAgent.setup?.lanes?.includes('command') && / run --dir \. -- sh -c 'cat >\/dev\/null; echo "hello from \$FABRIKKA_RUN_ID"'$/.test(cmdAgent.setup?.commandCommand ?? ''), 'SETUP OFFERS THE ANY COMMAND LANE for an unknown provider, with the line to run');
 const mcpUrl = cmdAgent.mcpUrl;
 const runner = spawn(process.execPath, [CLI, 'run', '--dir', process.cwd(), '--', 'sh', '-c', 'cat >/dev/null; echo "hello from the shell $FABRIKKA_RUN_ID"'], {
   env: { ...process.env, FABRIKKA_URL: mcpUrl, FABRIKKA_TOKEN: cmdAgent.token },

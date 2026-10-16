@@ -1792,7 +1792,7 @@ function AgentSetup({
             ADR 0054: any command acts as this agent. On each mention it starts with the mention on its input and its
             output is posted as the reply; it may report its state through the variables Fabrikka sets.{' '}
             <strong>Full trust:</strong> nothing confines a command you choose, so run it in a folder you would grant as Full.
-            Replace <code>&lt;your command&gt;</code> after <code>--</code>.
+            The line runs as pasted and answers with its run id; replace what comes after <code>--</code> with your own command.
           </p>
           {block('command', 'Copy command', setup.commandCommand)}
         </>

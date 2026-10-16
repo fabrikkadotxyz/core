@@ -2243,9 +2243,9 @@ invite on the core):
 > **Test:** `scripts/acceptance/m16-report.mjs`: reports over HTTP with a
 > run token, the argv rules, the limits, the command through the real
 > client, and a shell command answering a mention. By hand: Connect another
-> way → *Any command* → copy the line → run it with `-- sh -c 'cat; echo
-> hello'` → mention the agent: *hello* is posted. **4 clicks and one paste,
-> once.**
+> way → *Any command* → copy the line → paste it in a terminal as it is (it
+> ends with a sample command) → mention the agent: *hello from <run id>* is
+> posted. **4 clicks and one paste, once.**
 
 ## M50 — Setup, one question at a time
 

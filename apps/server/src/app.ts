@@ -2793,11 +2793,13 @@ export function createApp(options: CreateAppOptions = {}) {
             ? `opencode mcp add fabrikka --url ${mcpUrl} --header "Authorization=Bearer ${token}"`
             : `Streamable HTTP MCP endpoint:\n  ${mcpUrl}\n\nAuthorization: Bearer ${token}`;
 
-    // ADR 0054: any command may act as this agent, Full policy only; the person types the command after --.
+    // ADR 0054: any command may act as this agent, Full policy only. The line runs as
+    // pasted (the five-click rule): a sample command that answers with its run id;
+    // the person replaces what comes after -- with their own.
     const commandCommand =
       `FABRIKKA_URL=${mcpUrl} \\
   FABRIKKA_TOKEN=${token} \\
-  ` + `${BRIDGE_COMMAND.join(' ')} run --dir . -- <your command>`;
+  ` + `${BRIDGE_COMMAND.join(' ')} run --dir . -- sh -c 'cat >/dev/null; echo "hello from $FABRIKKA_RUN_ID"'`;
 
     const lanes: SetupLane[] =
       provider === 'claude-code'

@@ -2558,8 +2558,12 @@ new table, one read-only endpoint, `GET /api/me/home`:
 - **Your computers:** each paired computer, online or offline, with how
   many agents are bound to it, and *Your devices* a click away.
 
-A section with nothing in it is not shown. In Self the one-off session card
-comes first; then the sections above.
+A section with nothing in it is not shown. **The arrangement (2026-10-16,
+the owner's pick of three):** a board. In Self a slim one-off bar on top;
+then two columns, **Now** (Needs you, Running now, Waiting on others) and
+**While you were away** (Finished, Rooms with news), each section a card
+with a colour stripe for its kind and a count; at the bottom, Your computers
+and open one-off links as chips. One column on a phone.
 
 **Test:**
 1. Have someone mention you in a room you have not opened: the home lists

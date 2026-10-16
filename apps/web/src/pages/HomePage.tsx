@@ -1,7 +1,10 @@
 /**
- * Home (M28, M56): what needs you, what is running, what changed; in Self the
- * one-off session card (M55) first. Sessions live in the sidebar, beside every
- * page; organizations are made in Settings (2026-10-16).
+ * Home (M28, M56): a board of what is going on, from one answer of the server.
+ * Two columns: Now (needs you, running, waiting on others) and While you were
+ * away (finished, rooms with news); a slim one-off bar on top in Self (M55);
+ * computers and open links as chips at the bottom. The owner chose this
+ * arrangement from three on 2026-10-16. Sessions live in the sidebar;
+ * organizations are made in Settings.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -20,6 +23,22 @@ function daysUntil(iso: string): string {
   return hours >= 1 ? `${hours} hour${hours === 1 ? '' : 's'}` : 'less than an hour';
 }
 
+type Room = { ownerSlug: string; publicId: string; title: string };
+const room = (s: Room) => `/o/${s.ownerSlug}/s/${s.publicId}`;
+
+/** A card on the board: a heading with a count, a kind stripe, and its items. */
+function Card({ title, label, tone, count, children }: { title: string; label?: string; tone?: 'attn' | 'ok' | 'info' | 'warn'; count?: number; children: React.ReactNode }) {
+  return (
+    <section className={`home-card${tone ? ` stripe-${tone}` : ''}`} aria-label={label ?? title}>
+      <h3>
+        {title}
+        {count !== undefined && <span className={`home-count${tone ? ` ${tone}` : ''}`}>{count}</span>}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
 export function HomePage() {
   const { team } = useWorkspace();
   const [home, setHome] = useState<HomeView | null>(null);
@@ -30,8 +49,9 @@ export function HomePage() {
     window.addEventListener('focus', load);
     return () => window.removeEventListener('focus', load);
   }, []);
-  const room = (s: { ownerSlug: string; publicId: string }) => `/o/${s.ownerSlug}/s/${s.publicId}`;
-  const empty = home && home.needsYou.length + home.running.length + home.finished.length + home.changed.length + home.waitingOnOthers.length + home.openInvites.length === 0;
+  const now = home ? home.needsYou.length + home.running.length + home.waitingOnOthers.length : 0;
+  const away = home ? home.finished.length + home.changed.length : 0;
+  const empty = home && now + away + home.openInvites.length === 0;
 
   return (
     <div className="page">
@@ -40,146 +60,146 @@ export function HomePage() {
 
         <GettingStarted />
 
-        {team?.own && <OneOffCard onMade={load} />}
+        {team?.own && <OneOffBar onMade={load} />}
 
-        {home && home.needsYou.length > 0 && (
-          <section className="home-section" aria-label="Needs you">
-            <h2>Needs you</h2>
-            <ul className="session-list">
-              {home.needsYou.map((w, i) => (
-                <li key={i}>
-                  <Link to={room(w.session)}>
-                    <span className="session-title">
-                      @{w.from} <span className="muted small">in {w.session.title} · {timeAgo(w.at)}</span>
-                    </span>
-                    <span className="small">{w.text}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
+        {home && (now > 0 || away > 0) && (
+          <div className="home-cols">
+            <div className="home-col">
+              <p className="home-h">Now</p>
+              {home.needsYou.length > 0 && (
+                <Card title="Needs you" tone="attn" count={home.needsYou.length}>
+                  <ul className="home-list">
+                    {home.needsYou.map((w, i) => (
+                      <li key={i}>
+                        <Link to={room(w.session)}>
+                          <span className="t">
+                            <strong>@{w.from}</strong>
+                            <span className="m">in {w.session.title} · {timeAgo(w.at)}</span>
+                          </span>
+                          <span className="x">{w.text}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+              {home.running.length > 0 && (
+                <Card title="Running now" tone="ok" count={home.running.length}>
+                  <ul className="home-list">
+                    {home.running.map((r) => (
+                      <li key={r.id}>
+                        <Link to={room(r.session)}>
+                          <span className="t">
+                            <span className="live-dot" aria-hidden />
+                            <strong>@{r.agent}</strong>
+                            <span className="m">in {r.session.title} · since {timeAgo(r.startedAt)}</span>
+                          </span>
+                          <span className="x activity-line">{r.last ? `${r.last.tool}${r.last.detail ? ` ${r.last.detail}` : ''}` : 'working…'}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+              {home.waitingOnOthers.length > 0 && (
+                <Card title="Waiting on others" tone="info">
+                  <ul className="home-list">
+                    {home.waitingOnOthers.map((w) => (
+                      <li key={w.session.publicId}>
+                        <Link to={room(w.session)}>
+                          <span className="t">
+                            <strong>{w.to}</strong>
+                            <span className="m">in {w.session.title} · you asked {timeAgo(w.at)}</span>
+                          </span>
+                          <span className="x">{w.text}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+              {now === 0 && <p className="muted small home-quiet">Nothing needs you right now.</p>}
+            </div>
+            <div className="home-col">
+              <p className="home-h">While you were away</p>
+              {home.finished.length > 0 && (
+                <Card title="Finished" label="Finished while you were away">
+                  <ul className="home-list">
+                    {home.finished.map((r) => (
+                      <li key={r.id}>
+                        <Link to={room(r.session)}>
+                          <span className="t">
+                            <strong>@{r.agent}</strong>
+                            <span className={`pill run-${r.status}`}>{r.status}</span>
+                            <span className="m">in {r.session.title} · {timeAgo(r.endedAt)}</span>
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+              {home.changed.length > 0 && (
+                <Card title="Rooms with news" label="Since you were away" tone="warn" count={home.changed.length}>
+                  <ul className="home-list">
+                    {home.changed.map((c) => (
+                      <li key={c.session.publicId}>
+                        <Link to={room(c.session)}>
+                          <span className="t">
+                            <strong>{c.session.title}</strong>
+                          </span>
+                          <span className="m">
+                            {c.messages} new message{c.messages === 1 ? '' : 's'} · {timeAgo(c.lastAt)}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+              {away === 0 && <p className="muted small home-quiet">Nothing happened while you were away.</p>}
+            </div>
+          </div>
         )}
 
-        {home && home.running.length > 0 && (
-          <section className="home-section" aria-label="Running now">
-            <h2>Running now</h2>
-            <ul className="session-list">
-              {home.running.map((r) => (
-                <li key={r.id}>
-                  <Link to={room(r.session)}>
-                    <span className="session-title">
-                      <span className="live-dot" aria-hidden /> @{r.agent} <span className="muted small">in {r.session.title} · since {timeAgo(r.startedAt)}</span>
+        {home && (home.computers.length > 0 || home.openInvites.length > 0) && (
+          <div className="home-foot">
+            {home.computers.length > 0 && (
+              <Card title="Your computers">
+                <div className="chips">
+                  {home.computers.map((d) => (
+                    <Link key={d.id} className="chip" to="/settings/devices">
+                      <span className={d.online ? 'dot on' : 'dot off'} aria-hidden />
+                      {d.name}
+                      <span className="home-count">{d.agents === 0 ? 'no agents' : `${d.agents} agent${d.agents === 1 ? '' : 's'}`}</span>
+                      {!d.online && <span className="m">offline</span>}
+                    </Link>
+                  ))}
+                </div>
+              </Card>
+            )}
+            {home.openInvites.length > 0 && (
+              <Card title="One-off sessions, open" label="One-off sessions, open">
+                <div className="chips">
+                  {home.openInvites.map((inv) => (
+                    <span key={inv.id} className="chip">
+                      <Link to={room(inv.session)}>{inv.session.title}</Link>
+                      <span className="home-count">{daysUntil(inv.expiresAt)} left</span>
+                      <button
+                        className="link small danger"
+                        onClick={async () => {
+                          await sessions.revokeInvite({ owner: inv.session.ownerSlug, session: inv.session.publicId }, inv.id).catch(() => {});
+                          load();
+                        }}
+                      >
+                        Revoke
+                      </button>
                     </span>
-                    <span className="small activity-line">
-                      {r.last ? `${r.last.tool}${r.last.detail ? ` ${r.last.detail}` : ''}` : 'working…'}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {home && home.finished.length > 0 && (
-          <section className="home-section" aria-label="Finished while you were away">
-            <h2>Finished while you were away</h2>
-            <ul className="session-list">
-              {home.finished.map((r) => (
-                <li key={r.id}>
-                  <Link to={room(r.session)}>
-                    <span className="session-title">
-                      @{r.agent} <span className={`badge run-${r.status}`}>{r.status}</span>{' '}
-                      <span className="muted small">in {r.session.title} · {timeAgo(r.endedAt)}</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {home && home.changed.length > 0 && (
-          <section className="home-section" aria-label="Since you were away">
-            <h2>Since you were away</h2>
-            <ul className="session-list">
-              {home.changed.map((c) => (
-                <li key={c.session.publicId}>
-                  <Link to={room(c.session)}>
-                    <span className="session-title">{c.session.title}</span>
-                    <span className="muted small">
-                      {c.messages} new message{c.messages === 1 ? '' : 's'} · {timeAgo(c.lastAt)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {home && home.waitingOnOthers.length > 0 && (
-          <section className="home-section" aria-label="Waiting on others">
-            <h2>Waiting on others</h2>
-            <ul className="session-list">
-              {home.waitingOnOthers.map((w) => (
-                <li key={w.session.publicId}>
-                  <Link to={room(w.session)}>
-                    <span className="session-title">
-                      {w.to} <span className="muted small">in {w.session.title} · you asked {timeAgo(w.at)}</span>
-                    </span>
-                    <span className="small">{w.text}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {home && home.openInvites.length > 0 && (
-          <section className="home-section" aria-label="One-off sessions, open">
-            <h2>One-off sessions, open</h2>
-            <p className="muted small">Links you sent that nobody has opened yet.</p>
-            <ul className="session-list">
-              {home.openInvites.map((inv) => (
-                <li key={inv.id} className="with-actions">
-                  <Link to={room(inv.session)}>
-                    <span className="session-title">{inv.session.title}</span>
-                    <span className="muted small">
-                      sent {timeAgo(inv.createdAt)} · expires in {daysUntil(inv.expiresAt)}
-                    </span>
-                  </Link>
-                  <button
-                    className="link small danger"
-                    onClick={async () => {
-                      await sessions.revokeInvite({ owner: inv.session.ownerSlug, session: inv.session.publicId }, inv.id).catch(() => {});
-                      load();
-                    }}
-                  >
-                    Revoke
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {home && home.computers.length > 0 && (
-          <section className="home-section" aria-label="Your computers">
-            <h2>Your computers</h2>
-            <ul className="session-list">
-              {home.computers.map((d) => (
-                <li key={d.id}>
-                  <Link to="/settings/devices">
-                    <span className="session-title">
-                      {d.name} <span className={d.online ? 'status on' : 'status off'}>{d.online ? 'online' : 'offline'}</span>
-                    </span>
-                    <span className="muted small">
-                      {d.agents === 0 ? 'no agents bound' : `${d.agents} agent${d.agents === 1 ? '' : 's'} bound`}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
         )}
 
         {empty && (
@@ -194,11 +214,12 @@ export function HomePage() {
 }
 
 /**
- * M55 (ADR 0053): a one-off session, from the Self home. A title, one click:
- * the session in your Self and a single-use member invite, and the link to
- * send. The sidebar's + beside One-off sessions lands here with ?one-off=1.
+ * M55 (ADR 0053): a one-off session, from the Self home, as one slim bar. A
+ * title, one click: the session in your Self and a single-use member invite,
+ * and the link to send. The sidebar's + beside One-off sessions lands here
+ * with ?one-off=1.
  */
-function OneOffCard({ onMade }: { onMade: () => void }) {
+function OneOffBar({ onMade }: { onMade: () => void }) {
   const [params] = useSearchParams();
   const [title, setTitle] = useState('');
   const [made, setMade] = useState<{ url: string; path: string; title: string } | null>(null);
@@ -231,50 +252,45 @@ function OneOffCard({ onMade }: { onMade: () => void }) {
   };
 
   return (
-    <section className="card-hint one-off" aria-label="One-off session">
-      <h2>One-off session</h2>
-      <p className="muted small">
-        For one piece of work with one person, outside any organization. One link in, nothing to set up for them.
-      </p>
+    <section className="one-off-bar" aria-label="One-off session">
       {made ? (
-        <div className="stack">
-          <p className="small">
-            <strong>{made.title}</strong> is ready. Send this link; whoever opens it joins this session, nothing else.
-          </p>
-          <div className="row copy-row">
-            <code className="endpoint">{made.url}</code>
-            <button
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(made.url);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                } catch {
-                  // Clipboard refused: the link is selectable text.
-                }
-              }}
-            >
-              {copied ? 'Copied ✓' : 'Copy'}
-            </button>
-          </div>
-          <div className="row one-off-actions">
-            <Link className="button" to={made.path}>
-              Open the session
-            </Link>
-            <span className="spacer" />
-            <button className="link small" onClick={() => setMade(null)}>
-              Start another
-            </button>
-          </div>
+        <div className="one-off-row">
+          <span className="lbl">
+            <strong>{made.title}</strong> is ready
+          </span>
+          <code className="endpoint">{made.url}</code>
+          <button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(made.url);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              } catch {
+                // Clipboard refused: the link is selectable text.
+              }
+            }}
+          >
+            {copied ? 'Copied ✓' : 'Copy'}
+          </button>
+          <Link className="button" to={made.path}>
+            Open the session
+          </Link>
+          <span className="spacer" />
+          <button className="link small" onClick={() => setMade(null)}>
+            Start another
+          </button>
         </div>
       ) : (
-        <form className="inline-form" onSubmit={start}>
+        <form className="one-off-row" onSubmit={start}>
+          <span className="lbl">One-off session</span>
           <input ref={input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What is it about?" aria-label="One-off session title" />
           <button type="submit" disabled={!title.trim() || busy}>
             {busy ? 'Starting…' : 'Start a one-off session'}
           </button>
+          <span className="muted small hint-inline">One link, one person, nothing to set up for them.</span>
         </form>
       )}
+      {made && <p className="muted small">Send the link; whoever opens it joins this session, nothing else.</p>}
       {error && <p className="error small">{error}</p>}
     </section>
   );

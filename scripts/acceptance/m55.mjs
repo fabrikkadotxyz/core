@@ -41,7 +41,7 @@ async function req(path, { method = 'GET', body, cookie } = {}) {
 /* ------------------------------------------------ 1. the source */
 
 const home = read('apps/web/src/pages/HomePage.tsx');
-check(/\{team\?\.own && <OneOffCard onMade=\{load\} \/>\}/.test(home) && /Start a one-off session/.test(home), 'THE SELF HOME HAS THE ONE-OFF SESSION CARD, and only Self');
+check(/\{team\?\.own && <OneOffBar onMade=\{load\} \/>\}/.test(home) && /Start a one-off session/.test(home), 'THE SELF HOME HAS THE ONE-OFF SESSION BAR, and only Self');
 check(/const s = await sessions\.create\(title\.trim\(\), undefined, 'private'\);\s*const inv = await sessions\.createInvite\(/.test(home), 'one click: a private session in your own organization, then its invite');
 check(/Copied ✓/.test(home) && /Open the session/.test(home), 'the link to copy, then the room');
 const side = read('apps/web/src/shell/Sidebar.tsx');

@@ -89,6 +89,7 @@ import {
   deliverMentions,
   listenForMentions,
   setConnectionStatus,
+  blockedOn,
 } from './delivery.ts';
 import {
   addAgentToSession,
@@ -1113,6 +1114,8 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!s) return c.notFound();
 
     const statuses = await connectionStatuses(db, s.id);
+    // M15 slice 1: what a blocked agent waits on, so the room can say so.
+    const blocked = await blockedOn(db, s.id);
     const viewer = s.access === 'viewer';
     const view: SessionView = {
       agents: await pauseState(db, s.id),
@@ -1120,6 +1123,7 @@ export function createApp(options: CreateAppOptions = {}) {
       participants: (await listParticipants(db, s.id)).map((p) => ({
         ...p,
         status: statuses.get(p.id),
+        blocked: blocked.get(p.id) ?? null,
       })),
       members: viewer ? [] : await membersWithOrigin(s.id),
       me: { role: s.role, participantId: s.participantId },
@@ -2171,6 +2175,10 @@ export function createApp(options: CreateAppOptions = {}) {
        * An activity feed that reorders steps is worse than no feed at all.
        */
       let queue: Promise<void> = Promise.resolve();
+      // M15 slice 1: the last sequence number accepted on this connection. A
+      // numbered frame not above it is dropped, so a delayed frame cannot turn
+      // idle back into working. Unnumbered frames (older bridges) pass.
+      let lastSeq = -Infinity;
 
       const handleFrame = async (
         evt: { data: unknown },
@@ -2187,7 +2195,14 @@ export function createApp(options: CreateAppOptions = {}) {
             messageId?: string;
             tool?: string;
             detail?: string | null;
+            seq?: number;
+            reason?: string;
+            completed?: boolean;
           };
+          if (typeof frame.seq === 'number' && frame.type !== 'hello') {
+            if (!(frame.seq > lastSeq)) return;
+            lastSeq = frame.seq;
+          }
 
           /**
            * Run lifecycle and activity. Deliberately NOT routed through
@@ -2253,12 +2268,16 @@ export function createApp(options: CreateAppOptions = {}) {
           if (frame.type !== 'status') return;
           if (
             frame.status !== 'working' &&
+            frame.status !== 'blocked' &&
             frame.status !== 'idle' &&
             frame.status !== 'connected'
           ) {
             return;
           }
-          await setConnectionStatus(db, { ...actorRef, kind, status: frame.status });
+          // M15 slice 1: a blocked agent says why (an unknown reason is kept as "waiting"); an idle may say it completed work.
+          const reason = typeof frame.reason === 'string' ? frame.reason.slice(0, 32) : null;
+          const detail = typeof frame.detail === 'string' ? frame.detail.slice(0, 120) : null;
+          await setConnectionStatus(db, { ...actorRef, kind, status: frame.status, reason, detail, completed: frame.completed === true });
         } catch {
           // Ignore a malformed frame rather than dropping the connection.
         }

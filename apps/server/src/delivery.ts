@@ -246,13 +246,21 @@ export async function setConnectionStatus(
     sessionId: string;
     participantId: string;
     kind: ConnectionKind | 'remote_http';
-    status: 'connected' | 'working' | 'idle' | 'offline';
+    status: 'connected' | 'working' | 'blocked' | 'idle' | 'offline';
+    /** M15 slice 1: with `blocked`, why and on what (already redacted, capped here). */
+    reason?: string | null;
+    detail?: string | null;
+    /** M15 slice 1: with `idle`, a unit of work just finished. */
+    completed?: boolean;
   },
 ): Promise<void> {
+  const blocked = opts.status === 'blocked';
   const fields = {
     sessionId: opts.sessionId,
     kind: opts.kind,
     status: opts.status,
+    blockedReason: blocked ? (opts.reason ?? null)?.slice(0, 32) ?? null : null,
+    blockedDetail: blocked ? (opts.detail ?? null)?.slice(0, 120) ?? null : null,
     lastSeenAt: new Date(),
   };
 
@@ -265,13 +273,15 @@ export async function setConnectionStatus(
     type: 'presence.updated',
     participantId: opts.participantId,
     status: opts.status,
+    ...(blocked ? { reason: fields.blockedReason as never, detail: fields.blockedDetail } : {}),
+    ...(opts.status === 'idle' && opts.completed ? { completed: true } : {}),
   });
 }
 
 export async function connectionStatuses(
   db: Database,
   sessionId: string,
-): Promise<Map<string, 'connected' | 'working' | 'idle' | 'offline'>> {
+): Promise<Map<string, 'connected' | 'working' | 'blocked' | 'idle' | 'offline'>> {
   const rows = await db
     .select({
       participantId: agentConnections.participantId,
@@ -283,7 +293,16 @@ export async function connectionStatuses(
   return new Map(
     rows.map((r) => [
       r.participantId,
-      r.status as 'connected' | 'working' | 'idle' | 'offline',
+      r.status as 'connected' | 'working' | 'blocked' | 'idle' | 'offline',
     ]),
   );
+}
+
+/** M15 slice 1: what a blocked agent is waiting on, for the room and the home. */
+export async function blockedOn(db: Database, sessionId: string): Promise<Map<string, { reason: string | null; detail: string | null }>> {
+  const rows = await db
+    .select({ participantId: agentConnections.participantId, reason: agentConnections.blockedReason, detail: agentConnections.blockedDetail })
+    .from(agentConnections)
+    .where(and(eq(agentConnections.sessionId, sessionId), eq(agentConnections.status, 'blocked')));
+  return new Map(rows.map((r) => [r.participantId, { reason: r.reason, detail: r.detail }]));
 }

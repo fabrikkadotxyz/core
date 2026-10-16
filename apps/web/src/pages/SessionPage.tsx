@@ -6,6 +6,7 @@ import { inDesktopApp, openFolders, openOutput as openOutputTab } from '../deskt
 import { AGENT_TOOLS, agentTool } from '@fabrikka/types';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
+  ConnectionStatus,
   ActivityEvent,
   AgentSummary,
   Artifact,
@@ -490,7 +491,9 @@ export function SessionPage() {
                 ? {
                     ...prev,
                     participants: prev.participants.map((p) =>
-                      p.id === event.participantId ? { ...p, status: event.status } : p,
+                      p.id === event.participantId
+                        ? { ...p, status: event.status, blocked: event.status === 'blocked' ? { reason: event.reason ?? null, detail: event.detail ?? null } : null }
+                        : p,
                     ),
                   }
                 : prev,
@@ -611,6 +614,7 @@ export function SessionPage() {
           */}
           {setupTab === 'agents' && (
             <AgentsPanel
+              presence={Object.fromEntries(view.participants.map((p) => [p.id, { status: p.status, blocked: p.blocked }]))}
               ref_={ref}
               onChanged={reload}
               isOwner={isOwner}
@@ -1299,12 +1303,15 @@ function RoomPanel({
  */
 function AgentsPanel({
   ref_,
+  presence = {},
   onChanged,
   isOwner,
   myUserId,
   startAdding = false,
 }: {
   ref_: SessionRef;
+  /** M15 slice 1: each agent's presence, so a blocked one says what it waits on. */
+  presence?: Record<string, { status?: ConnectionStatus; blocked?: { reason: string | null; detail: string | null } | null }>;
   onChanged: () => void;
   isOwner: boolean;
   myUserId: string | undefined;
@@ -1550,6 +1557,13 @@ function AgentsPanel({
                     }`
                   : a.provider}
               </span>
+              {presence[a.participantId]?.status && (
+                <span className={`presence ${presence[a.participantId]!.status}`} title={presence[a.participantId]!.blocked?.detail ?? undefined}>
+                  {presence[a.participantId]!.status === 'blocked'
+                    ? `waiting on ${presence[a.participantId]!.blocked?.reason === 'permission' ? 'a permission' : presence[a.participantId]!.blocked?.reason === 'elicitation' ? 'a question from a tool' : presence[a.participantId]!.blocked?.reason === 'input' ? 'its prompt' : 'you'}`
+                    : presence[a.participantId]!.status}
+                </span>
+              )}
               {(isOwner || a.ownerUserId === myUserId) && (
                 <button
                   className="link small"

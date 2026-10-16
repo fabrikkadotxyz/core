@@ -570,6 +570,21 @@ account** — a member's own, and an agent's owner's
 > Today a mention arriving mid-run **queues a second run**, so the agent spends
 > minutes finishing work everyone can already see is wrong.
 
+> **Slice 1 built 2026-10-16: the `blocked` state and sequence numbers**
+> (herdr items 1 and 2, `docs/mvp.md`). The bridge may report `blocked` with
+> a reason (permission, elicitation, input) and a redacted detail; the room
+> and the home show who the agent is waiting on; every bridge frame carries a
+> sequence number and a stale one is dropped; an `idle` that ends work says
+> `completed`. No adapter emits `blocked` yet: headless runs are unattended by
+> design (ADR 0027), and the live-session source is the agent's own hooks,
+> herdr item 4. The contract, the server, the bridge and the room are ready
+> for it. Steering itself (stop and resume) is still to build.
+>
+> **Test (slice 1):** `scripts/acceptance/m15.mjs` plays a bridge: a
+> `blocked` frame shows in the room's People as *waiting on approval*, a
+> stale `seq` is dropped, an `idle` with `completed` ends it. By hand: none
+> until an adapter emits it.
+
 **The honest version is narrower than the word suggests.** Neither runtime lets us
 change a model's instructions mid-thought: `claude -p` and `codex exec` take their
 prompt up front, and a channel push is documented to land "on the next turn". So

@@ -15,7 +15,9 @@ export type SessionStatus = 'active' | 'archived';
 /** Only a `bridge` connection can receive a claude/channel push. */
 export type ConnectionKind = 'bridge' | 'remote_http';
 
-export type ConnectionStatus = 'connected' | 'working' | 'idle' | 'offline';
+export type ConnectionStatus = 'connected' | 'working' | 'blocked' | 'idle' | 'offline';
+/** M15 slice 1: why an agent is blocked, where it reported one. An unknown value is shown as "waiting". */
+export type BlockedReason = 'permission' | 'elicitation' | 'input';
 
 export interface Participant {
   id: string;
@@ -24,6 +26,8 @@ export interface Participant {
   displayName: string;
   /** Absent for humans and for agents with no live connection. */
   status?: ConnectionStatus;
+  /** M15 slice 1: with `blocked`, what the agent waits on (reason, redacted detail). */
+  blocked?: { reason: string | null; detail: string | null } | null;
 }
 
 /**
@@ -131,7 +135,16 @@ export type ServerEvent =
         | 'paused'
         | 'turn_budget';
     }
-  | { type: 'presence.updated'; participantId: string; status: ConnectionStatus }
+  | {
+      type: 'presence.updated';
+      participantId: string;
+      status: ConnectionStatus;
+      /** M15 slice 1: with `blocked`, why and (redacted) on what. */
+      reason?: BlockedReason | null;
+      detail?: string | null;
+      /** M15 slice 1: with `idle`, true when a unit of work just finished. */
+      completed?: boolean;
+    }
   | {
       /** Agents halted, by a human or by the turn budget. See ADR 0012. */
       type: 'agents.paused';
@@ -614,7 +627,7 @@ export interface HomeView {
   /** Mentions of you since you last looked (M24). */
   needsYou: WaitingItem[];
   /** Runs in progress in rooms you are in, with the latest step when its owner shows activity. */
-  running: { id: string; agent: string; provider: string | null; startedAt: string; session: WaitingItem['session']; last: { tool: string; detail: string | null; at: string } | null }[];
+  running: { id: string; agent: string; provider: string | null; startedAt: string; session: WaitingItem['session']; last: { tool: string; detail: string | null; at: string } | null; /** M15 slice 1: the agent reported it is waiting on a person. */ blocked?: { reason: BlockedReason | string; detail: string | null } | null }[];
   /** Your agents' runs that ended since you last looked at their room. */
   finished: { id: string; agent: string; status: 'done' | 'failed' | 'stopped'; endedAt: string; session: WaitingItem['session'] }[];
   /** Rooms with messages from someone else since you last looked. */

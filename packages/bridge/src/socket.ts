@@ -40,7 +40,9 @@ export type ClientFrame =
   /** Declares how this connection wants to act, so the server can prefer a live
    *  bridge over a runner (ADR 0011). */
   | { type: 'hello'; kind: 'bridge' | 'runner' }
-  | { type: 'status'; status: 'working' | 'idle' }
+  /** M15 slice 1: `blocked` while the agent waits on a person; `completed` on
+   *  an idle that ends a unit of work. `detail` is already redacted. */
+  | { type: 'status'; status: 'working' | 'blocked' | 'idle'; reason?: 'permission' | 'elicitation' | 'input'; detail?: string | null; completed?: boolean }
   /** A unit of work begins. The runner mints the id so it can label activity
    *  immediately, without a round trip. */
   | {
@@ -69,6 +71,8 @@ export class BridgeSocket {
 
   connect(): void {
     if (this.closed || this.refused) return;
+    // A new connection, a new counter: the server scopes sequence numbers per connection.
+    this.seq = 0;
 
     // Header auth: possible because this is Node, not a browser.
     const ws = new WebSocket(this.url, {
@@ -113,10 +117,14 @@ export class BridgeSocket {
   }
 
   /** Best-effort: losing a status or hello frame must not be fatal. */
+  /** M15 slice 1: every status, run and activity frame carries a sequence number, per connection. */
+  private seq = 0;
+
   send(frame: ClientFrame): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       try {
-        this.ws.send(JSON.stringify(frame));
+        const numbered = frame.type === 'hello' ? frame : { ...frame, seq: ++this.seq };
+        this.ws.send(JSON.stringify(numbered));
       } catch {
         // ignore
       }

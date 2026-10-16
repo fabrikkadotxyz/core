@@ -6,6 +6,7 @@
 import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import {
+  agentConnections,
   agents,
   devices,
   messageMentions,
@@ -36,9 +37,20 @@ export async function homeFor(db: Database, userId: string, online: (deviceId: s
 
   // Running now: in-flight runs in rooms you are in.
   const running = await db
-    .select({ id: runs.id, agent: participants.displayName, startedAt: runs.startedAt, provider: runs.provider, ...ref })
+    .select({
+      id: runs.id,
+      agent: participants.displayName,
+      startedAt: runs.startedAt,
+      provider: runs.provider,
+      // M15 slice 1: the agent reported it is waiting on a person.
+      status: agentConnections.status,
+      reason: agentConnections.blockedReason,
+      blockedDetail: agentConnections.blockedDetail,
+      ...ref,
+    })
     .from(runs)
     .innerJoin(participants, eq(participants.id, runs.participantId))
+    .leftJoin(agentConnections, eq(agentConnections.participantId, runs.participantId))
     .innerJoin(sessions, eq(sessions.id, runs.sessionId))
     .innerJoin(users, eq(users.id, sessions.ownerId))
     .where(and(isNull(runs.endedAt), inArray(runs.sessionId, mine)))
@@ -119,7 +131,15 @@ export async function homeFor(db: Database, userId: string, online: (deviceId: s
     needsYou: await waitingFor(db, userId),
     running: running.map((r) => {
       const last = lastActivity(r.id);
-      return { id: r.id, agent: r.agent, provider: r.provider, startedAt: r.startedAt.toISOString(), session: toRef(r), last: last ? { tool: last.tool, detail: last.detail, at: last.at } : null };
+      return {
+        id: r.id,
+        agent: r.agent,
+        provider: r.provider,
+        startedAt: r.startedAt.toISOString(),
+        session: toRef(r),
+        last: last ? { tool: last.tool, detail: last.detail, at: last.at } : null,
+        blocked: r.status === 'blocked' ? { reason: r.reason ?? 'waiting', detail: r.blockedDetail ?? null } : null,
+      };
     }),
     finished: finished.map((r) => ({ id: r.id, agent: r.agent, status: r.status as 'done' | 'failed' | 'stopped', endedAt: r.endedAt!.toISOString(), session: toRef(r) })),
     changed: changed.map((r) => ({ session: toRef(r), messages: Number(r.count), lastAt: new Date(r.lastAt).toISOString() })),

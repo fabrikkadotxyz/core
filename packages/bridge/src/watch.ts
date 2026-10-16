@@ -276,7 +276,8 @@ export async function startRunner(
 
     running = false;
     current = undefined;
-    socket.send({ type: 'status', status: 'idle' });
+    // M15 slice 1: this idle ends a unit of work, unlike the one at startup.
+    socket.send({ type: 'status', status: 'idle', completed: true });
 
     const next = queue.shift();
     if (next) void handle(next);

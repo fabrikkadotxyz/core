@@ -499,8 +499,11 @@ export const agentConnections = pgTable(
       .references(() => sessions.id, { onDelete: 'cascade' }),
     /** bridge | remote_http */
     kind: text('kind').notNull(),
-    /** connected | working | idle | offline */
+    /** connected | working | blocked | idle | offline */
     status: text('status').notNull().default('offline'),
+    /** M15 slice 1: with `blocked`, why (permission | elicitation | input) and a redacted detail. */
+    blockedReason: text('blocked_reason'),
+    blockedDetail: text('blocked_detail'),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

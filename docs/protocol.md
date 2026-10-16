@@ -546,10 +546,20 @@ Bridge → server frames:
 | Frame | Meaning |
 | --- | --- |
 | `{ type: 'hello', kind }` | Declares `bridge` or `runner`; sent immediately after `ready` |
-| `{ type: 'status', status }` | `working` while a turn or run is in flight, `idle` after |
-| `{ type: 'run.start', runId, kind, provider?, messageId? }` | A run is beginning. `runId` is a UUID the runner mints |
-| `{ type: 'activity', runId, tool, detail? }` | One step, **already redacted** (ADR 0015) |
-| `{ type: 'run.end', runId, status }` | `done`, `stopped` or `failed` |
+| `{ type: 'status', status, seq?, reason?, detail?, completed? }` | `working` while a turn or run is in flight, `idle` after, **`blocked`** *(M15 slice 1, 2026-10-16)* while the agent waits on a person: `reason` is `permission` (a tool needs approval on the machine), `elicitation` (an MCP server asked the agent a question) or `input` (the agent's own prompt is waiting); `detail` is a short, **already redacted** line (120 chars) such as the tool's name. A correction mentioned while an agent is blocked reaches the agent on its next turn; the room shows who it is waiting on, so the person answers there. `completed: true` on an `idle` says a unit of work just finished, which tells it apart from idle at startup; absent means unknown |
+| `{ type: 'run.start', runId, kind, provider?, messageId?, seq? }` | A run is beginning. `runId` is a UUID the runner mints |
+| `{ type: 'activity', runId, tool, detail?, seq? }` | One step, **already redacted** (ADR 0015) |
+| `{ type: 'run.end', runId, status, seq? }` | `done`, `stopped` or `failed` |
+
+**Sequence numbers** *(M15 slice 1)*: a sender may number its `status`, `run.*`
+and `activity` frames with `seq`, a counter it increments by one per frame for
+the life of the connection, starting anywhere. The server drops a numbered
+frame whose `seq` is not above the last it accepted on that connection, so a
+frame delayed behind its successor cannot turn `idle` back into `working`. The
+counter is per connection: a reconnect starts a new one. Frames without `seq`
+are accepted in order of arrival, as before; a sender that numbers some frames
+and not others gets the unnumbered ones accepted and the numbered ones checked.
+The bridge numbers every frame it sends.
 
 Run and activity frames are **scoped to the sender**: the server checks that
 `runId` names a run belonging to *this* participant in *this* session, and drops
@@ -829,6 +839,7 @@ Server → client frames:
 | `{ type: 'comments.changed', outputId }` | *(M23)* A comment on that output was added, replied to, resolved or reopened |
 | `{ type: 'output.edited', edit }` | *(M12)* An output's content changed: `{ id, outputId, outputName, file, participantId, displayName, participantKind, runId, version, added, removed, at }`. Display data only, like activity |
 | `{ type: 'participant.joined', event }` | *(M17)* A human redeemed an invite, or an agent connected for the first time: `{ id, participantId, displayName, participantKind, ownerDisplayName, provider, at }`. `ownerDisplayName` and `provider` are null for humans. Display data only, like activity |
+| `{ type: 'presence.updated', participantId, status, reason?, detail?, completed? }` | An agent's presence changed (see *Presence*). *(M15 slice 1)* With `blocked`, `reason` and `detail` say what it waits on; with `idle`, `completed: true` says a unit of work just finished |
 | `{ type: 'stream.error', code }` | Refused; the socket closes immediately after |
 
 Join markers *(M17)* follow the same rule as activity. They are never delivered
@@ -1011,6 +1022,7 @@ extension never answers 402.
 | --- | --- |
 | `connected` | Bridge attached, live session, channel push available |
 | `working` | A run is in flight (channel turn or spawned run) |
+| `blocked` | *(M15 slice 1)* Waiting on a person: a permission prompt, an MCP elicitation, or its own input prompt. `reason` and `detail` say which, where the agent reported them |
 | `idle` | Reachable but doing nothing |
 | `offline` | No connection; mentions queue |
 

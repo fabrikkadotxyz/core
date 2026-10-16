@@ -2618,3 +2618,8 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, 0.5); }
 .one-off-row .hint-inline { flex-basis: 100%; }
 .one-off-bar > p { margin: 6px 0 0; }
 @media (max-width: 900px) { .home .home-cols, .home .home-foot { grid-template-columns: 1fr; } }
+
+/* ---- M15 slice 1: a blocked agent waits on a person ---- */
+.home .live-dot.blocked { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft, transparent); }
+.presence.blocked { color: var(--warn); border-color: var(--warn-border); }
+.presence.blocked::before { background: var(--warn); }

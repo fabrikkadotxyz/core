@@ -90,11 +90,17 @@ export function HomePage() {
                       <li key={r.id}>
                         <Link to={room(r.session)}>
                           <span className="t">
-                            <span className="live-dot" aria-hidden />
+                            <span className={r.blocked ? 'live-dot blocked' : 'live-dot'} aria-hidden />
                             <strong>@{r.agent}</strong>
                             <span className="m">in {r.session.title} · since {timeAgo(r.startedAt)}</span>
                           </span>
-                          <span className="x activity-line">{r.last ? `${r.last.tool}${r.last.detail ? ` ${r.last.detail}` : ''}` : 'working…'}</span>
+                          <span className="x activity-line">
+                            {r.blocked
+                              ? `waiting on you: ${r.blocked.reason === 'permission' ? 'a permission' : r.blocked.reason === 'elicitation' ? 'a question from a tool' : r.blocked.reason === 'input' ? 'its own prompt' : 'something'}${r.blocked.detail ? ` (${r.blocked.detail})` : ''}`
+                              : r.last
+                                ? `${r.last.tool}${r.last.detail ? ` ${r.last.detail}` : ''}`
+                                : 'working…'}
+                          </span>
                         </Link>
                       </li>
                     ))}

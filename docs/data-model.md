@@ -299,8 +299,8 @@ a time.
 **A viewer is not a participant.** No `participants` row, no token, no mention
 marker can point at them, and `list_participants` never shows them (ADR 0025).
 
-**`visibility = 'team'` needs a team.** Taking a session out of its team resets it
-to `private`.
+**`visibility = 'team'` needs a team.** (Until ADR 0050, taking a session out of its team reset it
+to `private`.)
 
 **A guest invite is a session invite with `role = 'guest'`.** Redeeming it writes
 `session_guests`, not `session_members`. An existing member who redeems one stays
@@ -574,7 +574,7 @@ lending someone the team's.
 
 **No join table to sessions.** Where a team credential applies is derived on
 every listing and call from `sessions.team_id` and `team_members`, so leaving
-the team or moving the session ends access on the next call, with nothing to
+the team ends access on the next call (so did moving the session, until ADR 0050), with nothing to
 clean up.
 
 **Precedence is per slug:** a participant's own `mcp_servers` row attached to

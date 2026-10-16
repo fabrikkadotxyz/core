@@ -121,25 +121,7 @@ export async function sessionTeam(db: Database, sessionId: string): Promise<{ id
   return row ?? null;
 }
 
-/**
- * Put a session in a team, move it, or take it out. Memberships the previous
- * team granted go with it: they came from the team, not from the owner.
- */
-export async function setSessionTeam(db: Database, sessionId: string, teamId: string | null): Promise<void> {
-  await db.transaction(async (tx) => {
-    const [before] = await tx.select({ teamId: sessions.teamId }).from(sessions).where(eq(sessions.id, sessionId));
-    // Out of a team means private again (M22): team visibility needs a team.
-    await tx
-      .update(sessions)
-      .set(teamId ? { teamId } : { teamId: null, visibility: 'private' })
-      .where(eq(sessions.id, sessionId));
-    if (before?.teamId && before.teamId !== teamId) {
-      await tx
-        .delete(sessionMembers)
-        .where(and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.viaTeamId, before.teamId)));
-    }
-  });
-}
+// ADR 0050: a session's organization is fixed at creation; there is no setSessionTeam.
 
 /** Teammates who aren't in the session yet — who the owner can add without a link. */
 export async function roster(db: Database, sessionId: string): Promise<TeamMember[]> {

@@ -242,8 +242,7 @@ check(!(await toolMap(S.mcp, fedeAgent.token)).has('sentry__list_issues'), 'it i
 
 await req(`/teams/${T}/connections`, { method: 'POST', body: { slug: 'sentry', url: UPSTREAM, credential: TEAM_TOKEN }, jar: fede });
 check((await toolMap(S.mcp, fedeAgent.token)).has('sentry__list_issues'), 're-added, it is back — the grant was the session’s all along');
-await req(`${S.base}/team`, { method: 'PUT', body: { teamId: null }, jar: fede });
-check(!(await toolMap(S.mcp, fedeAgent.token)).has('sentry__list_issues'), 'moving the session out of the team ends it');
+// ADR 0050: a session never leaves its team, so that way of ending access is gone; leaving the team (above) remains.
 
 check((await toolMap(S.mcp, fedeAgent.token)).has('post_message'), "the session's own tools are untouched throughout");
 

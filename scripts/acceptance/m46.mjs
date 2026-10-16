@@ -143,7 +143,8 @@ try {
   const blocked = await req(DEP, '/api/sessions', { method: 'POST', body: { title: 'nope', teamId: gatedTeam.id }, jar: fede });
   check(blocked.status === 402 && blocked.json?.url === '/fixture-notice' && blocked.json?.gated === true && /room/.test(blocked.json.error), 'A NEW ROOM IN A GATED TEAM IS REFUSED: 402, the reason and its link');
 
-  await req(DEP, `${base}/team`, { method: 'PUT', body: { teamId: gatedTeam.id }, jar: fede });
+  // ADR 0050: a room cannot be moved into a gated team; the fixture gates the room's own team instead.
+  await req(DEP, `/api/fixture/gate/${openTeam.id}`, { method: 'POST', body: {} });
   const sent = await req(DEP, `${base}/messages`, { method: 'POST', body: { content: 'after' }, jar: fede });
   check(sent.status === 402 && /message/.test(sent.json?.error ?? ''), 'IN A GATED TEAM, SENDING A MESSAGE IS REFUSED (402)');
   check((await req(DEP, `${base}/messages`, { jar: fede })).status === 200, '…reading still works');

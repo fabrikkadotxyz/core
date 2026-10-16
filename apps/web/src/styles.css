@@ -2561,3 +2561,6 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, 0.5); }
 .perm-list .grant input { margin-top: 0.2rem; }
 .perm-name { font-family: var(--font-mono); font-size: 0.78rem; }
 .perm-desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--muted); font-size: 0.72rem; }
+
+/* ---- ADR 0050: the room's organization is a fact, not a control ---- */
+.room-org { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; }

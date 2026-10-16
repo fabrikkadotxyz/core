@@ -154,15 +154,17 @@ const me = (await req('/auth/me', { jar: fede })).json;
 const lastOwner = await req(`/teams/${T}/members/${me?.id ?? me?.user?.id}`, { method: 'DELETE', jar: fede });
 check(lastOwner.status === 409, 'the last owner cannot leave the team');
 
-/* ------------------------------------- moving the session out of its team */
+/* ------------------------- the session's team is fixed (ADR 0050); leaving the team ends what it gave */
 
 const invC = await req(`/teams/${T}/invites`, { method: 'POST', body: {}, jar: fede });
 const dan = await signupWith(invC.json.token, 'dan');
 await req(`${base}/members`, { method: 'POST', body: { userId: dan.id }, jar: fede });
 check((await req(base, { jar: dan.jar })).status === 200, 'Dan is added from the roster');
 const out = await req(`${base}/team`, { method: 'PUT', body: { teamId: null }, jar: fede });
-check(out.status === 200 && out.json === null, 'Fede takes the session out of the team');
-check((await req(base, { jar: dan.jar })).status === 404, 'Dan, added by the team, goes with it');
+check(out.status === 404, "THE SESSION CANNOT BE MOVED OUT OF ITS TEAM, or into another: there is no such endpoint (ADR 0050)");
+check((await req(`${base}/team`, { jar: fede })).json?.id === T, '…and it is still in the team');
+await req(`/teams/${T}/members/${dan.id}`, { method: 'DELETE', jar: fede });
+check((await req(base, { jar: dan.jar })).status === 404, 'Dan, removed from the team, loses what the team gave');
 check((await req(base, { jar: bob.jar })).status === 200, 'Bob, invited directly, stays');
 
 if (failures) {

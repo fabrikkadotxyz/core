@@ -319,8 +319,6 @@ export const sessions = {
     call<TemplateSummary>(`${base(ref)}/template`, { method: 'POST', body }),
   /** M21: the session's team, who can be added from it, and adding them. */
   team: (ref: SessionRef) => call<{ id: string; name: string } | null>(`${base(ref)}/team`),
-  setTeam: (ref: SessionRef, teamId: string | null) =>
-    call<{ id: string; name: string } | null>(`${base(ref)}/team`, { method: 'PUT', body: { teamId } }),
   roster: (ref: SessionRef) => call<TeamMember[]>(`${base(ref)}/roster`),
   addFromRoster: (ref: SessionRef, userId: string) =>
     call<{ ok: true }>(`${base(ref)}/members`, { method: 'POST', body: { userId } }),

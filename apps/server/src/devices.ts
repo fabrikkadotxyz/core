@@ -387,16 +387,6 @@ export async function refreshHostsOf(db: Database, userId: string, rebind = fals
   for (const d of mine) hostHub.refresh(d.id, organizations, rebind);
 }
 
-/** ADR 0043: a room changed organization: its hosts get their bindings anew (and check them). */
-export async function refreshHostsInRoom(db: Database, sessionId: string): Promise<void> {
-  const bound = await db
-    .selectDistinct({ deviceId: sessionAgentHosts.deviceId, userId: devices.userId })
-    .from(sessionAgentHosts)
-    .innerJoin(sessionAgents, eq(sessionAgents.id, sessionAgentHosts.sessionAgentId))
-    .innerJoin(devices, eq(devices.id, sessionAgentHosts.deviceId))
-    .where(eq(sessionAgents.sessionId, sessionId));
-  for (const b of bound) hostHub.refresh(b.deviceId, await organizationsOf(db, b.userId), true);
-}
 
 export const hostHub = {
   attach(deviceId: string, ws: { send: (data: string) => void; close: () => void }) {

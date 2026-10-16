@@ -1199,13 +1199,11 @@ function RoomPanel({
 }) {
   const [title, setTitle] = useState(view.session.title);
   const [org, setOrg] = useState<{ id: string; name: string } | null | undefined>(undefined);
-  const [mine, setMine] = useState<TeamSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => setTitle(view.session.title), [view.session.title]);
   useEffect(() => {
     sessions.team(ref_).then(setOrg).catch(() => setOrg(null));
-    teams.list().then(setMine).catch(() => {});
   }, [ref_]);
 
   const saveTitle = async () => {
@@ -1217,19 +1215,6 @@ function RoomPanel({
     setError(null);
     try {
       await sessions.update(ref_, { title: next });
-      onChanged();
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
-
-  const changeOrg = async (teamId: string) => {
-    setError(null);
-    if (org && teamId !== org.id && !window.confirm(
-      'People added from the current organization will lose access to this session. Continue?',
-    )) return;
-    try {
-      setOrg(await sessions.setTeam(ref_, teamId || null));
       onChanged();
     } catch (err) {
       setError((err as Error).message);
@@ -1257,17 +1242,19 @@ function RoomPanel({
         </div>
       </div>
 
-      {org !== undefined && (org || mine.length > 0) && (
+      {/* ADR 0050: the organization is a fact of the room, set when it was created. */}
+      {org !== undefined && (
         <div className="stack">
-          <Select
-            label="Organization"
-            value={org?.id ?? ''}
-            options={[
-              { value: '', label: 'No organization', description: 'Only people you add' },
-              ...mine.map((t) => ({ value: t.id, label: t.name, leading: <TeamInitial name={t.name} /> })),
-            ]}
-            onChange={(v) => changeOrg(v)}
-          />
+          <span className="small muted">Organization</span>
+          <span className="room-org">
+            {org ? (
+              <>
+                <TeamInitial name={org.name} /> {org.name}
+              </>
+            ) : (
+              'None: only people you add'
+            )}
+          </span>
         </div>
       )}
 

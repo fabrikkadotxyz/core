@@ -541,7 +541,7 @@ export async function teamConnectionUses(
 /**
  * The team credentials a user may use in this session: the session must belong to
  * a team, and the user must be on it NOW. Derived on every call — leaving the team
- * or moving the session ends access with nothing to clean up.
+ * ends access with nothing to clean up (so did moving the session, until ADR 0050).
  */
 export async function teamServersFor(db: Database, sessionId: string, userId: string): Promise<UsableServer[]> {
   const rows = await db

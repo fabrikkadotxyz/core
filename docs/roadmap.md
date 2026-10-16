@@ -2131,8 +2131,8 @@ invite on the core):
 - **An organization's room offers only its folders;** the server refuses any
   other, and the host refuses to run one even if asked. **A personal room
   offers all of yours,** each marked with its organization.
-- **Leaving an organization** stops its folders being offered or run; a room
-  changing organization re-checks its agents.
+- **Leaving an organization** stops its folders being offered or run. (A room
+  changing organization re-checked its agents until ADR 0050 removed moving.)
 - **Existing folders are Personal.** One already bound in an organization's
   room keeps working, marked *from Personal: add it for <org>*.
 
@@ -2157,8 +2157,7 @@ invite on the core):
 2. In an Acme room, **Add my agent** offers only the Acme folder → **Add**:
    the agent answers a mention. In a Client room, only the Client one. In a
    personal room, all of them, marked *Acme* and *Client*.
-3. Move the Acme room to Client (room settings → Organization): the agent
-   goes offline, and *Add my agent* there offers only the Client folder.
+3. *(Removed by ADR 0050: a room's organization is fixed at creation.)*
 4. Settings → Personal integrations: GitHub, connected for all your rooms,
    attaches in an Acme room and in a Client room alike. Then *Use in: only
    Client* → Connect GitHub with a second account: in a Client room, *attach*
@@ -2245,7 +2244,8 @@ invite on the core):
   with Attach right-aligned**, never wrapping; *Connect by hand* (slug, URL,
   token) behind a disclosure; and a line to *Settings → Integrations* to add
   one. The *Use in* and scope rules of ADR 0043 are unchanged.
-- **Room** is the owner's: the name (rename inline), the organization selector,
+- **Room** is the owner's: the name (rename inline), the organization it is in
+  (a fact, not a control, since [ADR 0050](decisions/0050-a-sessions-organization-is-fixed-at-creation.md)),
   *Export*, *Archive*, and *Delete* last, in the danger colour. Non-owners
   don't get the tab, as they have no Settings panel today. Viewers have no
   Setup at all (M22), unchanged.

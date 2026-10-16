@@ -81,3 +81,4 @@ What we rejected and why.
 | [0047](0047-opencode-on-the-host-is-confined-by-a-per-run-config.md) | OpenCode on the local host is confined by a per-run config, reads included | Proposed |
 | [0048](0048-the-workspace-is-an-icon-rail-of-four-places.md) | The workspace is an icon rail of four places | Proposed |
 | [0049](0049-grants-are-set-in-a-dialog-and-a-connection-remembers-your-default.md) | Grants are set in a dialog, and a connection remembers your default | Proposed |
+| [0050](0050-a-sessions-organization-is-fixed-at-creation.md) | A session's organization is fixed at creation | Proposed |

@@ -136,7 +136,6 @@ import {
   removeTeamMember,
   roster,
   sessionTeam,
-  setSessionTeam,
   TeamError,
   teamRole,
 } from './teams.ts';
@@ -155,7 +154,6 @@ import {
   listDevices,
   organizationsOf,
   pollPairing,
-  refreshHostsInRoom,
   refreshHostsOf,
   resolveDevice,
   revokeDevice,
@@ -1412,18 +1410,7 @@ export function createApp(options: CreateAppOptions = {}) {
     return c.json(await sessionTeam(db, s.id));
   });
 
-  sessionRoutes.put('/team', async (c) => {
-    const s = await resolve(c);
-    if (!s || s.role !== 'owner') return c.notFound();
-    // Chats (M29) don't take invites, roster adds, a team change or visibility.
-    if ((s.view.kind ?? 'session') !== 'session') return c.json({ error: 'not available for chats' }, 400);
-    const { teamId } = await c.req.json<{ teamId?: string | null }>();
-    if (teamId && !(await teamRole(db, teamId, c.get('user').id))) return c.json({ error: 'no such organization' }, 404);
-    await setSessionTeam(db, s.id, teamId ?? null);
-    // ADR 0043: its agents' folders are checked again against the room's new organization.
-    void refreshHostsInRoom(db, s.id).catch(() => {});
-    return c.json(await sessionTeam(db, s.id));
-  });
+  // ADR 0050: there is no PUT /team. A session's organization is fixed at creation.
 
   /** Teammates not yet in the session. Owner only: adding is the owner's call. */
   sessionRoutes.get('/roster', async (c) => {

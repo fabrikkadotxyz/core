@@ -284,8 +284,7 @@ check((await req(base, { jar: alice.jar })).status === 200, 'team-visible again:
 await req(`/teams/${T}/members/${alice.id}`, { method: 'DELETE', jar: fede });
 check((await req(base, { jar: alice.jar })).status === 404, 'Alice leaves the team: the session is a 404 to her');
 
-await req(`${base}/team`, { method: 'PUT', body: { teamId: null }, jar: fede });
-check((await req(base, { jar: fede })).json.visibility === 'private', 'taking the session out of its team makes it private');
+// ADR 0050: a session's team is fixed at creation, so "out of its team makes it private" has no path any more.
 
 if (failures) {
   console.error(`\n${failures} failure(s)`);

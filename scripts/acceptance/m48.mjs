@@ -148,10 +148,10 @@ try {
     req(`/o/${mine.ownerSlug}/s/${mine.publicId}`, { jar: me }).then((r) => r.json?.participants.find((p) => p.displayName === inMine.json?.agent?.displayName)?.status);
   check(!!(await until(async () => ['connected', 'idle'].includes(await mineStatus()))), '…and the host runs it there');
 
-  /* ---------------------------------------------- the room moves */
+  /* ---------------------------------------------- the room cannot move (ADR 0050) */
 
-  check((await req(`${base}/team`, { method: 'PUT', body: { teamId: client.id }, jar: me })).status === 200, 'the room moves to Client');
-  check(!!(await until(async () => !['connected', 'idle'].includes(await status()))), "ITS AGENT STOPS: Acme's folder doesn't serve a Client room");
+  check((await req(`${base}/team`, { method: 'PUT', body: { teamId: client.id }, jar: me })).status === 404, 'the room cannot be moved to Client: there is no such endpoint (ADR 0050)');
+  check(['connected', 'idle'].includes(await status()), "…so its agent keeps running where it was");
 
   /* ---------------------------------------------- connections, per organization */
 

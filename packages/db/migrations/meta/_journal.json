@@ -267,6 +267,13 @@
       "when": 1792169621160,
       "tag": "0037_resume_argv",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792179520870,
+      "tag": "0038_preferred_agent",
+      "breakpoints": true
     }
   ]
 }

@@ -40,6 +40,7 @@ import {
   type TokenSummary,
 } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
+import { useOnboarding } from '../onboarding.ts';
 import { MentionComposer, MentionText } from '../mentions.tsx';
 import { typingAttrs } from '../typing.ts';
 import { OutputsPanel, timeAgo, type OutputTab } from '../outputs/Outputs.tsx';
@@ -1321,14 +1322,17 @@ function AgentsPanel({
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [tokens, setTokens] = useState<TokenSummary[]>([]);
   const [name, setName] = useState('');
-  const [provider, setProvider] = useState('claude-code');
+  // 2026-10-16: the agent they said they use comes first; any tool stays offered.
+  const { state: onboardingState } = useOnboarding();
+  const preferred = onboardingState?.agent && agentTool(onboardingState.agent) ? onboardingState.agent : null;
+  const [provider, setProvider] = useState(preferred ?? 'claude-code');
   const [fresh, setFresh] = useState<CreatedAgentView | null>(null);
   const [error, setError] = useState<string | null>(null);
   // M31: agents that run on your own computer, in a folder granted there.
   const [myDevices, setMyDevices] = useState<DeviceSummary[] | null>(null);
   const [picking, setPicking] = useState(false);
   const [choice, setChoice] = useState<string>('');
-  const [tool, setTool] = useState('');
+  const [tool, setTool] = useState(preferred ?? '');
   const [caveatOk, setCaveatOk] = useState(false);
   const [hosts, setHosts] = useState<Record<string, { deviceName: string; label: string | null; online: boolean; fromPersonal?: boolean }>>({});
   // ADR 0043: the room's organization (null: Personal). Only its folders are offered.

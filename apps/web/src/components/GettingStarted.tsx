@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { onboarding, sessions, type GettingStartedStep } from '../api.ts';
+import { AGENT_TOOLS, agentTool } from '@fabrikka/types';
 import { useOnboarding } from '../onboarding.ts';
 import { useWorkspace } from '../shell/workspace.tsx';
 
@@ -13,7 +14,7 @@ const POLL_MS = 5000;
 const LABELS: Record<GettingStartedStep, { title: string; hint: string }> = {
   computer: { title: 'Connect your computer', hint: 'Your agents run there, with your tools and your folders.' },
   room: { title: 'Start a room', hint: 'Where you, your colleagues and your agents work together.' },
-  agent: { title: 'Bring your agent', hint: 'Claude Code, Codex or OpenCode, on your computer, in the room.' },
+  agent: { title: 'Bring your agent', hint: `${AGENT_TOOLS.map((t) => t.name).join(', ')}, on your computer, in the room.` },
   invite: { title: 'Invite a colleague', hint: 'They see what your agent did, and can mention it too.' },
   integration: { title: 'Connect GitHub or Jira', hint: 'So agents can read issues and pull requests.' },
 };
@@ -93,7 +94,7 @@ export function GettingStarted() {
             <span className="step-mark" aria-hidden>{s.done ? '✓' : i + 1}</span>
             <span className="step-text">
               <strong>
-                {LABELS[s.id].title}
+                {s.id === 'agent' && state.agent && agentTool(state.agent) ? `Bring ${agentTool(state.agent)!.name}` : LABELS[s.id].title}
                 {s.optional && <span className="muted small"> (optional)</span>}
               </strong>
               <span className="muted small">{LABELS[s.id].hint}</span>

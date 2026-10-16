@@ -44,7 +44,7 @@ import {
 import { publish, subscribe } from './bus.ts';
 import { createSetup, SetupError } from './setup.ts';
 import { allowedHostsFor, createMcpApp } from './mcp.ts';
-import { dismissGettingStarted, gettingStarted, markWelcomed } from './onboarding.ts';
+import { dismissGettingStarted, gettingStarted, markWelcomed, setPreferredAgent, validAgentChoice } from './onboarding.ts';
 import { broadcastAbort, onAbort, pauseState, setPaused } from './rails.ts';
 import { catchUp, endRun, recordActivity, startRun } from './activity.ts';
 import {
@@ -476,14 +476,25 @@ export function createApp(options: CreateAppOptions = {}) {
 
   /** The welcome's Continue: the look it chose (as PUT /api/me/theme), and never again. */
   app.post('/api/me/welcome', requireUser(db), async (c) => {
-    const body = await c.req.json<{ theme?: unknown }>().catch(() => ({}) as { theme?: unknown });
+    const body = await c.req.json<{ theme?: unknown; agent?: unknown }>().catch(() => ({}) as { theme?: unknown; agent?: unknown });
     const theme = body.theme === undefined ? undefined : (body.theme ?? null);
     if (theme !== undefined && theme !== null && theme !== 'system' && (typeof theme !== 'string' || !themes.has(theme))) {
       return c.json({ error: 'this instance offers no such theme' }, 400);
     }
+    // 2026-10-16: the agent they use, a registry id or 'other'; anything else is refused, nothing is marked.
+    if (body.agent !== undefined && body.agent !== null && !validAgentChoice(body.agent)) return c.json({ error: 'no such agent tool' }, 400);
     if (theme !== undefined) await setUserTheme(db, c.get('user').id, theme as string | null);
+    if (body.agent !== undefined) await setPreferredAgent(db, c.get('user').id, (body.agent as string | null) ?? null);
     await markWelcomed(db, c.get('user').id);
     return c.json({ ok: true });
+  });
+
+  /** The agent you use, changed later from Your devices. A preference, never a restriction. */
+  app.put('/api/me/agent', requireUser(db), async (c) => {
+    const { agent } = await c.req.json<{ agent?: unknown }>().catch(() => ({}) as { agent?: unknown });
+    if (agent !== null && !validAgentChoice(agent)) return c.json({ error: 'no such agent tool' }, 400);
+    await setPreferredAgent(db, c.get('user').id, (agent as string | null) ?? null);
+    return c.json({ ok: true, agent: (agent as string | null) ?? null });
   });
 
   app.post('/api/me/getting-started/dismiss', requireUser(db), async (c) => {

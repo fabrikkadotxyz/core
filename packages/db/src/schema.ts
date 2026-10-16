@@ -57,6 +57,8 @@ export const users = pgTable('users', {
   theme: text('theme'),
   /** M47: the welcome (pick a look) was shown. Null = show it on next sign-in. */
   welcomedAt: timestamp('welcomed_at', { withTimezone: true }),
+  /** M47 (amended 2026-10-16): the agent tool this person said they use, an AGENT_TOOLS id or 'other'; null until asked. */
+  preferredAgent: text('preferred_agent'),
   /** M47: the person dismissed Get started. Its steps are derived, never stored. */
   gettingStartedDismissedAt: timestamp('getting_started_dismissed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true })

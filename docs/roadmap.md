@@ -2096,7 +2096,23 @@ on is one-time.
 > computer, and it comes first. M17 covers people who arrive by invite; this
 > covers everyone's first sign-in, and the person who starts a team.
 
-### Welcome: pick a look (once per account)
+### Welcome: your agent, then a look (once per account)
+
+> **Amended 2026-10-16 (the owner's ask): the welcome asks which agent you
+> use before the look.** Two screens, one Continue each.
+>
+> - **"Which agent do you use?"** One card per tool in the registry (Claude
+>   Code, Codex, OpenCode, Antigravity) and *Something else, or none yet*.
+>   The choice is saved to the account (`users.preferred_agent`) and shapes
+>   what follows: *Add my agent* preselects it when the folder offers it,
+>   *Connect another way* starts on it, *Get started*'s step 3 names it
+>   (*Bring Claude Code*), and *Your devices* says what the app will find.
+>   It is a preference, never a restriction: any installed tool stays
+>   offered. Changed any time at the top of *Your devices*.
+> - Then **"Pick a look."**, as before.
+>
+> **Clicks:** 2 to get through with the defaults (Continue, Continue); 4 to
+> choose both.
 
 - **On first sign-in**, before anything else: *"Welcome to Fabrikka. Pick a
   look."* with the theme cards from Appearance and the default, **Fabrikka**,

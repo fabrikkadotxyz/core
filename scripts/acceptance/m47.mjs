@@ -72,7 +72,16 @@ check(g.room === null, 'no room to bring an agent into yet');
 
 check((await req('/me/welcome', { method: 'POST', body: { theme: '../../etc' }, jar: newbie })).status === 400, 'A THEME THE INSTANCE DOES NOT OFFER IS REFUSED');
 check(!(await req('/me/getting-started', { jar: newbie })).json.welcomed, '…and a refused Continue does not count as welcomed');
-check((await req('/me/welcome', { method: 'POST', body: { theme: 'terminal' }, jar: newbie })).status === 200, 'Continue with Terminal');
+check((await req('/me/welcome', { method: 'POST', body: { theme: 'terminal', agent: 'vim' }, jar: newbie })).status === 400, 'AN AGENT NOT IN THE REGISTRY IS REFUSED (2026-10-16)');
+check(!(await req('/me/getting-started', { jar: newbie })).json.welcomed, '…and that does not count as welcomed either');
+check((await req('/me/welcome', { method: 'POST', body: { theme: 'terminal', agent: 'antigravity' }, jar: newbie })).status === 200, 'Continue with Terminal, having said you use Antigravity');
+check((await req('/me/getting-started', { jar: newbie })).json.agent === 'antigravity', 'THE AGENT YOU USE IS REMEMBERED on the account');
+check((await req('/me/agent', { method: 'PUT', body: { agent: 'other' }, jar: newbie })).status === 200 && (await req('/me/getting-started', { jar: newbie })).json.agent === 'other', '…and can be changed later (Your devices)');
+check((await req('/me/agent', { method: 'PUT', body: { agent: 'emacs' }, jar: newbie })).status === 400, 'changing it to something not in the registry is refused');
+const welcomeSrc = readFileSync('apps/web/src/pages/WelcomePage.tsx', 'utf8');
+check(/Which agent do you use\?/.test(welcomeSrc) && /Pick a look\./.test(welcomeSrc) && welcomeSrc.indexOf('Which agent do you use?') < welcomeSrc.indexOf('Pick a look.'), 'THE WELCOME ASKS YOUR AGENT, THEN THE LOOK');
+check(/AGENT_TOOLS\.map\(/.test(welcomeSrc) && /Something else, or none yet/.test(welcomeSrc), 'one card per registry tool, and something else');
+check(/useState\(preferred \?\? 'claude-code'\)/.test(readFileSync('apps/web/src/pages/SessionPage.tsx', 'utf8')) && /useState\(preferred \?\? ''\)/.test(readFileSync('apps/web/src/pages/SessionPage.tsx', 'utf8')), 'Add my agent and Connect another way start on your agent');
 check((await req('/me/getting-started', { jar: newbie })).json.welcomed === true, '…marks the account welcomed (so no other browser shows it)');
 check((await req('/me/theme', { jar: newbie })).json?.theme === 'terminal', '…and saves the look to the account, the same setting as Appearance');
 

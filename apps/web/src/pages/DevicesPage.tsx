@@ -6,6 +6,10 @@ import { useCallback, useEffect, useState } from 'react';
 import type { DeviceSummary } from '@fabrikka/types';
 import { client, devices } from '../api.ts';
 import { inDesktopApp, openFolders } from '../desktop.ts';
+import { AGENT_TOOLS } from '@fabrikka/types';
+import { Select } from '../components/Select.tsx';
+import { onboarding } from '../api.ts';
+import { useOnboarding } from '../onboarding.ts';
 import { timeAgo } from '../outputs/Outputs.tsx';
 import { useWorkspace } from '../shell/workspace.tsx';
 
@@ -54,6 +58,28 @@ export function ConnectCommand({ first }: { first: boolean }) {
   );
 }
 
+/** 2026-10-16: the agent you said you use at the welcome, changeable here. A preference, never a restriction. */
+function YourAgent() {
+  const { state, refresh } = useOnboarding();
+  if (!state) return null;
+  return (
+    <div className="your-agent">
+      <span>The agent you use</span>
+      {/* M36: the app's own selector, never a native select. */}
+      <Select
+        label="The agent you use"
+        value={state.agent ?? 'other'}
+        options={[...AGENT_TOOLS.map((t) => ({ value: t.id, label: t.name })), { value: 'other', label: 'Something else, or none yet' }]}
+        onChange={async (v) => {
+          await onboarding.setAgent(v).catch(() => {});
+          refresh().catch(() => {});
+        }}
+      />
+      <span className="muted small">Comes first in Add my agent; every installed tool stays offered.</span>
+    </div>
+  );
+}
+
 export function Devices() {
   const [list, setList] = useState<DeviceSummary[] | null>(null);
   // ADR 0043: each folder is for one organization's rooms. Personal (M53, ADR 0051) serves no room any more.
@@ -70,6 +96,7 @@ export function Devices() {
 
   return (
     <>
+    <YourAgent />
     <p className="muted">
       Computers that can run your agents. Each runs them only in folders granted on that computer, with the
       policy chosen there.

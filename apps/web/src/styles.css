@@ -2623,3 +2623,11 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, 0.5); }
 .home .live-dot.blocked { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft, transparent); }
 .presence.blocked { color: var(--warn); border-color: var(--warn-border); }
 .presence.blocked::before { background: var(--warn); }
+
+/* ---- M47 (amended 2026-10-16): which agent do you use ---- */
+.agent-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 12px 0 4px; }
+.agent-card { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text); cursor: pointer; font: inherit; }
+.agent-card:hover { border-color: var(--accent); }
+.agent-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft, transparent); }
+.agent-card strong { font-size: 0.95rem; }
+.your-agent { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }

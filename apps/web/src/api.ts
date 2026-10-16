@@ -114,12 +114,16 @@ export interface GettingStarted {
   dismissed: boolean;
   steps: { id: GettingStartedStep; done: boolean; optional: boolean }[];
   room: { ownerSlug: string; publicId: string } | null;
+  /** The agent tool you said you use (an AGENT_TOOLS id or 'other'); null until asked. */
+  agent: string | null;
 }
 
 export const onboarding = {
   get: () => call<GettingStarted>('/me/getting-started'),
   /** The welcome's Continue: saves the look (as Appearance does) and is never shown again. */
-  welcome: (theme: string | null) => call<{ ok: true }>('/me/welcome', { method: 'POST', body: { theme } }),
+  welcome: (theme: string | null, agent?: string | null) => call<{ ok: true }>('/me/welcome', { method: 'POST', body: { theme, ...(agent !== undefined ? { agent } : {}) } }),
+  /** Change the agent you use, any time, from Your devices. */
+  setAgent: (agent: string | null) => call<{ ok: true; agent: string | null }>('/me/agent', { method: 'PUT', body: { agent } }),
   dismiss: () => call<{ ok: true }>('/me/getting-started/dismiss', { method: 'POST', body: {} }),
 };
 

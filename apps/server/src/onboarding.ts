@@ -6,6 +6,7 @@
  */
 import type { Database } from '@fabrikka/db';
 import { users } from '@fabrikka/db';
+import { AGENT_TOOLS } from '@fabrikka/types';
 import { eq, sql } from 'drizzle-orm';
 
 export type StepId = 'computer' | 'room' | 'agent' | 'invite' | 'integration';
@@ -17,6 +18,17 @@ export interface GettingStarted {
   steps: { id: StepId; done: boolean; optional: boolean }[];
   /** A room of yours to bring an agent into (step 3), newest first; null if none. */
   room: { ownerSlug: string; publicId: string } | null;
+  /** 2026-10-16: the agent tool they said they use (an AGENT_TOOLS id or 'other'); null until asked. */
+  agent: string | null;
+}
+
+/** What the welcome may record as your agent: a registry id, or 'other'. */
+export function validAgentChoice(v: unknown): v is string {
+  return v === 'other' || (typeof v === 'string' && AGENT_TOOLS.some((t) => t.id === v));
+}
+
+export async function setPreferredAgent(db: Database, userId: string, agent: string | null): Promise<void> {
+  await db.update(users).set({ preferredAgent: agent }).where(eq(users.id, userId));
 }
 
 export async function gettingStarted(db: Database, userId: string): Promise<GettingStarted> {
@@ -24,6 +36,7 @@ export async function gettingStarted(db: Database, userId: string): Promise<Gett
     SELECT
       u.welcomed_at IS NOT NULL AS welcomed,
       u.getting_started_dismissed_at IS NOT NULL AS dismissed,
+      u.preferred_agent AS preferred_agent,
       EXISTS (SELECT 1 FROM devices d WHERE d.user_id = u.id AND d.revoked_at IS NULL) AS computer,
       EXISTS (SELECT 1 FROM sessions s WHERE s.owner_id = u.id AND s.kind = 'session') AS room,
       EXISTS (
@@ -60,6 +73,8 @@ export async function gettingStarted(db: Database, userId: string): Promise<Gett
       { id: 'integration', done: done('integration'), optional: true },
     ],
     room: (r.latest_room as GettingStarted['room']) ?? null,
+    // `agent` is taken by step 3's flag above; the preference has its own name.
+    agent: typeof r.preferred_agent === 'string' ? r.preferred_agent : null,
   };
 }
 

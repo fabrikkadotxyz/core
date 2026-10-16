@@ -2403,11 +2403,14 @@ room you attach the connection to as owner.
 - **Every session and chat is in an organization.** Only a direct message
   between two people is in none. Creating a session names the organization;
   the API defaults to your own.
-- **Each account has its own organization**, made with the account and
-  named after the person. Renamable; People, integrations, folders and a
-  *#general* like any other; you cannot leave it. Existing accounts get
-  theirs in the migration, and their sessions in no organization move into
-  it with their members, guests and visibility untouched.
+- **Each account has its own organization, "Self"**, made with the account.
+  Renamable; sessions, folders and People like any other; you cannot leave
+  it. **Inside Self, integrations are one list**: your own connections, with
+  no organization integrations beside them, and Self has no *#general*
+  (amended 2026-10-16: it was named after the person at first). Existing
+  accounts get theirs in the migration, and their sessions in no
+  organization move into it with their members, guests and visibility
+  untouched.
 - **Individual sessions are the ones only you are in**: one member, no
   guest, private. The sidebar shows, for the chosen organization,
   **Organization sessions** (the organization reads along, or more than one
@@ -2421,9 +2424,9 @@ room you attach the connection to as owner.
 - **The switcher lists your own organization first.**
 
 **Test:**
-1. Sign up a new account: the switcher shows an organization named after
-   you, with *#general*. Under Sessions, two headings: Organization sessions
-   and Individual sessions, both empty.
+1. Sign up a new account: the switcher shows *Self*, and no *#general*
+   under Chats. Under Sessions, two headings: Organization sessions and
+   Individual sessions, both empty. Under Integrations, one entry.
 2. **+** beside Individual sessions, a title, Enter: the session opens and is
    listed under Individual. Setup → People: only you. **2 clicks and a
    title.**

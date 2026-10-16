@@ -318,7 +318,8 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
         </section>
       )}
 
-      {place === 'chats' && team && (
+      {/* ADR 0051: Self has no organization chats; a chat with yourself is not a chat. */}
+      {place === 'chats' && team && !team.own && (
         <section className="side-section" aria-label="Organization chats">
           <h2>Organization chats</h2>
           {teamChats.map((s) => (
@@ -341,8 +342,9 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
       {place === 'integrations' && (
         <section className="side-section" aria-label="Integrations">
           <h2>Connections</h2>
-          <PageLink to="/integrations" end label="Personal" onNavigate={onNavigate} />
-          {team && <PageLink to="/integrations/organization" label={`${team.name}'s`} onNavigate={onNavigate} />}
+          <PageLink to="/integrations" end label={team?.own ? 'Yours' : 'Personal'} onNavigate={onNavigate} />
+          {/* ADR 0051: inside Self there is no organization list beside your own. */}
+          {team && !team.own && <PageLink to="/integrations/organization" label={`${team.name}'s`} onNavigate={onNavigate} />}
         </section>
       )}
 

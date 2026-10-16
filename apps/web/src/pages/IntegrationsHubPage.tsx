@@ -11,13 +11,14 @@ import { OrganizationIntegrations } from './TeamIntegrationsPage.tsx';
 
 export function IntegrationsHubPage({ scope }: { scope: 'personal' | 'organization' }) {
   const { team, loaded } = useWorkspace();
-  if (scope === 'organization' && !team) {
+  // ADR 0051: inside Self, integrations are one list; there is no organization page.
+  if (scope === 'organization' && (!team || team.own)) {
     return loaded ? <Navigate to="/integrations" replace /> : <main className="centered">Loading…</main>;
   }
   return (
     <div className="page">
       <main className="column">
-        <h1>{scope === 'personal' ? 'Personal integrations' : `${team!.name} integrations`}</h1>
+        <h1>{scope === 'personal' ? (team?.own ? 'Integrations' : 'Personal integrations') : `${team!.name} integrations`}</h1>
         {scope === 'personal' ? <PersonalIntegrations /> : <OrganizationIntegrations teamId={team!.id} />}
       </main>
     </div>

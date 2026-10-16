@@ -66,8 +66,8 @@ export async function createUser(
     })
     .returning();
 
-  // M53 (ADR 0051): an account has its own organization, named after the person.
-  const [own] = await db.insert(teams).values({ name: displayName, createdByUserId: row!.id, ownOfUserId: row!.id }).returning({ id: teams.id });
+  // M53 (ADR 0051): an account has its own organization, "Self".
+  const [own] = await db.insert(teams).values({ name: 'Self', createdByUserId: row!.id, ownOfUserId: row!.id }).returning({ id: teams.id });
   await db.insert(teamMembers).values({ teamId: own!.id, userId: row!.id, role: 'owner' });
 
   return {

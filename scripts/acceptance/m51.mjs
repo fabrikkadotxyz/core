@@ -41,9 +41,9 @@ check(/<div className="side-stack">/.test(shell), 'on a phone the rail and the l
 /* ------------------------------------------------ 2. the list, one place at a time */
 
 const side = read('apps/web/src/shell/Sidebar.tsx');
-check(/\{place === 'sessions' && team && \(/.test(side) && /\{place === 'chats' && team && \(/.test(side) && /\{place === 'integrations' && \(/.test(side) && /\{place === 'settings' && \(/.test(side), 'the list shows one place: sessions, chats, integrations or settings');
+check(/\{place === 'sessions' && team && \(/.test(side) && /\{place === 'chats' && team && !team\.own && \(/.test(side) && /\{place === 'integrations' && \(/.test(side) && /\{place === 'settings' && \(/.test(side), 'the list shows one place: sessions, chats, integrations or settings');
 check(/teamSessions\.map\(/.test(side) && !/RECENT/.test(side), 'ALL of the organization\'s active sessions are listed, not five and a link');
-check(/to="\/integrations" end label="Personal"/.test(side) && /to="\/integrations\/organization"/.test(side), 'Integrations lists Personal and the organization\'s');
+check(/to="\/integrations" end label=\{team\?\.own \? 'Yours' : 'Personal'\}/.test(side) && /to="\/integrations\/organization"/.test(side), 'Integrations lists Personal and the organization\'s (one list inside Self, ADR 0051)');
 check(/to="\/settings\/people"/.test(side) && /to="\/settings\/devices"/.test(side) && /to="\/settings\/appearance"/.test(side), 'Settings lists People, Your devices, Appearance');
 check(/\{place === 'settings' && \(\s*<div className="side-bottom">/.test(side) && /Sign out/.test(side) && /AGPL-3\.0/.test(side), 'who you are, Sign out and the source link sit under Settings');
 check(/\{rooms && <NotifyOffer/.test(side), 'the notification offer (M42) lives with the rooms');

@@ -120,10 +120,10 @@ export function createKit(opts: {
             emailVerified: input.emailVerified,
           });
           if (!made.ok) throw new KitError(made.error);
-          // M53 (ADR 0051): the account is born with its own organization; this names it as asked.
-          const [team] = await tx.update(teams).set({ name: teamName }).where(eq(teams.ownOfUserId, made.user.id)).returning();
-          if (!team) throw new KitError('the account has no own organization');
-          return { user: made.user, team: { id: team.id, name: team.name } };
+          // M53 (ADR 0051): the account is born with Self; the organization asked for is made beside it.
+          const [team] = await tx.insert(teams).values({ name: teamName, createdByUserId: made.user.id }).returning();
+          await tx.insert(teamMembers).values({ teamId: team!.id, userId: made.user.id, role: 'owner' });
+          return { user: made.user, team: { id: team!.id, name: team!.name } };
         });
         // Every team starts with #general (M29), outside the transaction like createTeam.
         await ensureGeneral(db, created.team.id);

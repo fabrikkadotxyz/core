@@ -71,8 +71,10 @@ export async function ensureGeneral(db: Database, teamId: string): Promise<void>
     .where(and(eq(sessions.teamId, teamId), eq(sessions.kind, 'chat'), eq(sessions.title, 'general')))
     .limit(1);
   if (has.length) return;
-  const [team] = await db.select({ createdBy: teams.createdByUserId }).from(teams).where(eq(teams.id, teamId));
+  const [team] = await db.select({ createdBy: teams.createdByUserId, ownOf: teams.ownOfUserId }).from(teams).where(eq(teams.id, teamId));
   if (!team) return;
+  // ADR 0051: Self has no #general. A chat with yourself is not a chat.
+  if (team.ownOf) return;
   await createChat(db, { teamId, userId: team.createdBy, name: 'general' }).catch(() => {});
 }
 

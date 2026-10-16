@@ -32,13 +32,16 @@ is in none, because it belongs to the pair and not to either's organization.
 Creating a session names the organization; the API's default, when none is
 named, is the caller's own.
 
-**2. An account has its own organization**, created with the account and
-named after the person. It is an ordinary organization: renamable, with
-People, integrations, folders and a *#general*. Two things are special: it is
-marked as the account's own (`teams.own_of_user_id`), and its person cannot
-leave it or be removed from it, so the account is never without one. Other
-people may be invited to it like any organization; it is the person's
-workspace, and inviting is the person's call.
+**2. An account has its own organization, named "Self"** (amended
+2026-10-16: it was named after the person at first; the owner chose *Self*,
+one word that says what it is in the switcher of every account). It is
+marked as the account's own (`teams.own_of_user_id`), its person cannot
+leave it or be removed from it, so the account is never without one, and it
+is renamable like any organization. **Inside Self there is no distinction
+between personal and organization integrations:** the Integrations place
+shows one list, your own connections, and Self has no shared connections of
+its own. Self has no *#general* either: a chat with yourself is not a chat.
+Sessions, folders and the People page work as in any organization.
 
 Existing accounts get theirs in the migration, and their sessions in no
 organization move into it. Nobody gains access by this: the own organization
@@ -78,8 +81,9 @@ change.
   top left. The sidebar, the folders offered, the connections offered, the
   People page and the integrations page all agree, with no Personal
   exception.
-- A fresh account can start a session at once, in its own organization,
-  with no *create an organization first* step. Getting started's *Invite*
+- A fresh account can start a session at once, in *Self*, with no *create
+  an organization first* step. A deployment's sign-up that asks for
+  an organization name makes that organization beside Self, not instead of it. Getting started's *Invite*
   always has an organization to invite into.
 - The switcher lists the own organization first, then the others by name.
 - **An organization's rooms go with it when it is deleted.** Until now

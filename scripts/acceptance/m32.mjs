@@ -117,7 +117,7 @@ const made = await req(DEP, '/api/fixture/accounts', {
 });
 check(made.status === 201 && made.json.team?.name === `Dana's team ${stamp}`, 'createAccountWithOwnTeam makes an account and a team, and signs it in');
 const danaTeams = (await req(DEP, '/api/teams', { jar: dana })).json;
-check(danaTeams?.length === 1 && danaTeams[0].role === 'owner' && danaTeams[0].memberCount === 1, "SHE IS ON EXACTLY ONE TEAM, HER OWN, ALONE");
+check(danaTeams?.length === 2 && danaTeams[0].own === true && danaTeams[1].name === `Dana's team ${stamp}` && danaTeams.every((t) => t.role === 'owner' && t.memberCount === 1), "SHE IS ON EXACTLY TWO TEAMS, SELF AND HER OWN, ALONE IN BOTH (ADR 0051)");
 const danaSessions = (await req(DEP, '/api/sessions', { jar: dana })).json;
 check(Array.isArray(danaSessions) && danaSessions.every((s) => s.ownerSlug === made.json.user.ownerSlug), "she sees nobody else's sessions");
 const verified = (await sql(`select email_verified_at is not null from users where email = '${danaEmail}'`)).trim();
@@ -129,7 +129,7 @@ await req(CORE, '/api/auth/login', { method: 'POST', body: { email: EMAIL, passw
 const fedeTeam = (await req(CORE, '/api/teams', { method: 'POST', body: { name: `Inviting ${stamp}` }, jar: fede })).json;
 const invite = (await req(CORE, `/api/teams/${fedeTeam.id}/invites`, { method: 'POST', body: {}, jar: fede })).json;
 check((await req(DEP, `/api/invites/${invite.token}/redeem`, { method: 'POST', jar: dana })).status === 200, "an invite still brings her into someone else's team");
-check((await req(DEP, '/api/teams', { jar: dana })).json?.length === 2, '…and that is the only way she got there');
+check((await req(DEP, '/api/teams', { jar: dana })).json?.length === 3, '…and that is the only way she got there (Self, hers, and this one)');
 
 /* ----------------------------- 3. password reset by email */
 

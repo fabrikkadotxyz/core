@@ -246,6 +246,13 @@
       "when": 1792124682512,
       "tag": "0034_rooms_go_with_their_organization",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792160901683,
+      "tag": "0035_self",
+      "breakpoints": true
     }
   ]
 }

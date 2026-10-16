@@ -280,8 +280,8 @@ doesn't make a session visible to anyone (that's M22's `visibility`). The team
 is set at creation and never changes (ADR 0050). `check (kind = 'direct' or
 team_id is not null)` holds it.
 
-**Each account has its own team** (`teams.own_of_user_id`, unique), created
-with the account and named after the person. Its person cannot be removed
+**Each account has its own team, "Self"** (`teams.own_of_user_id`, unique),
+created with the account. It has no #general and no shared connections. Its person cannot be removed
 from it. Sessions created without naming a team go there. A session is
 *individual* when it is private and has one member and no guest; that is
 derived on listing, never stored.

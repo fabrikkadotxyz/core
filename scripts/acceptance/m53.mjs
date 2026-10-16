@@ -51,6 +51,9 @@ check(/check\('sessions_in_organization', sql`\$\{t\.kind\} = 'direct' or \$\{t\
 check(/ownOfUserId: uuid\('own_of_user_id'\)\.unique\(\)/.test(read('packages/db/src/schema.ts')), 'an account has at most one own organization');
 check(!/name: 'Personal'/.test(read('apps/desktop/src/folders.html')) && !/name: 'Personal'/.test(read('packages/bridge/src/host/control.ts')), 'the Folders window and the host\'s page offer no Personal scope');
 check(/Personal · no longer used/.test(read('packages/bridge/src/host/host.ts')), 'an older Personal folder is listed as no longer used');
+check(/team && !team\.own && <PageLink to="\/integrations\/organization"/.test(side) && /scope === 'organization' && \(!team \|\| team\.own\)/.test(read('apps/web/src/pages/IntegrationsHubPage.tsx')), 'INSIDE SELF, INTEGRATIONS ARE ONE LIST: no organization integrations beside your own');
+check(/place === 'chats' && team && !team\.own && \(/.test(side), 'Self has no organization chats in the sidebar');
+check(/if \(team\.ownOf\) return;/.test(read('apps/server/src/chats.ts')), 'the server never makes a #general for Self');
 
 /* ------------------------------------------------ 2. a new account has its own organization */
 
@@ -66,9 +69,9 @@ const inv = (await req(`/o/${S0.ownerSlug}/s/${S0.publicId}/invites`, { method: 
 const alice = await req('/auth/signup', { method: 'POST', body: { token: inv.token, email: `m53-alice-${stamp}@example.com`, password: 'password123', displayName: `Alice ${stamp}` } });
 check(alice.status === 201, 'Alice signs up through an invite');
 const aliceTeams = (await req('/teams', { cookie: alice.cookie })).json;
-check(aliceTeams.length === 1 && aliceTeams[0].own === true && aliceTeams[0].name === `Alice ${stamp}`, 'A NEW ACCOUNT IS BORN WITH ITS OWN ORGANIZATION, named after the person');
+check(aliceTeams.length === 1 && aliceTeams[0].own === true && aliceTeams[0].name === 'Self', 'A NEW ACCOUNT IS BORN WITH ITS OWN ORGANIZATION, "Self"');
 const aliceChats = (await req('/sessions', { cookie: alice.cookie })).json.filter((s) => s.kind === 'chat');
-check(aliceChats.some((s) => s.team?.id === aliceTeams[0].id && s.title === 'general'), '…with a #general like any organization');
+check(!aliceChats.some((s) => s.team?.id === aliceTeams[0].id && s.title === 'general'), '…and Self has no #general: a chat with yourself is not a chat');
 
 /* ------------------------------------------------ 3. sessions land in an organization */
 

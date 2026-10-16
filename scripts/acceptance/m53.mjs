@@ -54,6 +54,7 @@ check(/Personal · no longer used/.test(read('packages/bridge/src/host/host.ts')
 check(/team && !team\.own && <PageLink to="\/integrations\/organization"/.test(side) && /scope === 'organization' && \(!team \|\| team\.own\)/.test(read('apps/web/src/pages/IntegrationsHubPage.tsx')), 'INSIDE SELF, INTEGRATIONS ARE ONE LIST: no organization integrations beside your own');
 check(/place === 'chats' && team && !team\.own && \(/.test(side), 'Self has no organization chats in the sidebar');
 check(/if \(team\.ownOf\) return;/.test(read('apps/server/src/chats.ts')), 'the server never makes a #general for Self');
+check(!/Create organization/.test(read('apps/web/src/pages/HomePage.tsx')) && /key: 'organizations', label: 'Organizations', org: true, self: true/.test(read('apps/web/src/pages/SettingsPage.tsx')) && /team\?\.own && <PageLink to="\/settings\/organizations"/.test(side), 'ORGANIZATIONS ARE CREATED IN SETTINGS, IN SELF ONLY, not on the home');
 
 /* ------------------------------------------------ 2. a new account has its own organization */
 

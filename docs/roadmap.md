@@ -1259,6 +1259,8 @@ decision, with who decided and when, and opens in any editor.
   forward there, so links in notices and docs keep working, and the OAuth
   callback comes back to the Personal integrations tab. One click more on each
   of those paths; all stay within five.
+- **Organizations are created in Settings → Organizations (2026-10-16), shown
+  in Self only; the page also lists yours. The home no longer has the form.**
 - **Superseded in M51 (2026-10-15, ADR 0048):** the sidebar became an icon
   rail of four places (Sessions · Chats · Integrations · Settings) with the
   list for one place beside it. Integrations live at `/integrations`; the

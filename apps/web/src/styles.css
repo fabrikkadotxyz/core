@@ -2575,3 +2575,7 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, 0.5); }
 .one-off .inline-form { margin-top: 8px; }
 .one-off .copy-row { align-items: center; }
 .one-off .endpoint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- Settings → Organizations (2026-10-16) ---- */
+.organizations li button.row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; }
+.organizations .session-title { flex: 1; }

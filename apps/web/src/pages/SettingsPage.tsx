@@ -11,11 +11,14 @@ import { useWorkspace } from '../shell/workspace.tsx';
 import { OrganizationPeople } from './TeamPage.tsx';
 import { Devices } from './DevicesPage.tsx';
 import { Appearance } from './AppearancePage.tsx';
+import { Organizations } from './OrganizationsPage.tsx';
 
 const TABS = [
-  { key: 'people', label: 'People', org: true },
-  { key: 'devices', label: 'Your devices', org: false },
-  { key: 'appearance', label: 'Appearance', org: false },
+  { key: 'people', label: 'People', org: true, self: false },
+  // 2026-10-16: organizations are made here, in Self only; the home is for what needs you.
+  { key: 'organizations', label: 'Organizations', org: true, self: true },
+  { key: 'devices', label: 'Your devices', org: false, self: false },
+  { key: 'appearance', label: 'Appearance', org: false, self: false },
 ] as const;
 
 export function SettingsPage() {
@@ -24,7 +27,7 @@ export function SettingsPage() {
   const { team, loaded } = useWorkspace();
   if (tab === 'integrations') return <Navigate to={`/integrations${search}`} replace />;
   if (tab === 'organization') return <Navigate to={`/integrations/organization${search}`} replace />;
-  const offered = TABS.filter((t) => !t.org || team);
+  const offered = TABS.filter((t) => (!t.org || team) && (!t.self || team?.own));
   const current = offered.find((t) => t.key === tab);
   if (!current) {
     // People before the organizations are listed: wait rather than forward away from it.
@@ -37,6 +40,7 @@ export function SettingsPage() {
       <main className="column">
         <h1>{current.key === 'people' && team ? `People in ${team.name}` : current.label}</h1>
         {current.key === 'people' && team && <OrganizationPeople teamId={team.id} />}
+        {current.key === 'organizations' && <Organizations />}
         {current.key === 'devices' && <Devices />}
         {current.key === 'appearance' && <Appearance />}
       </main>

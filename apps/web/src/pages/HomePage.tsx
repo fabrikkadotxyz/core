@@ -1,19 +1,17 @@
 /**
- * Home (M28): what's waiting for you, and your teams. Sessions — listing them
- * and starting them — live in the sidebar, beside every page.
+ * Home (M28): what's waiting for you, and in Self the one-off session card (M55).
+ * Sessions live in the sidebar, beside every page; organizations are made in Settings (2026-10-16).
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { WaitingItem } from '@fabrikka/types';
-import { sessions, teams } from '../api.ts';
+import { sessions } from '../api.ts';
 import { useWorkspace } from '../shell/workspace.tsx';
 import { GettingStarted } from '../components/GettingStarted.tsx';
 
 export function HomePage() {
-  const { team, teams: myTeams, refresh, selectTeam } = useWorkspace();
+  const { team } = useWorkspace();
   const [waiting, setWaiting] = useState<WaitingItem[]>([]);
-  const [teamName, setTeamName] = useState('');
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     sessions.waiting().then(setWaiting).catch(() => {});
@@ -50,32 +48,7 @@ export function HomePage() {
           Start a session with the <strong>+</strong> beside <em>{team?.own ? 'One-off sessions' : 'Organization sessions'}</em> or{' '}
           <em>Individual sessions</em> in the sidebar.
         </p>
-        {error && <p className="error">{error}</p>}
 
-        <h2>Organizations</h2>
-        {myTeams.length === 0 && (
-          <p className="muted small">An organization is the people you can add to a session without sending a link.</p>
-        )}
-        <form
-          className="inline-form"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!teamName.trim()) return;
-            try {
-              const t = await teams.create(teamName.trim());
-              setTeamName('');
-              selectTeam(t.id);
-              refresh();
-            } catch (err) {
-              setError((err as Error).message);
-            }
-          }}
-        >
-          <input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="New organization name" aria-label="New organization name" />
-          <button type="submit" disabled={!teamName.trim()}>
-            Create organization
-          </button>
-        </form>
       </main>
     </div>
   );

@@ -63,11 +63,14 @@ An individual session becomes an organization session the moment someone
 else is let in or the organization is allowed to read along. That is what
 the words mean; no column records it.
 
-**4. The *Personal* folder scope is retired.** A folder is granted *for* an
-organization, the own one included. The Folders window no longer offers
-*Personal*; a folder granted that way earlier is listed as *Personal · no
-longer used* and serves no room, until it is removed and granted for an
-organization. Connections keep *all your rooms* (ADR 0043, amended
+**4. The *Personal* folder scope is retired: a folder with no organization
+is Self's.** (Amended 2026-10-16: the first version listed such folders as
+*no longer used* and asked for them to be granted again; the owner's four
+folders vanished from Self's rooms, which is exactly the surprise this ADR
+exists to prevent.) A folder is granted *for* an organization, the own one
+included; a folder granted before, with none, counts as Self's, on the
+server and on the machine, and shows as *Self*. The Folders window offers
+organizations only. Connections keep *all your rooms* (ADR 0043, amended
 2026-10-14): that scope means every organization, which is still a meaning.
 
 **5. The host protocol is unchanged in shape.** A `grants` frame may still

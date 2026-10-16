@@ -63,12 +63,17 @@ export class Host {
   /** Re-checked when the person opens Agent tools or flips a switch. */
   installed = installedTools();
   /** ADR 0043: the account's organizations, from the server, for the Folders window's "For". */
-  organizations: { id: string; name: string }[] = [];
+  organizations: { id: string; name: string; own?: boolean }[] = [];
+
+  /** ADR 0051 (amended 2026-10-16): a folder granted with no organization, "Personal", is your own organization's (Self). */
+  ownOrg(): string | null {
+    return this.organizations.find((o) => o.own)?.id ?? null;
+  }
 
   scopeName(org: string | null | undefined): string {
-    // M53 (ADR 0051): a Personal folder serves no room any more.
-    if (!org) return 'Personal · no longer used';
-    return this.organizations.find((o) => o.id === org)?.name ?? 'an organization you have left';
+    const id = org ?? this.ownOrg();
+    if (!id) return 'Self';
+    return this.organizations.find((o) => o.id === id)?.name ?? 'an organization you have left';
   }
 
   /** What this computer offers: installed AND switched on in Agent tools (M37). */
@@ -79,8 +84,8 @@ export class Host {
    * ADR 0043: your organizations changed (or we just connected). Report the
    * grants again, so the server drops those of an organization you've left.
    */
-  private organizationsChanged(list: { id: string; name: string }[]): void {
-    this.organizations = list.filter((o) => typeof o?.id === 'string').map((o) => ({ id: o.id, name: String(o.name ?? '') }));
+  private organizationsChanged(list: { id: string; name: string; own?: boolean }[]): void {
+    this.organizations = list.filter((o) => typeof o?.id === 'string').map((o) => ({ id: o.id, name: String(o.name ?? ''), own: o.own === true }));
     // Always: the server may be waiting on these to send the bindings again.
     this.ws?.send(JSON.stringify({ type: 'grants', grants: this.reportedGrants() }));
   }
@@ -120,7 +125,7 @@ export class Host {
         binding?: Binding;
         code?: string;
         version?: string;
-        organizations?: { id: string; name: string }[];
+        organizations?: { id: string; name: string; own?: boolean }[];
         org?: string;
       };
       try {
@@ -212,9 +217,10 @@ export class Host {
     // ADR 0043 (amended 2026-10-16): checked here too, so the server can't steer
     // a folder into another scope's room. A room runs only folders of its own
     // scope: its organization's, or Personal ones in a room in none.
-    const folderOrg = grant.org ?? null;
+    // A folder with no organization is Self's (ADR 0051, amended 2026-10-16).
+    const folderOrg = grant.org ?? this.ownOrg();
     const roomOrg = b.session.org ?? null;
-    if (folderOrg !== roomOrg && !(folderOrg === null && b.fromPersonal)) {
+    if (folderOrg !== roomOrg && !(grant.org == null && b.fromPersonal)) {
       return refuse(`this folder is for ${this.scopeName(folderOrg)}, not this room`);
     }
     if (!existsSync(grant.path)) return refuse(`${grant.path} no longer exists`);

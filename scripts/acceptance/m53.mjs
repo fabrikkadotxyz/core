@@ -50,7 +50,7 @@ check(/work\.filter\(\(s\) => s\.individual\)/.test(side) && /work\.filter\(\(s\
 check(/check\('sessions_in_organization', sql`\$\{t\.kind\} = 'direct' or \$\{t\.teamId\} is not null`\)/.test(read('packages/db/src/schema.ts')), 'THE SCHEMA HOLDS IT: a session or chat has an organization; only a direct message has none');
 check(/ownOfUserId: uuid\('own_of_user_id'\)\.unique\(\)/.test(read('packages/db/src/schema.ts')), 'an account has at most one own organization');
 check(!/name: 'Personal'/.test(read('apps/desktop/src/folders.html')) && !/name: 'Personal'/.test(read('packages/bridge/src/host/control.ts')), 'the Folders window and the host\'s page offer no Personal scope');
-check(/Personal · no longer used/.test(read('packages/bridge/src/host/host.ts')), 'an older Personal folder is listed as no longer used');
+check(/const folderOrg = grant\.org \?\? this\.ownOrg\(\);/.test(read('packages/bridge/src/host/host.ts')) && /teamId: g\.org \?\? own/.test(read('apps/server/src/devices.ts')), "AN OLDER PERSONAL FOLDER COUNTS AS SELF'S, on the machine and on the server");
 check(/team && !team\.own && <PageLink to="\/integrations\/organization"/.test(side) && /scope === 'organization' && \(!team \|\| team\.own\)/.test(read('apps/web/src/pages/IntegrationsHubPage.tsx')), 'INSIDE SELF, INTEGRATIONS ARE ONE LIST: no organization integrations beside your own');
 check(/place === 'chats' && team && !team\.own && \(/.test(side), 'Self has no organization chats in the sidebar');
 check(/if \(team\.ownOf\) return;/.test(read('apps/server/src/chats.ts')), 'the server never makes a #general for Self');

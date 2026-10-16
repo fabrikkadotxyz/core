@@ -2454,7 +2454,7 @@ room you attach the connection to as owner.
   along, and an individual session becomes an organization session.
 - **No *Personal* folder scope.** The Folders window offers your
   organizations, the own one included. A folder granted *Personal* earlier
-  is listed as no longer used until it is granted for an organization.
+  counts as Self's (amended 2026-10-16), on the server and on the machine.
 - **The switcher lists your own organization first.**
 
 **Test:**
@@ -2472,8 +2472,8 @@ room you attach the connection to as owner.
 5. Settings → People: *Leave organization* is not offered for your own.
    Rename it there: the switcher follows.
 6. Folders window: *For* offers your organizations and no *Personal*. An
-   older Personal folder is tagged no longer used; *Add my agent* in your
-   individual session offers only folders granted for your organization.
+   older Personal folder is tagged *Self*; *Add my agent* in a Self room
+   offers it, and a room of another organization does not.
 7. An existing account after the migration: its former personal sessions
    are under Individual sessions of its own organization, with the same
    people in them.

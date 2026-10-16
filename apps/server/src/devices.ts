@@ -164,13 +164,15 @@ export async function revokeDevice(db: Database, userId: string, deviceId: strin
 }
 
 /** ADR 0043: the organizations a person is in, for the host's "For" picker. */
-export async function organizationsOf(db: Database, userId: string): Promise<{ id: string; name: string }[]> {
-  return db
-    .select({ id: teams.id, name: teams.name })
+export async function organizationsOf(db: Database, userId: string): Promise<{ id: string; name: string; own: boolean }[]> {
+  const rows = await db
+    .select({ id: teams.id, name: teams.name, ownOf: teams.ownOfUserId })
     .from(teamMembers)
     .innerJoin(teams, eq(teams.id, teamMembers.teamId))
     .where(eq(teamMembers.userId, userId))
     .orderBy(teams.name);
+  // ADR 0051: `own` marks Self, so the host can treat a folder with no organization as its.
+  return rows.map((r) => ({ id: r.id, name: r.name, own: r.ownOf === userId }));
 }
 
 /**
@@ -184,7 +186,10 @@ export async function setGrants(
   grants: { id: string; label: string; providers: string[]; org?: string | null }[],
 ): Promise<void> {
   const [owner] = await db.select({ userId: devices.userId }).from(devices).where(eq(devices.id, deviceId)).limit(1);
-  const mine = new Set(owner ? (await organizationsOf(db, owner.userId)).map((o) => o.id) : []);
+  const orgs = owner ? await organizationsOf(db, owner.userId) : [];
+  const mine = new Set(orgs.map((o) => o.id));
+  // ADR 0051 (amended 2026-10-16): a grant with no organization ("Personal") is the owner's own organization's, Self.
+  const own = orgs.find((o) => o.own)?.id ?? null;
   const seen = new Set<string>();
   const clean = grants
     .filter((g) => typeof g.id === 'string' && g.id.length > 0 && g.id.length <= 64)
@@ -197,7 +202,7 @@ export async function setGrants(
       grantId: g.id,
       label: String(g.label ?? '').slice(0, 80) || 'folder',
       providers: (Array.isArray(g.providers) ? g.providers : []).map(String).slice(0, 10),
-      teamId: g.org ?? null,
+      teamId: g.org ?? own,
     }));
   await db.transaction(async (tx) => {
     // Two frames from one host arrive back to back (a grant, then a policy

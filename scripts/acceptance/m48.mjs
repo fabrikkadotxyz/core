@@ -72,6 +72,8 @@ check((await req('/auth/login', { method: 'POST', body: { email: EMAIL, password
 const acme = (await req('/teams', { method: 'POST', body: { name: `Acme ${stamp}` }, jar: me })).json;
 const client = (await req('/teams', { method: 'POST', body: { name: `Client ${stamp}` }, jar: me })).json;
 check(!!acme?.id && !!client?.id, 'two organizations, Acme and Client');
+// ADR 0051: a folder granted with no organization is Self's.
+const selfOrg = (await req('/teams', { jar: me })).json.find((t) => t.own);
 
 /* ------------------------------------------------ a real host, paired */
 
@@ -120,20 +122,20 @@ try {
   const s = await state();
   const acmeGrant = s.grants.find((g) => g.org === acme.id);
   const personalGrant = s.grants.find((g) => g.org === null);
-  check(acmeGrant?.orgName === acme.name && /^Personal/.test(personalGrant?.orgName ?? ''), 'the host lists each folder with its organization (a Personal one as no longer used, M53)');
+  check(acmeGrant?.orgName === acme.name && personalGrant?.orgName === 'Self', 'the host lists each folder with its organization (one with none as Self, ADR 0051)');
 
   const seen = await until(async () => {
     const d = (await req('/devices', { jar: me })).json.find((x) => x.id === dev.id);
     return d?.grants.length === 2 ? d.grants : null;
   });
-  check(seen?.find((g) => g.id === acmeGrant.id)?.org === acme.id && seen?.find((g) => g.id === personalGrant.id)?.org === null, 'the server keeps each grant\'s organization');
+  check(seen?.find((g) => g.id === acmeGrant.id)?.org === acme.id && seen?.find((g) => g.id === personalGrant.id)?.org === selfOrg.id, 'the server keeps each grant\'s organization (none = Self)');
 
   /* ---------------------------------------------- Add my agent, in scope */
 
   const room = (await req('/sessions', { method: 'POST', body: { title: `Acme room ${stamp}`, teamId: acme.id }, jar: me })).json;
   const base = `/o/${room.ownerSlug}/s/${room.publicId}`;
   const wrong = await req(`${base}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: personalGrant.id }, jar: me });
-  check(wrong.status === 400 && /for Personal rooms/.test(wrong.json?.error ?? ''), 'A PERSONAL FOLDER IS REFUSED IN AN ACME ROOM, saying why');
+  check(wrong.status === 400 && /for Self/.test(wrong.json?.error ?? ''), "A FOLDER WITH NO ORGANIZATION IS SELF'S: refused in an Acme room, saying why");
   const bound = await req(`${base}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: acmeGrant.id }, jar: me });
   check(bound.status === 201, "Acme's folder is accepted in an Acme room");
   const agentName = bound.json?.agent?.displayName;
@@ -147,7 +149,9 @@ try {
   const acmeInMine = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: acmeGrant.id }, jar: me });
   check(acmeInMine.status === 400 && new RegExp(`for ${acme.name}`).test(acmeInMine.json?.error ?? ''), "ACME'S FOLDER IS REFUSED IN YOUR OWN ORGANIZATION'S ROOM, saying why");
   const personalInMine = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: personalGrant.id }, jar: me });
-  check(personalInMine.status === 400, 'a folder granted Personal serves no room any more (ADR 0051)');
+  check(personalInMine.status === 201, "A FOLDER GRANTED WITH NO ORGANIZATION IS SELF'S: accepted in your own organization's room (ADR 0051, amended)");
+  const personalStatus = () => req(`/o/${mine.ownerSlug}/s/${mine.publicId}`, { jar: me }).then((r) => r.json?.participants.find((p) => p.displayName === personalInMine.json?.agent?.displayName)?.status);
+  check(!!(await until(async () => ['connected', 'idle'].includes(await personalStatus()))), '…and the host runs it there too');
   const forOwn = await grant({ org: ownOrg.id, policy: 'read' });
   check(forOwn.status === 201, 'the repo is granted For: your own organization');
   const ownGrant = await until(async () => (await req('/devices', { jar: me })).json.find((d) => d.id === dev.id)?.grants.find((g) => g.org === ownOrg.id));

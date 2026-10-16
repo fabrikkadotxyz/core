@@ -41,7 +41,7 @@ const spawn = read('packages/bridge/src/spawn.ts');
 check(/provider === 'antigravity'\);\n\}/.test(spawn.replace(/\r/g, '')) || /\|\| provider === 'antigravity'\)/.test(spawn), 'all three policies are verified for it (policyVerified)');
 const args = harness('args');
 check(JSON.stringify(args.read) === '["--mode","plan"]' && JSON.stringify(args.edit) === '["--mode","accept-edits"]' && JSON.stringify(args.full) === '["--dangerously-skip-permissions"]', 'READ IS plan, EDIT IS accept-edits, FULL IS skip-permissions');
-check(/'-p', `\$\{req\.systemPreamble\}\\n\\n\$\{req\.prompt\}`, '--output-format', 'stream-json', '--disable-slash-commands'/.test(spawn), 'every run: -p with the preamble, stream-json, no slash expansion');
+check(/'-p', `\$\{preamble\}\\n\\n\$\{req\.prompt\}`, '--output-format', 'stream-json', '--disable-slash-commands'/.test(spawn) && /no shell and cannot call the session's tools/.test(spawn), 'every run: -p with the preamble (confined runs told what they cannot do), stream-json, no slash expansion');
 check(/args\.push\('--conversation', req\.resumeId\)/.test(spawn), '--conversation resumes');
 check(/req\.mcp \? \{ FABRIKKA_URL: req\.mcp\.url, FABRIKKA_TOKEN: req\.mcp\.token \} : \{\}/.test(spawn), "THE RUN'S ENVIRONMENT CARRIES THE ROOM AND THE RUN TOKEN for the user-level fabrikka entry");
 check(/step\.state !== 'ACTIVE'/.test(spawn) && !/tool_info\?\.output/.test(spawn), "the summariser reads a tool step once, and never the tool's output (ADR 0015)");

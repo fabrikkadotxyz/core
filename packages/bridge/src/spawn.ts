@@ -673,7 +673,13 @@ export function antigravityPolicyArgs(policy: Policy): string[] {
  */
 async function runAntigravity(req: SpawnRequest): Promise<SpawnResult> {
   const policy = req.policy ?? 'full';
-  const args = ['-p', `${req.systemPreamble}\n\n${req.prompt}`, '--output-format', 'stream-json', '--disable-slash-commands', ...antigravityPolicyArgs(policy)];
+  // Confined runs refuse the shell and the session's tools: say so, or the agent
+  // spends its turn trying them and ends on a refusal with an empty reply.
+  const preamble =
+    policy === 'full'
+      ? req.systemPreamble
+      : `${req.systemPreamble}\n\nIn this run you have no shell and cannot call the session's tools: both are refused in this mode. Use your file tools only, and put your answer in your final reply; it is posted to the session for you.`;
+  const args = ['-p', `${preamble}\n\n${req.prompt}`, '--output-format', 'stream-json', '--disable-slash-commands', ...antigravityPolicyArgs(policy)];
   if (req.resumeId) args.push('--conversation', req.resumeId);
 
   const out = await execute(
@@ -685,11 +691,27 @@ async function runAntigravity(req: SpawnRequest): Promise<SpawnResult> {
     (line) => emitAntigravityActivity(line, req),
   );
 
+  const outcome = antigravityOutcome(out.text);
+  if (!out.ok) return { ok: false, text: '', error: outcome.error ?? out.error, resumeId: outcome.conversationId };
+  if (outcome.status && outcome.status !== 'SUCCESS' && !outcome.text) return { ok: false, text: '', error: outcome.error ?? `Antigravity ended with ${outcome.status}`, resumeId: outcome.conversationId };
+  return { ok: true, text: outcome.text, resumeId: outcome.conversationId };
+}
+
+/**
+ * The outcome of an `agy --output-format stream-json` run: the conversation to
+ * resume, the status, and the answer. Pure, so it can be unit-tested against
+ * captured streams. The answer is `result.response`, but when the run ended on
+ * a refused step agy leaves that empty although the answer was streamed as
+ * `agent_response` deltas: those are kept per step and the last one stands in.
+ */
+export function antigravityOutcome(stream: string): { conversationId?: string; status?: string; text: string; error?: string } {
   let conversationId: string | undefined;
   let response: string | undefined;
   let status: string | undefined;
   let error: string | undefined;
-  for (const line of out.text.split('\n')) {
+  const spoken = new Map<number, string[]>();
+  let lastSpoken: number | undefined;
+  for (const line of stream.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed.startsWith('{')) continue;
     let event: Record<string, unknown>;
@@ -699,6 +721,14 @@ async function runAntigravity(req: SpawnRequest): Promise<SpawnResult> {
       continue;
     }
     if (event.event === 'init') conversationId = (event.conversation_id as string | undefined) ?? conversationId;
+    if (event.event === 'step_update') {
+      const step = event.step_update as { step_type?: string; step_index?: number; text_delta?: string } | undefined;
+      if (step?.step_type === 'agent_response' && typeof step.text_delta === 'string') {
+        const i = step.step_index ?? 0;
+        spoken.set(i, [...(spoken.get(i) ?? []), step.text_delta]);
+        lastSpoken = i;
+      }
+    }
     if (event.event === 'result') {
       const r = event.result as { conversation_id?: string; status?: string; response?: string; error?: string } | undefined;
       conversationId = r?.conversation_id ?? conversationId;
@@ -707,10 +737,8 @@ async function runAntigravity(req: SpawnRequest): Promise<SpawnResult> {
       if (r?.error) error = r.error;
     }
   }
-  const text = (response ?? '').trim();
-  if (!out.ok) return { ok: false, text: '', error: error ?? out.error, resumeId: conversationId };
-  if (status && status !== 'SUCCESS' && !text) return { ok: false, text: '', error: error ?? `Antigravity ended with ${status}`, resumeId: conversationId };
-  return { ok: true, text, resumeId: conversationId };
+  const text = (response ?? '').trim() || (lastSpoken !== undefined ? (spoken.get(lastSpoken) ?? []).join('').trim() : '');
+  return { conversationId, status, text, error };
 }
 
 /** Antigravity's tool names, as the summariser knows them. Anything else is named and nothing more. */

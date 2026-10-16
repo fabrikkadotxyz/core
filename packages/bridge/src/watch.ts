@@ -206,6 +206,8 @@ export async function startRunner(
     // is answerable by looking for a newer message of its own.
     const before = await latestOwnMessageId(upstream, displayName);
 
+    // How many steps the run reported: a run that worked but wrote no reply is told apart from one that did nothing.
+    let steps = 0;
     let runToken: { token: string; tokenId: string } | undefined;
     try {
       runToken = await mintRunToken(config);
@@ -232,7 +234,10 @@ export async function startRunner(
       onLog: (line) => log(`  ${line}`),
       // Already a tool name plus a short redacted descriptor: summarise() ran
       // inside the spawner, so no raw argument reaches this line (ADR 0015).
-      onActivity: ({ tool, detail }) => socket.send({ type: 'activity', runId, tool, detail }),
+      onActivity: ({ tool, detail }) => {
+        steps++;
+        socket.send({ type: 'activity', runId, tool, detail });
+      },
       signal: current.signal,
     });
 
@@ -270,9 +275,9 @@ export async function startRunner(
         log('run done — relaying its output (it posted nothing itself)');
         await upstream.callTool('post_message', { content: result.text }).catch(() => {});
       } else {
-        log('run done — no output at all');
+        log(steps ? `run done — ${steps} step(s), no reply` : 'run done — no output at all');
         await upstream
-          .callTool('post_message', { content: 'That run produced no output.' })
+          .callTool('post_message', { content: steps ? `That run finished without a reply after ${steps} step${steps === 1 ? '' : 's'}; they are in the timeline.` : 'That run produced no output.' })
           .catch(() => {});
       }
     }

@@ -1,5 +1,5 @@
 import { redact, summarise } from '../redact.ts';
-import { antigravityActivity, codexActivity, opencodeActivity } from '../spawn.ts';
+import { antigravityActivity, antigravityOutcome, codexActivity, opencodeActivity } from '../spawn.ts';
 
 let fails = 0;
 const eq = (label: string, got: unknown, want: unknown) => {
@@ -104,6 +104,18 @@ eq('antigravity mcp calls are the name only', antigravityActivity('{"event":"ste
 eq('antigravity agent_response steps are not activity', antigravityActivity('{"event":"step_update","step_update":{"state":"ACTIVE","step_type":"agent_response","text_delta":"4242"}}'), null);
 eq('antigravity init and result are not activity', antigravityActivity('{"event":"result","result":{"status":"SUCCESS","response":"pong"}}'), null);
 eq('antigravity malformed JSON is ignored', antigravityActivity('{"event":"step_update"'), null);
+
+// The outcome: result.response, or the last agent_response when a refused step left it empty.
+const agyStream = [
+  '{"event":"init","conversation_id":"c9","init":{"cwd":"/work","permission_mode":"request-review"}}',
+  '{"event":"step_update","step_update":{"step_index":1,"state":"ACTIVE","step_type":"agent_response","text_delta":"Created "}}',
+  '{"event":"step_update","step_update":{"step_index":1,"state":"DONE","step_type":"agent_response","text_delta":"fede.txt."}}',
+  '{"event":"step_update","step_update":{"step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"run_command","tool_info":{"parameters":{"CommandLine":"cat fede.txt"}}}}',
+  '{"event":"result","result":{"conversation_id":"c9","status":"SUCCESS","response":""}}',
+].join('\n');
+eq('antigravity outcome falls back to the streamed answer when the response is empty', antigravityOutcome(agyStream), { conversationId: 'c9', status: 'SUCCESS', text: 'Created fede.txt.', error: undefined });
+eq('antigravity outcome prefers result.response when present', antigravityOutcome(agyStream.replace('"response":""', '"response":"Done.\\n"')).text, 'Done.');
+eq('antigravity outcome with nothing said is empty', antigravityOutcome('{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":""}}').text, '');
 
 console.log(fails === 0 ? '\nredaction: PASS' : `\nredaction: ${fails} FAILURE(S)`);
 process.exit(fails === 0 ? 0 : 1);

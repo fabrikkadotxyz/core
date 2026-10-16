@@ -777,7 +777,12 @@ starts that server with the run's environment, so `FABRIKKA_URL` and
 `FABRIKKA_TOKEN` bind it to this room and this run. There is no per-run MCP
 config in agy, and `http` entries take literal headers. In headless mode
 `call_mcp_tool` is denied under `plan` and `accept-edits`, so only `full`
-reaches the tools; the picker's caveat says so.
+reaches the tools; the picker's caveat says so, and a confined run's preamble
+tells the agent it has no shell and no session tools, so it answers in its
+final reply. **When a run ends on a refused step, agy leaves `result.response`
+empty** although the answer was streamed as `agent_response` deltas; the
+runner keeps the last of those as the answer. A run that took steps but wrote
+nothing is reported as such, not as "no output".
 
 ### What the runner reports as activity
 

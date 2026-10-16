@@ -2529,6 +2529,55 @@ the picker as one.
 
 **Clicks:** 2 and a title to a link in hand.
 
+## M56 — The home: what needs you, what is running, what changed
+
+> **Built 2026-10-16**, the owner's pick from eight ideas (all but *pick up
+> where you left off*). The home had *Waiting for you* (M24) and, in Self,
+> the one-off session card (M55). Everything else about "what is going on"
+> was inside rooms.
+
+The home answers, in this order, from what the server already records; no
+new table, one read-only endpoint, `GET /api/me/home`:
+
+- **Needs you:** mentions of you since you last looked, newest first, with
+  the room (M24's list, renamed).
+- **Running now:** every run in progress in a room you are in: the agent,
+  the room, when it started, and its latest activity line when its owner
+  shows activity (M10). Click: the room.
+- **Finished while you were away:** runs of *your* agents that ended, done,
+  failed or stopped, since you last looked at their room (M42's signal, as a
+  list).
+- **Since you were away:** rooms with messages from someone else since you
+  last looked, with how many, newest first.
+- **Waiting on others:** rooms where the last word is yours and it mentions
+  a person, with who. Derived, never stored: the latest message in the room
+  is yours and mentions a human other than you.
+- **One-off sessions, open:** in Self, the links you sent that nobody has
+  opened yet, with when they expire and **Revoke**. The link itself is not
+  shown again: it is stored hashed (ADR 0007). *New link* makes another.
+- **Your computers:** each paired computer, online or offline, with how
+  many agents are bound to it, and *Your devices* a click away.
+
+A section with nothing in it is not shown. In Self the one-off session card
+comes first; then the sections above.
+
+**Test:**
+1. Have someone mention you in a room you have not opened: the home lists
+   it under *Needs you*; open the room: gone on the next visit.
+2. Mention an agent in a room and come home: *Running now* shows it with
+   its latest step; when it ends, it moves to *Finished while you were away*
+   until you open that room.
+3. Someone writes in a room without mentioning you: *Since you were away*
+   counts it; opening the room clears it.
+4. Mention a person and come home: *Waiting on others* names them; when
+   they answer, it is gone.
+5. In Self, start a one-off session and come home: its link is listed as
+   open; **Revoke** removes it; opening the link now says it can't be used.
+6. Quit the app: *Your computers* shows that computer offline and how many
+   agents it runs.
+
+**Clicks:** 1 from any item to its room.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

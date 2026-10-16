@@ -205,6 +205,12 @@ export async function catchUp(
   return { runs: live, activity };
 }
 
+/** M56: the latest buffered step of a run, for the home's Running now. */
+export function lastActivity(runId: string): ActivityEvent | null {
+  const buffer = buffers.get(runId);
+  return buffer?.length ? buffer[buffer.length - 1]! : null;
+}
+
 /** Stop tracking a session's runs, e.g. when it is deleted. */
 export function forgetSession(runIds: string[]): void {
   for (const id of runIds) buffers.delete(id);

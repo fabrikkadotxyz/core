@@ -25,6 +25,7 @@ import type {
   TemplateSummary,
   CatchUp,
   WaitingItem,
+  HomeView,
   OutputComment,
   TeamDetail,
   TeamMember,
@@ -496,6 +497,8 @@ export const sessions = {
   },
   /** M24: mentions of you across your sessions, since you last opened each. */
   waiting: () => call<WaitingItem[]>('/waiting'),
+  /** M56: the home, in one answer. */
+  home: () => call<HomeView>('/me/home'),
   /** M23: comments on an output. Viewers and guests may write these. */
   comments: (ref: SessionRef, outputId: string) => call<OutputComment[]>(`${base(ref)}/outputs/${outputId}/comments`),
   addComment: (ref: SessionRef, outputId: string, body: { quote: string; body: string; file?: string }) =>

@@ -609,6 +609,24 @@ export interface WaitingItem {
   at: string;
 }
 
+/** M56: the home, derived on each visit from what the server records. Every item names its room. */
+export interface HomeView {
+  /** Mentions of you since you last looked (M24). */
+  needsYou: WaitingItem[];
+  /** Runs in progress in rooms you are in, with the latest step when its owner shows activity. */
+  running: { id: string; agent: string; provider: string | null; startedAt: string; session: WaitingItem['session']; last: { tool: string; detail: string | null; at: string } | null }[];
+  /** Your agents' runs that ended since you last looked at their room. */
+  finished: { id: string; agent: string; status: 'done' | 'failed' | 'stopped'; endedAt: string; session: WaitingItem['session'] }[];
+  /** Rooms with messages from someone else since you last looked. */
+  changed: { session: WaitingItem['session']; messages: number; lastAt: string }[];
+  /** Rooms where the last word is yours and mentions a person. */
+  waitingOnOthers: { session: WaitingItem['session']; to: string; text: string; at: string }[];
+  /** One-off session links you sent that nobody has opened (Self). */
+  openInvites: { id: string; session: WaitingItem['session']; createdAt: string; expiresAt: string }[];
+  /** Your paired computers, with how many agents each runs. */
+  computers: { id: string; name: string; online: boolean; agents: number }[];
+}
+
 /* ----------------------------------------------------------------- templates */
 
 /** A session's structure, never its content (M25). */

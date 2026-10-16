@@ -206,6 +206,7 @@ import {
 } from './connections/oauth.ts';
 import { mailerFromEnv } from './mail.ts';
 import { APP_ZIP_NAME, appRelease, clientRelease, installCommand, installScript, manifest } from './client.ts';
+import { homeFor } from './home.ts';
 import { completePasswordReset, requestPasswordReset } from './password-reset.ts';
 import { rateLimit } from './rate-limit.ts';
 import { clientIp, clientIpHeader, trustedProxies } from './client-ip.ts';
@@ -715,6 +716,8 @@ export function createApp(options: CreateAppOptions = {}) {
 
   /** M24: mentions of you across your sessions, since you last opened each. */
   app.get('/api/waiting', requireUser(db), async (c) => c.json(await waitingFor(db, c.get('user').id)));
+  /** M56: the home in one answer: what needs you, what is running, what changed. */
+  app.get('/api/me/home', requireUser(db), async (c) => c.json(await homeFor(db, c.get('user').id, hostHub.online)));
 
   /* ---- templates (M25): a session's structure, never its content ---- */
 

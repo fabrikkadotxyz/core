@@ -2579,3 +2579,16 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, 0.5); }
 /* ---- Settings → Organizations (2026-10-16) ---- */
 .organizations li button.row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; }
 .organizations .session-title { flex: 1; }
+.one-off-actions { display: flex; align-items: center; gap: 1rem; }
+.one-off-actions .spacer { flex: 1; }
+
+/* ---- M56: the home ---- */
+.home .home-section { margin-bottom: 18px; }
+.home .home-section h2 { margin-bottom: 6px; }
+.home .session-list li.with-actions { display: flex; align-items: center; gap: 10px; }
+.home .session-list li.with-actions > a { flex: 1; min-width: 0; }
+.home .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok, #3cba54); margin-right: 4px; vertical-align: middle; }
+.home .activity-line { font-family: var(--font-mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home .badge.run-done { background: var(--badge-ok-bg, var(--badge-bg)); }
+.home .badge.run-failed { background: var(--danger-soft, var(--badge-bg)); }
+.home .badge.run-stopped { background: var(--warn-soft, var(--badge-bg)); }

@@ -70,6 +70,12 @@ import {
   pruneTeamCalls,
   setCallRecordDays,
   usableServers,
+  replaceGrants,
+  listGrantDefaults,
+  saveGrantDefault,
+  removeGrantDefault,
+  applyGrantDefault,
+  hasGrants,
 } from './aggregation.ts';
 import {
   createFileArtifact,
@@ -756,6 +762,26 @@ export function createApp(options: CreateAppOptions = {}) {
     const scope = await scopeOf(c, c.req.query('team'), true);
     if (!scope.ok) return c.notFound();
     return (await removeConnection(db, c.get('user').id, c.req.param('slug'), scope.scope)) ? c.json({ ok: true }) : c.notFound();
+  });
+
+  /* ---- M52 (ADR 0049): the grants you usually allow, per integration ---- */
+
+  app.get('/api/me/grant-defaults', requireUser(db), async (c) => {
+    return c.json({ defaults: await listGrantDefaults(db, c.get('user').id) });
+  });
+
+  /** One name today, `default`; the key carries the name so named sets come later. */
+  app.put('/api/me/grant-defaults/:slug', requireUser(db), async (c) => {
+    const body = await c.req.json<{ tools?: unknown; name?: string }>();
+    if (!Array.isArray(body.tools) || !body.tools.every((t) => typeof t === 'string')) return c.json({ error: 'tools is a list of tool names' }, 400);
+    const name = body.name ?? 'default';
+    if (name !== 'default') return c.json({ error: 'only the default is named today' }, 400);
+    await saveGrantDefault(db, c.get('user').id, c.req.param('slug'), name, [...new Set(body.tools as string[])]);
+    return c.json({ ok: true, tools: new Set(body.tools as string[]).size });
+  });
+
+  app.delete('/api/me/grant-defaults/:slug', requireUser(db), async (c) => {
+    return (await removeGrantDefault(db, c.get('user').id, c.req.param('slug'), c.req.query('name') ?? 'default')) ? c.json({ ok: true }) : c.notFound();
   });
 
   /* ---- connections by vendor (M18, ADR 0024) ---- */
@@ -1684,7 +1710,22 @@ export function createApp(options: CreateAppOptions = {}) {
     });
     if (!result.ok) return c.json({ error: result.error }, 400);
 
-    return c.json(result.server, 201);
+    // M52 (ADR 0049): the OWNER's default fills in grants the room doesn't have
+    // yet. A member's attach changes nothing: a member cannot set grants.
+    let defaultApplied: number | null = null;
+    if (s.role === 'owner' && !(await hasGrants(db, s.id, result.server.slug))) {
+      defaultApplied = await applyGrantDefault(db, s.id, c.get('user').id, result.server.slug);
+    }
+    return c.json({ ...result.server, defaultApplied }, 201);
+  });
+
+  /** M52: make this room's grants for a slug exactly the caller's saved default. Owner-only. */
+  sessionRoutes.post('/integrations/:slug/grants/apply-default', async (c) => {
+    const s = await resolve(c);
+    if (!s || s.role !== 'owner') return c.notFound();
+    const applied = await applyGrantDefault(db, s.id, c.get('user').id, c.req.param('slug'));
+    if (applied === null) return c.json({ error: 'no default saved for that connection' }, 404);
+    return c.json({ ok: true, allowed: applied });
   });
 
   sessionRoutes.delete('/integrations/:slug', async (c) => {

@@ -2342,6 +2342,54 @@ invite on the core):
 **Clicks:** 1 to Integrations from anywhere; 2 to a chat from a session
 (Chats, then the chat); 2 to any settings page.
 
+## M52 — Permissions in a dialog, and a default you keep
+
+> **Built 2026-10-16** ([ADR 0049](decisions/0049-grants-are-set-in-a-dialog-and-a-connection-remembers-your-default.md)).
+>
+> The list of what a session allows an integration to do (M8) opens inside
+> the Tools tab, under everything else, with no filter, and stays open; GitHub
+> offers about ninety tools. And the same boxes are ticked again in every
+> room.
+
+- **Permissions is a dialog.** Each attached connection's row has one button,
+  **Permissions**. It opens a modal over the room: the connection's name, the
+  sentence about default-deny and that a grant applies to everyone here, the
+  M18 preset buttons where the entry has presets, a **filter box**, and the
+  tools with a checkbox and a description each, with a count (*12 of 93
+  allowed*). A box saves at once. *Done* closes; so does Escape. A non-owner
+  sees the same dialog with the boxes disabled.
+- **Save as my default** stores the tools allowed right now for that
+  connection, under your account. **Apply my default** makes this room's
+  grants for it exactly that set. And when **you, as owner, attach** a
+  connection to a room where nothing is granted for it yet, your default is
+  applied for you. A member's attach applies nothing.
+- One default per connection today, named `default`; the key carries the
+  name, so named sets come later.
+- **No change to what agents see.** Grants stay per tool, default-deny, the
+  owner's. The MCP protocol is untouched.
+
+**Test:**
+1. Open a room with GitHub attached. Setup → Tools: the row has
+   **Permissions**, and no tool list in the tab. Click it: a dialog over the
+   dimmed room, with the count, the presets and the filter.
+2. Type `pull` in the filter: only pull-request tools. Tick
+   `create_pull_request`: the count goes up by one; close and reopen: still
+   ticked. **Setup → Tools → Permissions → the box: 4 clicks.**
+3. **Save as my default.** Open another room, attach GitHub as its owner: the
+   dialog shows the same boxes ticked, without a click.
+4. In a third room where GitHub is already attached with other grants, open
+   Permissions → **Apply my default**: the grants become exactly the saved
+   set; a box that was ticked and is not in the default is cleared.
+5. As a member who is not the owner: Permissions opens, the boxes are
+   disabled, and no default buttons. Attach your own GitHub there: the room's
+   grants do not change.
+6. Mention an agent and ask for the list of its tools: exactly the granted
+   ones, namespaced as before (M8).
+7. Escape closes the dialog; the room behind it is untouched.
+
+**Clicks:** 4 to grant a tool; 5 to save a default; 0 to have it in the next
+room you attach the connection to as owner.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

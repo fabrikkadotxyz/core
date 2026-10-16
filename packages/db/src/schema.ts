@@ -1032,3 +1032,25 @@ export const sessionAgentHosts = pgTable('session_agent_hosts', {
    */
   fromPersonal: boolean('from_personal').notNull().default(false),
 });
+
+/**
+ * M52 (ADR 0049): the grants a person usually allows for one integration.
+ * Keyed by the person and the slug, as grants are, never by a connection row:
+ * the organization's shared connection is nobody's row, and one person may
+ * hold a slug for several organizations. `name` is `default` today and is in
+ * the key so named sets come later without a migration.
+ */
+export const grantDefaults = pgTable(
+  'grant_defaults',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    serverSlug: text('server_slug').notNull(),
+    name: text('name').notNull().default('default'),
+    /** The tool names allowed; everything else for that slug is denied. */
+    tools: jsonb('tools').$type<string[]>().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.serverSlug, t.name] })],
+);

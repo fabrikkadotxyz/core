@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Select, TeamInitial } from '../components/Select.tsx';
+import { Modal } from '../components/Modal.tsx';
 import { inDesktopApp, openFolders, openOutput as openOutputTab } from '../desktop.ts';
 import { AGENT_TOOLS, agentTool } from '@fabrikka/types';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -2098,7 +2099,8 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
   const [slug, setSlug] = useState('');
   const [url, setUrl] = useState('');
   const [credential, setCredential] = useState('');
-  const [tools, setTools] = useState<Record<string, { name: string }[]>>({});
+  // M52 (ADR 0049): the connection whose Permissions dialog is open.
+  const [permissions, setPermissions] = useState<{ slug: string; label: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   // M18: which of my connections come from a catalogue entry with grant presets.
   const [presetSlugs, setPresetSlugs] = useState<Set<string>>(new Set());
@@ -2167,41 +2169,21 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
                 <span className="muted small">
                   {m.hasCredential ? 'credential set' : 'no credential'}
                 </span>
-                {isOwner && presetSlugs.has(m.slug) && (
-                  // M18: a shortcut over the per-tool grants, never a new permission model.
-                  <span className="preset-buttons" role="group" aria-label={`What agents may do with ${m.label}`}>
-                    {(['none', 'read', 'write'] as const).map((p) => (
-                      <button
-                        key={p}
-                        className="link small"
-                        onClick={async () => {
-                          await sessions.setPreset(ref_, m.slug, p).catch((err) => setError((err as Error).message));
-                          load();
-                        }}
-                      >
-                        {p === 'none' ? 'Allow nothing' : p === 'read' ? 'Read' : 'Read & write'}
-                      </button>
-                    ))}
-                  </span>
-                )}
-                <button
-                  className="link small"
-                  onClick={async () => {
-                    const list = await sessions.integrationTools(ref_, m.slug);
-                    setTools((t) => ({ ...t, [m.slug]: list }));
-                  }}
-                >
-                  tools
-                </button>
-                <button
-                  className="link small"
-                  onClick={async () => {
-                    await sessions.detachIntegration(ref_, m.slug);
-                    load();
-                  }}
-                >
-                  detach
-                </button>
+                <span className="row-end">
+                  {/* M52: grants, presets and your default live in one dialog. */}
+                  <button className="link small" onClick={() => setPermissions({ slug: m.slug, label: m.label })}>
+                    Permissions
+                  </button>
+                  <button
+                    className="link small"
+                    onClick={async () => {
+                      await sessions.detachIntegration(ref_, m.slug);
+                      load();
+                    }}
+                  >
+                    detach
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
@@ -2224,15 +2206,11 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
                     organization's · shared
                   </span>
                 )}
-                <button
-                  className="link small"
-                  onClick={async () => {
-                    const list = await sessions.integrationTools(ref_, t.slug);
-                    setTools((x) => ({ ...x, [t.slug]: list }));
-                  }}
-                >
-                  tools
-                </button>
+                <span className="row-end">
+                  <button className="link small" onClick={() => setPermissions({ slug: t.slug, label: t.label })}>
+                    Permissions
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
@@ -2296,35 +2274,18 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
 
       {error && <p className="error small">{error}</p>}
 
-      {Object.entries(tools).map(([s, list]) => (
-        <div key={s}>
-          <h3 className="subhead">{s} — what this session allows</h3>
-          <p className="hint">
-            Nothing is permitted until you allow it, and a grant applies to everyone
-            in the session — each person uses their own credential, or the organization's
-            shared one where they have none.
-          </p>
-          <ul className="participants">
-            {list.map((t) => (
-              <li key={t.name}>
-                <label className="grant">
-                  <input
-                    type="checkbox"
-                    checked={granted(s, t.name)}
-                    disabled={!isOwner}
-                    onChange={async (e) => {
-                      await sessions.setToolGrant(ref_, s, t.name, e.target.checked);
-                      load();
-                    }}
-                  />
-                  <span className="small">{t.name}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-          {!isOwner && <p className="hint">Only the session owner can change grants.</p>}
-        </div>
-      ))}
+      {permissions && (
+        <PermissionsDialog
+          ref_={ref_}
+          isOwner={isOwner}
+          slug={permissions.slug}
+          label={permissions.label}
+          hasPresets={presetSlugs.has(permissions.slug)}
+          granted={(t) => granted(permissions.slug, t)}
+          onChange={load}
+          onClose={() => setPermissions(null)}
+        />
+      )}
 
       {state.inSession.length > 0 && (
         <>
@@ -2464,6 +2425,142 @@ function Timeline({
   );
 }
 
+
+/**
+ * M52 (ADR 0049): what this session allows one integration to do, in a dialog
+ * over the room. The tools with a box each (saved at once, as M8), the M18
+ * presets where the entry has them, a filter, and your default: save the boxes
+ * ticked now, or apply the saved set. Non-owners see the boxes disabled.
+ */
+function PermissionsDialog({
+  ref_,
+  isOwner,
+  slug,
+  label,
+  hasPresets,
+  granted,
+  onChange,
+  onClose,
+}: {
+  ref_: SessionRef;
+  isOwner: boolean;
+  slug: string;
+  label: string;
+  hasPresets: boolean;
+  granted: (tool: string) => boolean;
+  onChange: () => void;
+  onClose: () => void;
+}) {
+  const [list, setList] = useState<{ name: string; description?: string }[] | null>(null);
+  const [filter, setFilter] = useState('');
+  /** Your saved default for this slug: its tools, or null when there is none. */
+  const [saved, setSaved] = useState<string[] | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    sessions.integrationTools(ref_, slug).then(setList).catch(() => setList([]));
+    if (isOwner) connections.grantDefaults().then((r) => setSaved(r.defaults.find((d) => d.slug === slug)?.tools ?? null)).catch(() => {});
+  }, [ref_, slug, isOwner]);
+
+  const q = filter.trim().toLowerCase();
+  const shown = (list ?? []).filter((t) => !q || t.name.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q));
+  const allowed = (list ?? []).filter((t) => granted(t.name)).length;
+  const act = async (f: () => Promise<unknown>, done?: string) => {
+    setError(null);
+    try {
+      await f();
+      onChange();
+      if (done) setNote(done);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <Modal label={`${label} — what this session allows`} onClose={onClose}>
+      <header className="modal-head">
+        <h2>{label} — what this session allows</h2>
+        <button className="modal-close" aria-label="Close" onClick={onClose}>
+          ×
+        </button>
+      </header>
+      <div className="modal-main">
+        <p className="hint">
+          Nothing is permitted until you allow it, and a grant applies to everyone in the session — each person uses
+          their own credential, or the organization's shared one where they have none.
+        </p>
+        <div className="perm-tools">
+          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter tools" aria-label="Filter tools" />
+          <span className="muted small">
+            {list === null ? 'Loading…' : `${allowed} of ${list.length} allowed`}
+          </span>
+          {isOwner && hasPresets && (
+            // M18: a shortcut over the per-tool grants, never a new permission model.
+            <span className="preset-buttons" role="group" aria-label={`What agents may do with ${label}`}>
+              {(['none', 'read', 'write'] as const).map((p) => (
+                <button key={p} className="link small" onClick={() => act(() => sessions.setPreset(ref_, slug, p))}>
+                  {p === 'none' ? 'Allow nothing' : p === 'read' ? 'Read' : 'Read & write'}
+                </button>
+              ))}
+            </span>
+          )}
+        </div>
+        {list && list.length === 0 && <p className="muted small">This connection offered no tools. Is its credential still good?</p>}
+        {list && list.length > 0 && shown.length === 0 && <p className="muted small">Nothing matches.</p>}
+        <ul className="perm-list">
+          {shown.map((t) => (
+            <li key={t.name}>
+              <label className="grant">
+                <input
+                  type="checkbox"
+                  checked={granted(t.name)}
+                  disabled={!isOwner}
+                  onChange={(e) => act(() => sessions.setToolGrant(ref_, slug, t.name, e.target.checked))}
+                />
+                <span>
+                  <span className="perm-name">{t.name}</span>
+                  {t.description && <span className="perm-desc">{t.description}</span>}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+        {!isOwner && <p className="hint">Only the session owner can change grants.</p>}
+      </div>
+      <footer className="modal-foot">
+        {isOwner && (
+          <>
+            <button
+              className="small"
+              disabled={list === null}
+              onClick={() =>
+                act(async () => {
+                  const tools = (list ?? []).filter((t) => granted(t.name)).map((t) => t.name);
+                  await connections.saveGrantDefault(slug, tools);
+                  setSaved(tools);
+                }, 'Saved as your default')
+              }
+            >
+              Save as my default
+            </button>
+            {saved !== null && (
+              <button className="small" onClick={() => act(() => sessions.applyGrantDefault(ref_, slug), `Applied your default: ${saved.length} allowed`)}>
+                Apply my default
+              </button>
+            )}
+          </>
+        )}
+        {note && <span className="muted small">{note}</span>}
+        {error && <span className="error small">{error}</span>}
+        <span className="spacer" />
+        <button className="small" onClick={onClose}>
+          Done
+        </button>
+      </footer>
+    </Modal>
+  );
+}
 
 function Panel({ title, children }: { title?: string; children: React.ReactNode }) {
   return (

@@ -225,6 +225,13 @@
       "when": 1791865652403,
       "tag": "0031_connection_organizations",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792120035723,
+      "tag": "0032_grant_defaults",
+      "breakpoints": true
     }
   ]
 }

@@ -22,6 +22,7 @@ import {
   seal,
   sessionMcpServers,
   sessionMcpToolGrants,
+  grantDefaults,
   sessions,
   teamMcpCalls,
   teamMcpServers,
@@ -638,6 +639,64 @@ export async function listGrants(
     })
     .from(sessionMcpToolGrants)
     .where(eq(sessionMcpToolGrants.sessionId, sessionId));
+}
+
+/**
+ * M52 (ADR 0049): make a session's grants for one slug exactly `allowed`:
+ * those tools on, every other row of that slug off. Absent still means denied.
+ */
+export async function replaceGrants(db: Database, sessionId: string, serverSlug: string, allowed: string[]): Promise<void> {
+  const keep = new Set(allowed);
+  await db
+    .update(sessionMcpToolGrants)
+    .set({ allowed: false })
+    .where(and(eq(sessionMcpToolGrants.sessionId, sessionId), eq(sessionMcpToolGrants.serverSlug, serverSlug)));
+  for (const toolName of keep) await setGrant(db, sessionId, serverSlug, toolName, true);
+}
+
+/** M52: the grants a person usually allows, per integration. */
+export async function listGrantDefaults(db: Database, userId: string): Promise<{ slug: string; name: string; tools: string[]; updatedAt: string }[]> {
+  const rows = await db.select().from(grantDefaults).where(eq(grantDefaults.userId, userId));
+  return rows.map((r) => ({ slug: r.serverSlug, name: r.name, tools: r.tools, updatedAt: r.updatedAt.toISOString() }));
+}
+
+export async function saveGrantDefault(db: Database, userId: string, serverSlug: string, name: string, tools: string[]): Promise<void> {
+  await db
+    .insert(grantDefaults)
+    .values({ userId, serverSlug, name, tools })
+    .onConflictDoUpdate({ target: [grantDefaults.userId, grantDefaults.serverSlug, grantDefaults.name], set: { tools, updatedAt: new Date() } });
+}
+
+export async function removeGrantDefault(db: Database, userId: string, serverSlug: string, name: string): Promise<boolean> {
+  const gone = await db
+    .delete(grantDefaults)
+    .where(and(eq(grantDefaults.userId, userId), eq(grantDefaults.serverSlug, serverSlug), eq(grantDefaults.name, name)))
+    .returning({ name: grantDefaults.name });
+  return gone.length > 0;
+}
+
+/**
+ * M52: apply a person's default to a session's grants for one slug. The caller
+ * checks that the person owns the session. Null when there is no such default.
+ */
+export async function applyGrantDefault(db: Database, sessionId: string, userId: string, serverSlug: string, name = 'default'): Promise<number | null> {
+  const [row] = await db
+    .select({ tools: grantDefaults.tools })
+    .from(grantDefaults)
+    .where(and(eq(grantDefaults.userId, userId), eq(grantDefaults.serverSlug, serverSlug), eq(grantDefaults.name, name)));
+  if (!row) return null;
+  await replaceGrants(db, sessionId, serverSlug, row.tools);
+  return row.tools.length;
+}
+
+/** M52: whether a session has any grant row for a slug (even a denied one). */
+export async function hasGrants(db: Database, sessionId: string, serverSlug: string): Promise<boolean> {
+  const rows = await db
+    .select({ toolName: sessionMcpToolGrants.toolName })
+    .from(sessionMcpToolGrants)
+    .where(and(eq(sessionMcpToolGrants.sessionId, sessionId), eq(sessionMcpToolGrants.serverSlug, serverSlug)))
+    .limit(1);
+  return rows.length > 0;
 }
 
 /* -------------------------------------------------------------------------- */

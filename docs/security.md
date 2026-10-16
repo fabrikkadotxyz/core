@@ -241,6 +241,13 @@ GitHub audit log says: alice
 
 Tool grants (`session_mcp_tool_grants`) are **tool-level and default-deny**. Server-level allow/deny is too coarse: "GitHub read but not merge" is the actual requirement.
 
+A person may save the grants they usually allow for an integration as their
+default ([ADR 0049](decisions/0049-grants-are-set-in-a-dialog-and-a-connection-remembers-your-default.md)).
+It is applied only by a session **owner**, by hand or when the owner attaches
+that integration to a room where nothing is granted for it yet. A member's
+default is never applied: a member cannot set grants, and attaching a
+connection must not change what a session allows.
+
 ### Each organization's own connections (ADR 0043)
 
 A personal connection is for **one organization's rooms, or Personal** rooms. A

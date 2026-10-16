@@ -73,7 +73,9 @@ for (const path of ['/integrations', '/integrations/organization', '/settings/pe
 /* ------------------------------------------------ 5. themes */
 
 const css = read('apps/web/src/styles.css');
-const railBlock = css.slice(css.indexOf('M51: the icon rail'));
+const railStart = css.indexOf('M51: the icon rail');
+const railEnd = css.indexOf('/* ---- ', railStart + 1);
+const railBlock = css.slice(railStart, railEnd === -1 ? undefined : railEnd);
 const tokens = [...railBlock.matchAll(/var\(--([a-z0-9-]+)\)/g)].map((m) => m[1]);
 check(tokens.length > 0 && tokens.every((t) => ['side-bg', 'side-muted', 'side-border', 'side-strong', 'side-hover', 'side-selected', 'grad-attention', 'radius-pill', 'rail-w', 'side-w'].includes(t)), `the rail uses the sidebar's tokens only, no new one (${[...new Set(tokens)].join(', ')})`);
 check(/icon rail of places beside it \(M51, ADR 0048\)/.test(read('docs/themes.md')), 'docs/themes.md says so');

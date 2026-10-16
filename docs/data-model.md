@@ -823,6 +823,27 @@ member, and a session where Alice can merge because nobody denied it on her row.
 
 Credentials belong to a **user**, not a session. A tool call routes to the *calling participant's* credential; a server a participant hasn't attached is absent from their tool list entirely. Grants are **tool-level and default-deny** — server-level granularity cannot express "GitHub read but not merge", which is the actual requirement. See `docs/security.md`.
 
+### M52 — grant defaults (ADR 0049)
+
+```
+grant_defaults
+  user_id        uuid -> users.id
+  server_slug    text not null            -- the integration, by slug, as grants are
+  name           text not null default 'default'
+  tools          jsonb not null           -- the tool names allowed; everything else denied
+  updated_at     timestamptz not null default now()
+  primary key (user_id, server_slug, name)
+```
+
+**A person's habit for one integration.** *Save as my default* in a session's
+Permissions dialog stores the tools allowed there; *Apply my default* makes
+another session's grants for that slug exactly this set; and the server
+applies it unasked when the **owner** attaches a connection whose slug has no
+grant in the room yet. Keyed by the person, not the connection row: the
+organization's shared connection is nobody's row, and one person may hold a
+slug for several organizations (ADR 0043). `name` is always `default` today;
+it is in the key so named sets come later without a migration.
+
 ### M12 — outputs (M14's `google_accounts` specced, not built)
 
 ```

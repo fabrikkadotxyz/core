@@ -250,6 +250,11 @@ export const connections = {
     call<{ id: string }>('/me/connections', { method: 'POST', body }),
   remove: (slug: string, team: string | null) =>
     call<{ ok: true }>(`/me/connections/${encodeURIComponent(slug)}${scopeQuery(team)}`, { method: 'DELETE' }),
+  /** M52 (ADR 0049): the grants you usually allow, per integration. One name today, `default`. */
+  grantDefaults: () => call<{ defaults: { slug: string; name: string; tools: string[]; updatedAt: string }[] }>('/me/grant-defaults'),
+  saveGrantDefault: (slug: string, tools: string[]) =>
+    call<{ ok: true; tools: number }>(`/me/grant-defaults/${encodeURIComponent(slug)}`, { method: 'PUT', body: { tools } }),
+  removeGrantDefault: (slug: string) => call<{ ok: true }>(`/me/grant-defaults/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
 };
 
 /** M30: the team's shared connections. Owners manage them; members see they exist. */
@@ -421,6 +426,9 @@ export const sessions = {
       method: 'PUT',
       body: { allowed },
     }),
+  /** M52: make this room's grants for a connection exactly your saved default. Owner-only. */
+  applyGrantDefault: (ref: SessionRef, slug: string) =>
+    call<{ ok: true; allowed: number }>(`${base(ref)}/integrations/${slug}/grants/apply-default`, { method: 'POST', body: {} }),
 
   artifacts: (ref: SessionRef) => call<Artifact[]>(`${base(ref)}/artifacts`),
   /** M19: pointers to tickets, PRs, repos, docs. Saving an existing URL updates it. */

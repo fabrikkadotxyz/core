@@ -208,6 +208,7 @@ import {
 import { mailerFromEnv } from './mail.ts';
 import { APP_ZIP_NAME, appRelease, clientRelease, installCommand, installScript, manifest } from './client.ts';
 import { homeFor } from './home.ts';
+import { runBelongsTo, storeResumeArgv, validResumeArgv } from './activity.ts';
 import { completePasswordReset, requestPasswordReset } from './password-reset.ts';
 import { rateLimit } from './rate-limit.ts';
 import { clientIp, clientIpHeader, trustedProxies } from './client-ip.ts';
@@ -2407,6 +2408,53 @@ export function createApp(options: CreateAppOptions = {}) {
   });
 
   /**
+   * ADR 0054: a run reports its state, its resume command or its end, with its
+   * own run token. Input, treated as untrusted: the token fixes the participant
+   * and the session, the body may only name a run of theirs, sizes are capped,
+   * unknown values are ignored and answered 202, sixty a minute per run.
+   */
+  app.post('/bridge/o/:owner/s/:session/report', async (c) => {
+    const bearer = c.req.header('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+    if (!bearer) return c.json({ error: 'unauthorized' }, 401, { 'WWW-Authenticate': 'Bearer realm="fabrikka"' });
+    const actor = await resolveSessionToken(db, bearer);
+    if (!actor || actor.sessionPublicId !== c.req.param('session') || actor.ownerSlug !== c.req.param('owner') || actor.participantKind !== 'agent') return c.notFound();
+    const raw = await c.req.text();
+    if (raw.length > 16 * 1024) return c.json({ error: 'too large' }, 413);
+    let body: { report?: unknown; runId?: unknown; status?: unknown; reason?: unknown; detail?: unknown; completed?: unknown; argv?: unknown };
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return c.json({ error: 'not JSON' }, 400);
+    }
+    const runId = typeof body.runId === 'string' ? body.runId : '';
+    if (!runId || !(await runBelongsTo(db, actor.sessionId, actor.participantId, runId))) return c.notFound();
+    if (!rateLimit(`report:${runId}`, { max: 60, windowMs: 60_000 })) return c.json({ error: 'too many reports' }, 429);
+    const ignored = (why: string) => c.json({ ok: false, ignored: why }, 202);
+
+    if (body.report === 'state') {
+      const status = body.status;
+      if (status !== 'working' && status !== 'blocked' && status !== 'idle') return ignored('status');
+      const reason = typeof body.reason === 'string' ? body.reason.slice(0, 32) : null;
+      const detail = typeof body.detail === 'string' ? body.detail.slice(0, 120) : null;
+      await setConnectionStatus(db, { sessionId: actor.sessionId, participantId: actor.participantId, kind: 'runner', status, reason, detail, completed: body.completed === true });
+      return c.json({ ok: true }, 202);
+    }
+    if (body.report === 'resume') {
+      const argv = validResumeArgv(body.argv);
+      if (!argv) return ignored('argv');
+      await storeResumeArgv(db, runId, argv);
+      return c.json({ ok: true }, 202);
+    }
+    if (body.report === 'release') {
+      const status = body.status === undefined ? 'done' : body.status;
+      if (status !== 'done' && status !== 'failed' && status !== 'stopped') return ignored('status');
+      await endRun(db, { runId, sessionId: actor.sessionId, participantId: actor.participantId, status });
+      return c.json({ ok: true }, 202);
+    }
+    return ignored('report');
+  });
+
+  /**
    * Revoke a run token when the run ends.
    *
    * A runner may only revoke tokens for its OWN participant, so possessing a
@@ -2745,12 +2793,18 @@ export function createApp(options: CreateAppOptions = {}) {
             ? `opencode mcp add fabrikka --url ${mcpUrl} --header "Authorization=Bearer ${token}"`
             : `Streamable HTTP MCP endpoint:\n  ${mcpUrl}\n\nAuthorization: Bearer ${token}`;
 
+    // ADR 0054: any command may act as this agent, Full policy only; the person types the command after --.
+    const commandCommand =
+      `FABRIKKA_URL=${mcpUrl} \\
+  FABRIKKA_TOKEN=${token} \\
+  ` + `${BRIDGE_COMMAND.join(' ')} run --dir . -- <your command>`;
+
     const lanes: SetupLane[] =
       provider === 'claude-code'
-        ? ['bridge', 'runner', 'remote']
+        ? ['bridge', 'runner', 'remote', 'command']
         : provider === 'codex' || provider === 'opencode'
-          ? ['runner', 'remote']
-          : ['remote'];
+          ? ['runner', 'remote', 'command']
+          : ['remote', 'command'];
 
     return {
       token,
@@ -2763,6 +2817,7 @@ export function createApp(options: CreateAppOptions = {}) {
           ? 'claude --dangerously-load-development-channels server:fabrikka'
           : null,
         runnerCommand: lanes.includes('runner') ? runnerCommand : null,
+        commandCommand,
       },
     };
   }

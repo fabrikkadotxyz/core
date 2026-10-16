@@ -1679,6 +1679,7 @@ const LANE_LABELS: Record<SetupLane, string> = {
   bridge: 'Live session',
   runner: 'While away',
   remote: 'Any MCP client',
+  command: 'Any command',
 };
 
 function AgentSetup({
@@ -1782,6 +1783,18 @@ function AgentSetup({
             )}{' '}
             The command prints what it will do before it does anything — read it.
           </p>
+        </>
+      )}
+
+      {lane === 'command' && setup.commandCommand && (
+        <>
+          <p className="hint">
+            ADR 0054: any command acts as this agent. On each mention it starts with the mention on its input and its
+            output is posted as the reply; it may report its state through the variables Fabrikka sets.{' '}
+            <strong>Full trust:</strong> nothing confines a command you choose, so run it in a folder you would grant as Full.
+            Replace <code>&lt;your command&gt;</code> after <code>--</code>.
+          </p>
+          {block('command', 'Copy command', setup.commandCommand)}
         </>
       )}
 

@@ -53,6 +53,18 @@ async function main(): Promise<void> {
         '    Spawn a headless run for each mention, in <project>. Policy\n' +
         '    defaults to edit: files in <project> only, no shell, no web.\n' +
         '\n' +
+        'fabrikka run --dir <project> -- <command…>\n' +
+        '    Any command as this agent (ADR 0054): on each mention it runs with\n' +
+        '    the mention on stdin and its output is posted. Full trust: nothing\n' +
+        '    confines it. Same FABRIKKA_URL and FABRIKKA_TOKEN as watch.\n' +
+        '\n' +
+        'fabrikka report state <working|blocked|idle> [--reason r] [--detail d] [--completed]\n' +
+        'fabrikka report resume -- <command…>\n' +
+        'fabrikka report release [--status done|failed|stopped]\n' +
+        '    Report about THIS run, from a hook or a wrapper, with the variables\n' +
+        '    Fabrikka set (FABRIKKA_REPORT_URL, FABRIKKA_RUN_TOKEN, FABRIKKA_RUN_ID).\n' +
+        '    Always exits 0: a report must never break the tool that made it.\n' +
+        '\n' +
         'fabrikka update [--server <url>]\n' +
         "    Install the client the server you're paired with now serves.\n" +
         '\n' +
@@ -77,13 +89,33 @@ async function main(): Promise<void> {
     await runHost(argv.slice(1), (...a) => console.error('[fabrikka host]', ...a));
     return;
   }
-  if (command !== 'connect' && command !== 'watch') {
+  if (command === 'report') {
+    // ADR 0054: from the environment Fabrikka set; exits 0 whatever happens.
+    await report(argv.slice(1));
+    return;
+  }
+  if (command !== 'connect' && command !== 'watch' && command !== 'run') {
     log(`unknown command: ${command}. Try: fabrikka help`);
     process.exitCode = 1;
     return;
   }
 
   const config = loadConfig(argv);
+
+  if (command === 'run') {
+    // ADR 0054: any command as this agent. Full by construction: nothing confines it.
+    const dash = argv.indexOf('--');
+    const cmd = dash === -1 ? [] : argv.slice(dash + 1);
+    if (cmd.length === 0) {
+      log('fabrikka run needs the command after --, e.g. fabrikka run --dir . -- sh -c "cat; echo hi"');
+      process.exitCode = 1;
+      return;
+    }
+    const dir = flag(argv, 'dir') ?? process.cwd();
+    log(`any command as this agent, Full trust: ${cmd.join(' ')}`);
+    await watch({ config, dir, provider: 'command', policy: 'full', command: cmd, log });
+    return;
+  }
 
   if (command === 'watch') {
     const dir = flag(argv, 'dir') ?? process.cwd();
@@ -230,4 +262,41 @@ function flag(argv: string[], name: string): string | undefined {
   if (i === -1) return undefined;
   const value = argv[i + 1];
   return value && !value.startsWith('--') ? value : undefined;
+}
+
+/**
+ * ADR 0054: `fabrikka report state|resume|release …`, for hooks and shell
+ * wrappers. Reads FABRIKKA_REPORT_URL, FABRIKKA_RUN_TOKEN and FABRIKKA_RUN_ID,
+ * posts once, and exits 0 no matter what: a report must never break the tool
+ * that made it.
+ */
+async function report(args: string[]): Promise<void> {
+  const url = process.env.FABRIKKA_REPORT_URL;
+  const token = process.env.FABRIKKA_RUN_TOKEN;
+  const runId = process.env.FABRIKKA_RUN_ID;
+  const kind = args[0];
+  if (!url || !token || !runId) {
+    log('nothing to report to: FABRIKKA_REPORT_URL, FABRIKKA_RUN_TOKEN and FABRIKKA_RUN_ID are not set (not under Fabrikka)');
+    return;
+  }
+  let body: Record<string, unknown> | null = null;
+  if (kind === 'state') {
+    body = { report: 'state', runId, status: args[1], reason: flag(args, 'reason'), detail: flag(args, 'detail'), completed: args.includes('--completed') };
+  } else if (kind === 'resume') {
+    const dash = args.indexOf('--');
+    body = { report: 'resume', runId, argv: dash === -1 ? args.slice(1) : args.slice(dash + 1) };
+  } else if (kind === 'release') {
+    body = { report: 'release', runId, status: flag(args, 'status') };
+  }
+  if (!body) {
+    log('fabrikka report takes state, resume or release');
+    return;
+  }
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const text = await res.text();
+    log(`reported ${kind}: ${res.status} ${text.slice(0, 80)}`);
+  } catch (err) {
+    log(`could not report ${kind}: ${(err as Error).message}`);
+  }
 }

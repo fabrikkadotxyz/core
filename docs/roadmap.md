@@ -2230,6 +2230,23 @@ invite on the core):
 
 **Clicks:** 1.
 
+## M16 (continued) — The reporting contract (ADR 0054)
+
+> **Built 2026-10-16**, herdr item 3. A run may report its state, its resume
+> command and its end with three HTTP calls and its own run token
+> (`docs/protocol.md`, section 4), or through `fabrikka report`. The three
+> adapters keep their parsers; a report wins for `blocked` and `resume`. Any
+> command can act as an agent for a room with `fabrikka run -- <command>`,
+> Full policy only, offered in Setup → Agents → Connect another way as *Any
+> command*.
+>
+> **Test:** `scripts/acceptance/m16-report.mjs`: reports over HTTP with a
+> run token, the argv rules, the limits, the command through the real
+> client, and a shell command answering a mention. By hand: Connect another
+> way → *Any command* → copy the line → run it with `-- sh -c 'cat; echo
+> hello'` → mention the agent: *hello* is posted. **4 clicks and one paste,
+> once.**
+
 ## M50 — Setup, one question at a time
 
 > **Built 2026-10-15**, after the owner chose it over the stacked column.

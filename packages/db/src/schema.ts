@@ -749,6 +749,8 @@ export const runs = pgTable(
     provider: text('provider'),
     /** --resume handle or thread id, when the provider supports one. */
     resumeHandle: text('resume_handle'),
+    /** ADR 0054: the argv the run reported for resuming it, validated before it is stored; run only by the owning machine. */
+    resumeArgv: jsonb('resume_argv').$type<string[]>(),
     /** running | done | stopped | failed */
     status: text('status').notNull().default('running'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),

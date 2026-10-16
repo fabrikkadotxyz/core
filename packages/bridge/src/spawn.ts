@@ -38,6 +38,8 @@ export const POLICIES: Policy[] = ['read', 'edit', 'full'];
  * whose per-run permission config confines reads too.
  */
 export function policyVerified(provider: Provider, policy: Policy): boolean {
+  // ADR 0054: an arbitrary command is confined by nothing, so it is Full only.
+  if (provider === 'command') return policy === 'full';
   return POLICIES.includes(policy) && (provider === 'claude-code' || provider === 'codex' || provider === 'opencode');
 }
 
@@ -108,6 +110,10 @@ export interface SpawnRequest {
   onActivity?: (line: ActivityLine) => void;
   /** Aborts the run. The server asks for this when a session is paused. */
   signal?: AbortSignal;
+  /** ADR 0054: where this run may report, and as which run. Set as FABRIKKA_REPORT_URL, FABRIKKA_RUN_TOKEN, FABRIKKA_RUN_ID. */
+  report?: { url: string; token: string; runId: string };
+  /** ADR 0054: provider `command`: the argv to run, with the preamble and prompt on stdin. */
+  command?: string[];
 }
 
 export interface SpawnResult {
@@ -121,7 +127,7 @@ export interface SpawnResult {
 
 /** Providers this build knows how to launch. */
 export function isSupported(provider: Provider): boolean {
-  return provider === 'claude-code' || provider === 'codex' || provider === 'opencode';
+  return provider === 'claude-code' || provider === 'codex' || provider === 'opencode' || provider === 'command';
 }
 
 export async function runAgent(req: SpawnRequest): Promise<SpawnResult> {
@@ -132,6 +138,7 @@ export async function runAgent(req: SpawnRequest): Promise<SpawnResult> {
   if (req.provider === 'codex') return runCodex(req);
   if (req.provider === 'opencode') return runOpencode(req);
   if (req.provider === 'claude-code') return runClaude(req);
+  if (req.provider === 'command') return runCommand(req);
   return {
     ok: false,
     text: '',
@@ -655,6 +662,64 @@ const RUN_TIMEOUT_MS = 10 * 60 * 1000;
  * events were all correct and completely useless, arriving after the answer they
  * described.
  */
+/** ADR 0054: the three variables anything Fabrikka runs may report with. */
+function reportEnv(req: SpawnRequest): Record<string, string> {
+  return req.report ? { FABRIKKA_REPORT_URL: req.report.url, FABRIKKA_RUN_TOKEN: req.report.token, FABRIKKA_RUN_ID: req.report.runId } : {};
+}
+
+/**
+ * ADR 0054: any command as an agent. Started once per mention with the
+ * preamble and the prompt on stdin; its stdout is the reply when it posted
+ * nothing itself. Nothing confines it, so the policy is Full by construction.
+ * It may report through the variables; the runner reports start and end.
+ */
+function runCommand(req: SpawnRequest): Promise<SpawnResult> {
+  const argv = req.command ?? [];
+  if (argv.length === 0) return Promise.resolve({ ok: false, text: '', error: 'no command given (fabrikka run -- <command…>)' });
+  return new Promise((resolve) => {
+    const child = spawn(argv[0]!, argv.slice(1), {
+      cwd: req.cwd,
+      env: { ...process.env, ...reportEnv(req) },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill('SIGTERM');
+      resolve({ ok: false, text: stdout, error: `run exceeded ${RUN_TIMEOUT_MS / 60000} minutes and was stopped` });
+    }, RUN_TIMEOUT_MS);
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      child.kill('SIGTERM');
+      resolve({ ok: false, text: stdout, error: 'run was stopped' });
+    };
+    req.signal?.addEventListener('abort', onAbort, { once: true });
+    child.stdout.on('data', (d) => (stdout += String(d)));
+    child.stderr.on('data', (d) => {
+      stderr += String(d);
+      for (const line of String(d).split('\n')) if (line.trim()) req.onLog?.(line);
+    });
+    child.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok: false, text: '', error: `could not start ${argv[0]}: ${err.message}` });
+    });
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      req.signal?.removeEventListener('abort', onAbort);
+      resolve(code === 0 ? { ok: true, text: stdout.trim() } : { ok: false, text: stdout, error: `${argv[0]} exited with ${code}${stderr ? `: ${stderr.trim().slice(0, 200)}` : ''}` });
+    });
+    child.stdin.end(`${req.systemPreamble}\n\n${req.prompt}\n`);
+  });
+}
+
 function execute(
   bin: string,
   args: string[],
@@ -666,8 +731,8 @@ function execute(
     const child = spawn(resolveBin(bin), args, {
       cwd: req.cwd,
       // Inherit the environment: the binary's own credentials live there, and
-      // they are the user's, not ours.
-      env: { ...process.env, ...extraEnv },
+      // they are the user's, not ours. ADR 0054: plus where this run may report.
+      env: { ...process.env, ...reportEnv(req), ...extraEnv },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 

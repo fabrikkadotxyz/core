@@ -87,7 +87,7 @@ const api = (path, init = {}) => {
 const S = await (await api('/sessions', { method: 'POST', body: JSON.stringify({ title: `M16 ${Date.now()}` }) })).json();
 const base = `/o/${S.ownerSlug}/s/${S.publicId}`;
 const made = await (await api(`${base}/agents`, { method: 'POST', body: JSON.stringify({ displayName: `opencode-m16-${Date.now()}`.slice(0, 40), provider: 'opencode' }) })).json();
-check(JSON.stringify(made.setup?.lanes) === '["runner","remote"]', 'an OpenCode agent is offered the runner and the remote lane (no channel: that is Claude Code only)');
+check(JSON.stringify(made.setup?.lanes) === '["runner","remote","command"]', 'an OpenCode agent is offered the runner, the remote lane and Any command (no channel: that is Claude Code only)');
 check(/opencode mcp add fabrikka --url .* --header "Authorization=Bearer /.test(made.setup?.remoteCommand ?? ''), 'the remote lane is phrased for OpenCode: opencode mcp add');
 check(/watch --dir \. --provider opencode$/.test(made.setup?.runnerCommand ?? ''), 'the runner command says --provider opencode');
 

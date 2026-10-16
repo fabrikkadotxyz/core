@@ -812,6 +812,70 @@ Headless runs cannot stop at permission prompts, so prompts are answered by poli
 
 Poll cadence for pending mentions: 5 s, exponential backoff on failure.
 
+## 4. Reporting contract
+
+*(ADR 0054, 2026-10-16.)* Three calls an agent may make about its own run,
+instead of Fabrikka reading each tool's output for them. They never bind an
+agent to a room (that is the owner's act, through Setup) and they never
+replace launching and confining (each tool's own controls, verified per tool).
+
+Anything Fabrikka runs gets three variables; anything that holds them may
+report:
+
+| Variable | Holds |
+| --- | --- |
+| `FABRIKKA_REPORT_URL` | `https://<host>/bridge/o/{owner_id}/s/{session_id}/report` |
+| `FABRIKKA_RUN_TOKEN` | The run's own token (M10): it names the participant, expires with the run, and may do nothing else |
+| `FABRIKKA_RUN_ID` | The run this process is |
+
+A report is one `POST` to the report URL, `Authorization: Bearer <run token>`,
+with a JSON body that names the run:
+
+| Body | Meaning |
+| --- | --- |
+| `{ report: 'state', runId, status, reason?, detail?, completed? }` | The words of the bridge's `status` frame: `working`; `blocked` with `reason` (`permission`, `elicitation`, `input`) and a **redacted** `detail` (120 chars); `idle`, with `completed: true` when a unit of work just finished |
+| `{ report: 'resume', runId, argv }` | How to continue this run later. Stored only if valid (below); executed only when a person asks to resume, on the machine that owns the run, inside the folder and policy the run had (ADR 0016). The server never runs it; the room shows its first word |
+| `{ report: 'release', runId, status? }` | The run is over: `done` (the default), `failed` or `stopped`. The same as the bridge's `run.end` |
+
+The answer is `202` with `{ ok: true }` when the report was taken, and `202`
+with `{ ok: false, ignored: <why> }` for a report kind, status or reason the
+server does not know, so an older or newer reporter never fails (the
+compatibility rules above). `401` without a token, `404` for a run the token
+does not own, `413` past the sizes, `429` past **sixty reports a minute per
+run**.
+
+**A resume argv is valid when**: the first word is a bare command (letters,
+digits, `.`, `_`, `-`; no path separator), found on `PATH` of the machine
+that resumes; no argument holds an apostrophe or a control character; at most
+64 arguments and 8 KiB in all. Anything else is ignored, answered `202`.
+
+**The boundary.** A report is a fact about the reporter's own run: the token
+decides the participant and the session, the body names a run of theirs.
+A report cannot post a message, change a grant or touch an output; those are
+the session's tools, for the model, behind their own gate. Activity steps are
+not reported: they are redacted on the bridge before they cross the wire
+(ADR 0015). Silence is allowed: a run that reports nothing is `working` from
+launch to exit, as the runner says on its behalf. Where both speak, a report
+wins for `blocked` and `resume`; the runner's own `working` and `idle` stand.
+
+**The command.** The client ships one that reads the variables and posts, for
+hooks and shell wrappers; it exits 0 whatever happens:
+
+```
+fabrikka report state blocked --reason permission --detail "Bash"
+fabrikka report resume -- claude --resume 8f3c…
+fabrikka report release --status done
+```
+
+**Any command, as an agent.** `fabrikka run --dir <folder> -- <command…>`
+acts as the runner (`FABRIKKA_URL`, `FABRIKKA_TOKEN` as for `watch`) for an
+agent added with *Connect another way*: on each mention it starts the
+command with the variables set and the preamble and mention on **stdin**,
+reports `working` at start and `idle, completed` at exit itself, posts the
+command's stdout as the reply when it posted nothing, and relays whatever
+the command reported. **Full policy only**: nothing confines an arbitrary
+command, and Setup says so.
+
 ## Session event stream (browser)
 
 Not part of the agent-facing contract, but it shares the access rules, so it is

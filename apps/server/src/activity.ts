@@ -205,6 +205,31 @@ export async function catchUp(
   return { runs: live, activity };
 }
 
+/** ADR 0054: does this run belong to this participant in this session? The token decides both. */
+export async function runBelongsTo(db: Database, sessionId: string, participantId: string, runId: string): Promise<boolean> {
+  return ownRun(db, sessionId, participantId, runId);
+}
+
+/**
+ * ADR 0054 (herdr item 5): a resume argv is data. Kept only when the first
+ * word is a bare command (no path separator), no argument holds an apostrophe
+ * or a control character, and it is at most 64 arguments and 8 KiB in all.
+ */
+export function validResumeArgv(argv: unknown): string[] | null {
+  if (!Array.isArray(argv) || argv.length === 0 || argv.length > 64) return null;
+  if (!argv.every((a) => typeof a === 'string')) return null;
+  const list = argv as string[];
+  if (!/^[A-Za-z0-9._-]+$/.test(list[0]!)) return null;
+  // eslint-disable-next-line no-control-regex
+  if (list.some((a) => /['\u0000-\u001f\u007f]/.test(a))) return null;
+  if (list.reduce((n, a) => n + Buffer.byteLength(a, 'utf8') + 1, 0) > 8 * 1024) return null;
+  return list;
+}
+
+export async function storeResumeArgv(db: Database, runId: string, argv: string[]): Promise<void> {
+  await db.update(runs).set({ resumeArgv: argv }).where(eq(runs.id, runId));
+}
+
 /** M56: the latest buffered step of a run, for the home's Running now. */
 export function lastActivity(runId: string): ActivityEvent | null {
   const buffer = buffers.get(runId);
@@ -218,6 +243,8 @@ export function forgetSession(runIds: string[]): void {
 
 function toRun(row: typeof runs.$inferSelect, displayName: string): Run {
   return {
+    // ADR 0054: the first word of a reported resume argv, never the whole of it.
+    resumeWith: row.resumeArgv?.[0] ?? null,
     id: row.id,
     participantId: row.participantId,
     displayName,

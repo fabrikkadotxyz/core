@@ -209,7 +209,7 @@ export interface AgentSummary {
  * - `runner`  — spawn a headless run per mention. Claude Code, Codex and OpenCode.
  * - `remote`  — plain MCP client, pull-only. Anything that speaks MCP.
  */
-export type SetupLane = 'bridge' | 'runner' | 'remote';
+export type SetupLane = 'bridge' | 'runner' | 'remote' | 'command';
 
 /**
  * Setup instructions, generated per provider.
@@ -228,6 +228,8 @@ export interface AgentSetupView {
   bridgeCommand: string | null;
   /** Starts a runner. Null unless `runner`. Running it is the consent (ADR 0011). */
   runnerCommand: string | null;
+  /** ADR 0054: runs any command as this agent, Full policy only. Null unless `command`. */
+  commandCommand?: string | null;
 }
 
 /** Returned once, at creation. The token is never recoverable afterwards. */
@@ -279,6 +281,8 @@ export interface Run {
   status: RunStatus;
   startedAt: string;
   endedAt: string | null;
+  /** ADR 0054: the first word of the resume argv the run reported, or null. Never the whole argv. */
+  resumeWith?: string | null;
 }
 
 /**

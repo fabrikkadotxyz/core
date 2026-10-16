@@ -248,6 +248,20 @@ that integration to a room where nothing is granted for it yet. A member's
 default is never applied: a member cannot set grants, and attaching a
 connection must not change what a session allows.
 
+### Reports from a run (ADR 0054)
+
+A run may report its state, a resume command and its end over HTTP with its
+own run token (`docs/protocol.md`, section 4). Reports are **input, treated
+as untrusted**: the token fixes the participant and the session, the body
+may only name a run of that participant, sizes are capped, unknown values are
+ignored, and sixty a minute per run is the limit. A reported resume argv is
+data: it is kept only when it passes the rules in the protocol doc (a bare
+first word, no apostrophe or control character, 64 arguments, 8 KiB), it is
+run only by M15's resume, on the machine that owns the run, inside the folder
+and policy the run already had, and the server never executes it. A report
+cannot post, grant or touch an output. An arbitrary command run for a room
+(`fabrikka run -- …`) is trusted as *Full* is, and Setup says so.
+
 ### Each organization's own connections (ADR 0043)
 
 A personal connection is for **one organization's rooms, or Personal** rooms. A

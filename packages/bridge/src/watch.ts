@@ -26,6 +26,8 @@ export interface WatchOptions {
   policy?: Policy;
   allowedTools?: string[];
   log: (...args: unknown[]) => void;
+  /** ADR 0054: provider `command`: the argv to run on each mention, with the mention on its stdin. Full policy only. */
+  command?: string[];
 }
 
 /** A running runner: one agent, one folder, one connection. */
@@ -222,6 +224,9 @@ export async function startRunner(
       mcp: runToken ? { url: config.mcpUrl, token: runToken.token } : undefined,
       // Codex ignores this (it cannot resume with auto-approval); Claude uses it.
       resumeId: opts.provider === 'codex' ? undefined : resumeId,
+      // ADR 0054: where this run may report, as which run.
+      report: runToken ? { url: reportUrl(config), token: runToken.token, runId } : undefined,
+      command: opts.command,
       allowedTools: opts.allowedTools,
       policy,
       onLog: (line) => log(`  ${line}`),
@@ -358,6 +363,11 @@ function buildPrompt(frame: MentionFrame): string {
 function runTokenUrl(config: BridgeConfig): string {
   // The bridge socket URL already carries the right owner/session segments.
   return config.bridgeUrl.replace(/^ws/, 'http') + '/run-token';
+}
+
+/** ADR 0054: the report endpoint beside the run-token one. */
+function reportUrl(config: { bridgeUrl: string }): string {
+  return config.bridgeUrl.replace(/^ws/, 'http') + '/report';
 }
 
 async function mintRunToken(

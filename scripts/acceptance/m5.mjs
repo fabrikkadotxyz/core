@@ -497,10 +497,11 @@ async function findCodex() {
 /* ------------- 6b. setup instructions match the provider */
 
 for (const [provider, expected] of [
-  ['claude-code', ['bridge', 'runner', 'remote']],
-  ['codex', ['runner', 'remote']],
-  ['opencode', ['runner', 'remote']],
-  ['other', ['remote']],
+  // ADR 0054: every provider also gets Any command, last.
+  ['claude-code', ['bridge', 'runner', 'remote', 'command']],
+  ['codex', ['runner', 'remote', 'command']],
+  ['opencode', ['runner', 'remote', 'command']],
+  ['other', ['remote', 'command']],
 ]) {
   const made = (
     await req(`${base}/agents`, {

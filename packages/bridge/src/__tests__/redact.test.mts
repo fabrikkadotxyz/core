@@ -1,5 +1,5 @@
 import { redact, summarise } from '../redact.ts';
-import { codexActivity, opencodeActivity } from '../spawn.ts';
+import { antigravityActivity, codexActivity, opencodeActivity } from '../spawn.ts';
 
 let fails = 0;
 const eq = (label: string, got: unknown, want: unknown) => {
@@ -91,6 +91,19 @@ eq('opencode mcp tools arrive under their server prefix, name only', opencodeAct
 eq('opencode text events are not activity', opencodeActivity('{"type":"text","part":{"type":"text","text":"4242"}}'), null);
 eq('opencode step events are not activity', opencodeActivity('{"type":"step_finish","part":{"type":"step-finish","reason":"stop"}}'), null);
 eq('opencode malformed JSON is ignored', opencodeActivity('{"type":"tool_use"'), null);
+
+// Antigravity (ADR 0055): a tool step appears ACTIVE then DONE; only ACTIVE is reported; tool_info.output is never read.
+const agyActive = '{"event":"step_update","step_update":{"conversation_id":"c1","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"view_file","tool_info":{"name":"view_file","parameters":{"AbsolutePath":"/work/note.txt"}}}}';
+const agyDone = '{"event":"step_update","step_update":{"conversation_id":"c1","step_index":2,"state":"DONE","step_type":"tool","tool_name":"view_file","duration_seconds":0.08,"tool_info":{"name":"view_file","parameters":{"AbsolutePath":"/work/note.txt"},"output":"the number is 8471"}}}';
+eq('antigravity reports a read step with its path, on ACTIVE', antigravityActivity(agyActive), { tool: 'Read', detail: '/work/note.txt' });
+eq('antigravity ignores the DONE twin, so no step appears twice', antigravityActivity(agyDone), null);
+lacks('antigravity never carries the tool output', JSON.stringify(antigravityActivity(agyDone) ?? antigravityActivity(agyActive)), '8471');
+eq('antigravity shell steps keep the program only', antigravityActivity('{"event":"step_update","step_update":{"state":"ACTIVE","step_type":"tool","tool_name":"run_command","tool_info":{"parameters":{"CommandLine":"curl -H \\"Authorization: Bearer sk-abcdefghijklmnopqrstuvwxyz\\" https://x","Cwd":"/work"}}}}'), { tool: 'Bash', detail: 'curl' });
+eq('antigravity edits name the file', antigravityActivity('{"event":"step_update","step_update":{"state":"ACTIVE","step_type":"tool","tool_name":"replace_file_content","tool_info":{"parameters":{"TargetFile":"/work/typo.txt","TargetContent":"teh","ReplacementContent":"the"}}}}'), { tool: 'Edit', detail: '/work/typo.txt' });
+eq('antigravity mcp calls are the name only', antigravityActivity('{"event":"step_update","step_update":{"state":"ACTIVE","step_type":"tool","tool_name":"call_mcp_tool","tool_info":{"parameters":{"ServerName":"fabrikka","ToolName":"post_message","Arguments":{"content":"done"}}}}}'), { tool: 'call_mcp_tool', detail: null });
+eq('antigravity agent_response steps are not activity', antigravityActivity('{"event":"step_update","step_update":{"state":"ACTIVE","step_type":"agent_response","text_delta":"4242"}}'), null);
+eq('antigravity init and result are not activity', antigravityActivity('{"event":"result","result":{"status":"SUCCESS","response":"pong"}}'), null);
+eq('antigravity malformed JSON is ignored', antigravityActivity('{"event":"step_update"'), null);
 
 console.log(fails === 0 ? '\nredaction: PASS' : `\nredaction: ${fails} FAILURE(S)`);
 process.exit(fails === 0 ? 0 : 1);

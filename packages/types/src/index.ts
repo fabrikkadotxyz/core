@@ -722,6 +722,14 @@ export const AGENT_TOOLS: readonly AgentTool[] = [
   },
   // ADR 0047: confined by a per-run permission config, reads included; no caveat.
   { id: 'opencode', name: 'OpenCode', command: 'opencode' },
+  {
+    id: 'antigravity',
+    name: 'Antigravity',
+    command: 'agy',
+    // ADR 0055: plan and accept-edits confine reads and writes, but deny the session's tools in headless mode.
+    caveat:
+      'In Read only and Edit in folder, Antigravity cannot use the session’s tools; its answer is posted for it. Full gives it the tools, after `agy mcp add -- fabrikka fabrikka connect` once on this computer.',
+  },
 ];
 
 export const agentTool = (id: string): AgentTool | undefined => AGENT_TOOLS.find((t) => t.id === id);

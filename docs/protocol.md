@@ -752,6 +752,33 @@ Verified against opencode `1.18.35` by real runs judged by the disk
   started by the host would work in the host's own directory. The runner sets
   `PWD` too.
 
+### Antigravity
+
+```bash
+FABRIKKA_URL=<session mcp url> FABRIKKA_TOKEN=<run token> \   # for the user-level `fabrikka` entry, if any
+agy -p "<session preamble>\n\n<prompt>" --output-format stream-json --disable-slash-commands \
+  --mode plan | --mode accept-edits | --dangerously-skip-permissions \
+  --conversation <id>                                            # when continuing
+```
+
+**Antigravity's policies** (M16, [ADR 0055](decisions/0055-antigravity-on-the-host-plan-is-read-accept-edits-is-edit.md))
+are its own modes, verified against agy `1.3.5` by real runs judged by the
+disk (`scripts/spikes/m16-antigravity-policies.mjs`):
+
+| Policy | Flag | Verified | Session's tools |
+| --- | --- | --- | --- |
+| `read` | `--mode plan` | edits are not applied; a command is refused; a read outside the folder is refused | no: the runner posts the answer |
+| `edit` (default) | `--mode accept-edits` | edits apply; a command, a read and a write outside the folder are refused | no: the runner posts the answer |
+| `full` | `--dangerously-skip-permissions` | a command runs | yes |
+
+**The session's tools** reach a run through one user-level stdio entry the
+person adds once, `agy mcp add -- fabrikka fabrikka connect`: Antigravity
+starts that server with the run's environment, so `FABRIKKA_URL` and
+`FABRIKKA_TOKEN` bind it to this room and this run. There is no per-run MCP
+config in agy, and `http` entries take literal headers. In headless mode
+`call_mcp_tool` is denied under `plan` and `accept-edits`, so only `full`
+reaches the tools; the picker's caveat says so.
+
 ### What the runner reports as activity
 
 Both runners parse the agent's own event stream **incrementally** — a line is
@@ -763,6 +790,7 @@ proceeds. What each stream offers differs:
 | Claude Code | `{"type":"assistant"}` events, each `tool_use` block | One event per call; no de-duplication needed |
 | Codex | `{"type":"item.started"}` events, `command_execution` and `mcp_tool_call` items | **`item.completed` repeats the same item `id`** and is ignored, or every step would appear twice |
 | OpenCode | `{"type":"tool_use"}` events, `part.tool` and `part.state.input` | `part.state.output` is the tool's result and is never read (ADR 0015); MCP tools arrive as `fabrikka_session_<tool>` |
+| Antigravity | `step_update` events with `step_type: "tool"`, on their first appearance (`state: "ACTIVE"`): `tool_name` and `tool_info.parameters` | `tool_info.output` is the tool's result and is never read (ADR 0015); the `DONE` repeat of a step is ignored |
 
 Codex's `item.completed` also carries `aggregated_output` — the command's actual
 stdout. **It is never read.** Tool output is not streamed by design (ADR 0015),

@@ -40,7 +40,8 @@ export const POLICIES: Policy[] = ['read', 'edit', 'full'];
 export function policyVerified(provider: Provider, policy: Policy): boolean {
   // ADR 0054: an arbitrary command is confined by nothing, so it is Full only.
   if (provider === 'command') return policy === 'full';
-  return POLICIES.includes(policy) && (provider === 'claude-code' || provider === 'codex' || provider === 'opencode');
+  // ADR 0055: Antigravity's own modes, verified by the disk (plan, accept-edits, skip-permissions).
+  return POLICIES.includes(policy) && (provider === 'claude-code' || provider === 'codex' || provider === 'opencode' || provider === 'antigravity');
 }
 
 /** Codex features that reach beyond its sandboxed shell: off in read and edit (ADR 0032). */
@@ -127,7 +128,7 @@ export interface SpawnResult {
 
 /** Providers this build knows how to launch. */
 export function isSupported(provider: Provider): boolean {
-  return provider === 'claude-code' || provider === 'codex' || provider === 'opencode' || provider === 'command';
+  return provider === 'claude-code' || provider === 'codex' || provider === 'opencode' || provider === 'antigravity' || provider === 'command';
 }
 
 export async function runAgent(req: SpawnRequest): Promise<SpawnResult> {
@@ -138,12 +139,13 @@ export async function runAgent(req: SpawnRequest): Promise<SpawnResult> {
   if (req.provider === 'codex') return runCodex(req);
   if (req.provider === 'opencode') return runOpencode(req);
   if (req.provider === 'claude-code') return runClaude(req);
+  if (req.provider === 'antigravity') return runAntigravity(req);
   if (req.provider === 'command') return runCommand(req);
   return {
     ok: false,
     text: '',
     error:
-      `provider "${req.provider}" cannot be spawned. Supported: claude-code, codex, opencode. ` +
+      `provider "${req.provider}" cannot be spawned. Supported: claude-code, codex, opencode, antigravity, command. ` +
       'Attach it as a live session instead.',
   };
 }
@@ -643,6 +645,134 @@ export function opencodeActivity(line: string): ActivityLine | null {
 
 function emitOpencodeActivity(line: string, req: SpawnRequest): void {
   const activity = opencodeActivity(line);
+  if (!activity) return;
+  req.onLog?.(`tool: ${activity.tool}`);
+  req.onActivity?.(activity);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Antigravity (ADR 0055)                                                     */
+/* -------------------------------------------------------------------------- */
+
+/** The agy flags for a policy. Exactly what scripts/spikes/m16-antigravity-policies.mjs verified (agy 1.3.5). */
+export function antigravityPolicyArgs(policy: Policy): string[] {
+  if (policy === 'read') return ['--mode', 'plan'];
+  if (policy === 'edit') return ['--mode', 'accept-edits'];
+  return ['--dangerously-skip-permissions'];
+}
+
+/**
+ * Antigravity CLI.
+ *
+ * `agy -p --output-format stream-json` prints one event per line; `result`
+ * carries the answer and the conversation id, `--conversation` resumes it. The
+ * session's tools reach a run only through a user-level stdio entry (`agy mcp
+ * add -- fabrikka fabrikka connect`) that inherits the run's environment, and
+ * only in Full: headless runs deny `call_mcp_tool` under plan and accept-edits.
+ * The runner posts the answer for a run that posted nothing, as for any tool.
+ */
+async function runAntigravity(req: SpawnRequest): Promise<SpawnResult> {
+  const policy = req.policy ?? 'full';
+  const args = ['-p', `${req.systemPreamble}\n\n${req.prompt}`, '--output-format', 'stream-json', '--disable-slash-commands', ...antigravityPolicyArgs(policy)];
+  if (req.resumeId) args.push('--conversation', req.resumeId);
+
+  const out = await execute(
+    'agy',
+    args,
+    req,
+    // The user-level `fabrikka` entry, if any, binds to this room and run through these.
+    req.mcp ? { FABRIKKA_URL: req.mcp.url, FABRIKKA_TOKEN: req.mcp.token } : {},
+    (line) => emitAntigravityActivity(line, req),
+  );
+
+  let conversationId: string | undefined;
+  let response: string | undefined;
+  let status: string | undefined;
+  let error: string | undefined;
+  for (const line of out.text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{')) continue;
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (event.event === 'init') conversationId = (event.conversation_id as string | undefined) ?? conversationId;
+    if (event.event === 'result') {
+      const r = event.result as { conversation_id?: string; status?: string; response?: string; error?: string } | undefined;
+      conversationId = r?.conversation_id ?? conversationId;
+      status = r?.status;
+      response = r?.response;
+      if (r?.error) error = r.error;
+    }
+  }
+  const text = (response ?? '').trim();
+  if (!out.ok) return { ok: false, text: '', error: error ?? out.error, resumeId: conversationId };
+  if (status && status !== 'SUCCESS' && !text) return { ok: false, text: '', error: error ?? `Antigravity ended with ${status}`, resumeId: conversationId };
+  return { ok: true, text, resumeId: conversationId };
+}
+
+/** Antigravity's tool names, as the summariser knows them. Anything else is named and nothing more. */
+const ANTIGRAVITY_TOOLS: Record<string, string> = {
+  view_file: 'Read',
+  view_file_outline: 'Read',
+  replace_file_content: 'Edit',
+  multi_replace_file_content: 'Edit',
+  sed_file: 'Edit',
+  write_to_file: 'Write',
+  run_command: 'Bash',
+  grep_search: 'Grep',
+  find_by_name: 'Glob',
+  list_dir: 'Glob',
+  read_url_content: 'WebFetch',
+  search_web: 'WebSearch',
+  invoke_subagent: 'Task',
+  browser_subagent: 'Task',
+};
+
+/**
+ * One line of `agy --output-format stream-json`, as an activity line or nothing.
+ *
+ * Pure, so the stream shape can be unit-tested against captured lines. Verified
+ * against agy 1.3.5: a tool step appears twice, `ACTIVE` then `DONE`; only the
+ * first is reported. **`tool_info.output` is the tool's result and is never
+ * read** (ADR 0015). Antigravity names its arguments in its own way
+ * (`AbsolutePath`, `TargetFile`, `CommandLine`, `Query`, `Pattern`, `Url`), so
+ * the one descriptor each summariser case reads is mapped here, and only that one.
+ */
+export function antigravityActivity(line: string): ActivityLine | null {
+  if (!line.startsWith('{')) return null;
+  let event: Record<string, unknown>;
+  try {
+    event = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (event.event !== 'step_update') return null;
+  const step = event.step_update as { step_type?: string; state?: string; tool_name?: string; tool_info?: { parameters?: Record<string, unknown> } } | undefined;
+  if (step?.step_type !== 'tool' || step.state !== 'ACTIVE' || !step.tool_name) return null;
+  const p = step.tool_info?.parameters ?? {};
+  const name = ANTIGRAVITY_TOOLS[step.tool_name];
+  // call_mcp_tool and anything unknown: the name only.
+  if (!name) return summarise({ name: step.tool_name });
+  const args =
+    name === 'Bash'
+      ? { command: p.CommandLine ?? p.Command ?? p.command }
+      : name === 'Glob' || name === 'Grep'
+        ? { pattern: p.Pattern ?? p.Query ?? p.SearchDirectory ?? p.DirectoryPath }
+        : name === 'WebFetch'
+          ? { url: p.Url ?? p.url }
+          : name === 'WebSearch'
+            ? { query: p.query ?? p.Query }
+            : name === 'Task'
+              ? {}
+              : { file_path: p.AbsolutePath ?? p.TargetFile ?? p.FilePath ?? p.file_path };
+  return summarise({ name, args });
+}
+
+function emitAntigravityActivity(line: string, req: SpawnRequest): void {
+  const activity = antigravityActivity(line);
   if (!activity) return;
   req.onLog?.(`tool: ${activity.tool}`);
   req.onActivity?.(activity);

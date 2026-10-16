@@ -248,6 +248,18 @@ that integration to a room where nothing is granted for it yet. A member's
 default is never applied: a member cannot set grants, and attaching a
 connection must not change what a session allows.
 
+### Antigravity on the host (M16)
+
+Confined by its own modes ([ADR 0055](decisions/0055-antigravity-on-the-host-plan-is-read-accept-edits-is-edit.md)):
+*plan* applies no edits and refuses commands and reads outside the folder;
+*accept-edits* applies edits and refuses commands, reads and writes outside
+the folder; *skip-permissions* is Full. The session's tools reach a run only
+through a user-level stdio entry the person adds once, which takes the room
+and the run token from the environment, and only in Full, because headless
+runs deny MCP calls under the confined modes. The runner's own process
+environment is what reaches that entry: nothing is written to the person's
+config by Fabrikka.
+
 ### Reports from a run (ADR 0054)
 
 A run may report its state, a resume command and its end over HTTP with its

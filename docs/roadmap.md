@@ -655,6 +655,26 @@ Not on the list, deliberately: **Cursor IDE, the Antigravity IDE, Cline,
 Windsurf.** IDEs and extensions with no headless CLI of their own (the Antigravity
 CLI is slot 1 and ships separately from the IDE). They get Lane A today and need nothing from us.
 
+> **Built 2026-10-16: slot 1, Antigravity CLI** ([ADR 0055](decisions/0055-antigravity-on-the-host-plan-is-read-accept-edits-is-edit.md)),
+> agy 1.3.5, verified by real runs under the owner's real home, judged by the
+> disk (`scripts/spikes/m16-antigravity-policies.mjs`). `--mode plan` is Read
+> only (edits not applied, commands and reads outside the folder refused),
+> `--mode accept-edits` is Edit in folder (edits apply; commands, reads and
+> writes outside the folder refused), `--dangerously-skip-permissions` is
+> Full. The session's tools reach a run through one user-level stdio entry,
+> `agy mcp add -- fabrikka fabrikka connect`, which inherits the run's
+> `FABRIKKA_URL` and `FABRIKKA_TOKEN`, and only in Full: headless runs deny
+> `call_mcp_tool` under plan and accept-edits. The picker's caveat says so;
+> confined runs answer through the runner's relay. `--conversation` resumes.
+>
+> **Test (Antigravity):** **Add my agent →** a folder **→ Antigravity →** tick
+> the caveat **→ Add**: 4 clicks and a tick. Mention it: it answers. In an
+> *Edit in folder* folder, ask it to fix a typo: fixed; ask for a shell
+> command: refused, and it says so. In a *Full* folder, after the one-time
+> `agy mcp add`, ask it to post a message itself: it does.
+> `scripts/acceptance/m16-antigravity.mjs` checks the static parts, and with
+> `FABRIKKA_TEST_SPAWN=1` runs real `agy` runs through the runner's own code.
+
 > **Built 2026-10-15: slot 2, OpenCode** ([ADR 0047](decisions/0047-opencode-on-the-host-is-confined-by-a-per-run-config.md)).
 > Verified first, by real `opencode run` runs judged by the disk
 > (`scripts/spikes/m16-opencode-policies.mjs`, opencode 1.18.35). What landed:
@@ -688,7 +708,9 @@ CLI is slot 1 and ships separately from the IDE). They get Lane A today and need
 > are soft-denied rather than hung. Blocked: MCP servers and permission
 > allow-rules live only in the user-level config, with no per-run override
 > found yet. Until there is one, an adapter would have to edit the user's own
-> config, which ADR 0002 forbids. Antigravity stays Lane A.
+> config, which ADR 0002 forbids. Antigravity stays Lane A. *(Superseded
+> 2026-10-16: agy 1.3.5's modes confine, and one fixed stdio entry inherits
+> the run's environment. ADR 0055, the block above.)*
 >
 > **Test (OpenCode).**
 > 1. In a session: **Setup → Add my agent →** a folder **→ OpenCode → Add**:

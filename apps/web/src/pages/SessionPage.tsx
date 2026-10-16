@@ -1807,7 +1807,9 @@ function AgentSetup({
                 ? 'Registers the session with Claude Code. '
                 : agent.provider === 'opencode'
                   ? 'Registers the session with OpenCode. '
-                  : 'Point any MCP client at this endpoint. '}
+                  : agent.provider === 'antigravity'
+                    ? 'Registers this room with Antigravity, as a fixed entry with this token. '
+                    : 'Point any MCP client at this endpoint. '}
             The agent can read and post, but <strong>cannot be woken</strong>: it
             participates only while it happens to be running.
           </p>

@@ -878,7 +878,7 @@ Server → host:
 | Frame | Meaning |
 | --- | --- |
 | `{ type: 'organizations', organizations: [{ id, name }] }` | *(ADR 0043)* The organizations of this device's owner, for the Folders window's *For*. Sent on connect and when they change. The host answers with `grants` |
-| `{ type: 'bindings', bindings: [{ id, grantId, provider, agent, session, fromPersonal?, mcpUrl, bridgeUrl, token }] }` | The agents bound to this machine, each with a **fresh token** minted for this connection (the previous one is revoked). Sent on connect, whenever a binding is added or removed, and *(ADR 0043)* after the owner left an organization. *(ADR 0050: a room's organization never changes, so that is no longer a trigger; the frame is unchanged.)* `session` is `{ title, ownerSlug, publicId, org }`: `org` is the room's organization, null for none. Only bindings the room may use are sent (an organization's room: that organization's grants; a room in none: any); `fromPersonal: true` marks a Personal grant bound in an organization's room before ADR 0043, which is honoured. **Carries no path, command line, flag or policy** |
+| `{ type: 'bindings', bindings: [{ id, grantId, provider, agent, session, fromPersonal?, mcpUrl, bridgeUrl, token }] }` | The agents bound to this machine, each with a **fresh token** minted for this connection (the previous one is revoked). Sent on connect, whenever a binding is added or removed, and *(ADR 0043)* after the owner left an organization. *(ADR 0050: a room's organization never changes, so that is no longer a trigger; the frame is unchanged.)* `session` is `{ title, ownerSlug, publicId, org }`: `org` is the room's organization, null for none. Only bindings the room may use are sent (an organization's room: that organization's grants; a room in none: Personal grants only, since ADR 0043's amendment of 2026-10-16); `fromPersonal: true` marks a Personal grant bound in an organization's room before ADR 0043, which is honoured. **Carries no path, command line, flag or policy** |
 | `{ type: 'binding', binding }` | One agent was just bound to this machine: the same shape as an entry above, with its own fresh token. The others keep theirs, because re-minting them would revoke tokens that running agents are using |
 | `{ type: 'revoked' }` | The device was revoked on the web. The host stops every run and forgets its token |
 | `{ type: 'client', version }` | *(M33)* The client version this server serves at `/downloads/manifest.json`. Sent once on connect. A host whose own version differs says "update available"; it never updates itself (ADR 0030). Omitted when the server has no client build |
@@ -891,8 +891,9 @@ against its own config to a folder and a policy, and refuses to run if the grant
 gone, the folder is missing, the provider has no verified policy, or *(ADR 0043)*
 the room is an organization's (`session.org`) and the grant isn't for that
 organization, unless it's a Personal grant marked `fromPersonal`. A room in no
-organization may use any grant. A binding without `session.org` (an older server) is
-treated as a room in no organization.
+organization may use Personal grants only (amended 2026-10-16; before, any).
+A binding without `session.org` (an older server) is treated as a room in no
+organization.
 
 ### Controlling a host over stdio (M34)
 

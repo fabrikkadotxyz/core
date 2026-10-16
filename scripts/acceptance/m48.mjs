@@ -141,9 +141,11 @@ try {
   check(!!(await until(async () => ['connected', 'idle'].includes(await status()))), '…and the host connects the agent');
 
   const mine = (await req('/sessions', { method: 'POST', body: { title: `Personal room ${stamp}` }, jar: me })).json;
-  // One way only: your personal rooms may use any of your folders.
-  const inMine = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: acmeGrant.id }, jar: me });
-  check(inMine.status === 201, "…but a personal room may use Acme's folder");
+  // ADR 0043 (amended 2026-10-16): a personal room uses Personal folders only; an organization's folder is refused there too.
+  const acmeInMine = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: acmeGrant.id }, jar: me });
+  check(acmeInMine.status === 400 && new RegExp(`for ${acme.name}`).test(acmeInMine.json?.error ?? ''), "ACME'S FOLDER IS REFUSED IN A PERSONAL ROOM, saying why");
+  const inMine = await req(`/o/${mine.ownerSlug}/s/${mine.publicId}/agents/host`, { method: 'POST', body: { deviceId: dev.id, grantId: personalGrant.id }, jar: me });
+  check(inMine.status === 201, '…and the Personal folder is accepted there');
   const mineStatus = () =>
     req(`/o/${mine.ownerSlug}/s/${mine.publicId}`, { jar: me }).then((r) => r.json?.participants.find((p) => p.displayName === inMine.json?.agent?.displayName)?.status);
   check(!!(await until(async () => ['connected', 'idle'].includes(await mineStatus()))), '…and the host runs it there');

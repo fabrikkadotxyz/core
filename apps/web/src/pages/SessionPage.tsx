@@ -1353,10 +1353,8 @@ function AgentsPanel({
     }
   };
 
-  // An organization's room: only its folders. A personal room: any of yours (ADR 0043).
-  const inScope = (g: DeviceSummary['grants'][number]) => !roomOrg || (g.org ?? null) === roomOrg.id;
-  const { teams: myOrgs } = useWorkspace();
-  const orgLabel = (org: string | null) => (org ? (myOrgs.find((t) => t.id === org)?.name ?? 'an organization') : 'Personal');
+  // A room offers the folders of its own scope only: its organization's, or the Personal ones (ADR 0043, amended 2026-10-16).
+  const inScope = (g: DeviceSummary['grants'][number]) => (g.org ?? null) === (roomOrg?.id ?? null);
   const scopeName = roomOrg ? roomOrg.name : 'Personal rooms';
   const elsewhere = (myDevices ?? []).some((d) => d.grants.some((g) => g.usable && !inScope(g)));
   const folders = (myDevices ?? []).flatMap((d) =>
@@ -1452,7 +1450,6 @@ function AgentsPanel({
                     <span className="muted small">
                       on {f.device}
                       {f.online ? '' : ' (offline)'}
-                      {!roomOrg && ` · for ${orgLabel(f.org)}`}
                     </span>
                   </span>
                 </label>

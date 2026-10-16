@@ -246,9 +246,10 @@ export async function bindAgent(
     .where(and(eq(deviceGrants.deviceId, opts.deviceId), eq(deviceGrants.grantId, opts.grantId)))
     .limit(1);
   if (!grant) throw new DeviceError('that folder is not granted on this device');
-  // ADR 0043: an organization's room takes only that organization's folders;
-  // a personal room takes any of yours.
-  if (opts.sessionTeamId !== null && (grant.teamId ?? null) !== opts.sessionTeamId) {
+  // ADR 0043 (amended 2026-10-16): a room takes the folders of its own scope
+  // only: an organization's room that organization's, a room in none the
+  // Personal ones.
+  if ((grant.teamId ?? null) !== opts.sessionTeamId) {
     const [t] = grant.teamId ? await db.select({ name: teams.name }).from(teams).where(eq(teams.id, grant.teamId)).limit(1) : [];
     throw new DeviceError(`this folder is for ${t ? t.name : 'Personal rooms'}, not this room`);
   }
@@ -325,13 +326,13 @@ export async function bindingsForDevice(db: Database, deviceId: string, publicUr
 
   const out = [];
   for (const r of rows) {
-    // ADR 0043: an organization's room, only its own folders (or an old Personal
-    // binding, marked); a personal room, any. A folder of an organization
-    // they've left isn't reported, so isn't here.
+    // ADR 0043 (amended 2026-10-16): a room, only the folders of its own scope
+    // (or an old Personal binding in an organization's room, marked). A folder
+    // of an organization they've left isn't reported, so isn't here.
     const grantOrg = r.granted ? (r.grantOrg ?? null) : undefined;
     if (grantOrg === undefined) continue;
     const roomOrg = r.roomOrg ?? null;
-    if (roomOrg !== null && grantOrg !== roomOrg && !(grantOrg === null && r.fromPersonal)) continue;
+    if (grantOrg !== roomOrg && !(grantOrg === null && r.fromPersonal)) continue;
     if (r.tokenId) await db.update(sessionTokens).set({ revokedAt: new Date() }).where(eq(sessionTokens.id, r.tokenId));
     const token = generateToken();
     const [t] = await db

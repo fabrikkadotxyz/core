@@ -46,15 +46,17 @@ move something, remove it and add it again.
 - **The host reports it:** the `grants` frame gains `org` per grant. The
   server stores it (`device_grants.team_id`), and ignores a grant scoped to
   an organization you're not in (as if it weren't sent).
-- **One way only (amended 2026-10-13, the owner's decision): a personal room
-  may use any of your folders; an organization's room only that organization's.**
-  Your personal rooms are your own workspace, and you're in every organization
-  whose folders you hold. The other direction is what this ADR is for: no
-  Personal folder, and no other organization's, in an organization's room.
-- **"Add my agent"** lists what the room may use: in an organization's room,
-  that organization's folders; in a personal room, all of yours, each marked
-  with its organization. `bindAgent` refuses the rest: *"this folder is for
-  <org>, not this room"*.
+- **Both ways (amended 2026-10-16, the owner's decision, reversing the one-way
+  rule of 2026-10-13): a room uses the folders of its own scope and no other.**
+  An organization's room, that organization's folders; a room in no
+  organization, the *Personal* folders. The one-way rule let a personal room
+  reach every organization's folder, and the owner saw other organizations'
+  folders offered in a room where they were not working for them. The rule
+  the owner stated: the organization chosen is the one everything assumes
+  (ADR 0050), and a room in none assumes Personal.
+- **"Add my agent"** lists what the room may use: that organization's folders,
+  or the Personal ones in a room in no organization. `bindAgent` refuses the
+  rest: *"this folder is for <org>, not this room"*.
 - **The machine checks too.** A binding now says its room's scope
   (`session.org`). The host refuses to start a run in an organization's room
   whose grant is scoped elsewhere. The server can't steer a folder into another organization's
@@ -98,10 +100,10 @@ scope. New ones follow the rule.
 
 ## Consequences
 
-- **A personal room can reach an organization's folder.** Anyone you've let
-  into that room (a link invitee, a guest) can ask your agent about that
-  organization's code. Bringing an organization's folder into a personal room
-  is the room owner's own call; an organization's rooms never get it.
+- **A personal room cannot reach an organization's folder** (since
+  2026-10-16; it could, between 2026-10-13 and then). Someone you've let into
+  a personal room by link can never ask your agent about an organization's
+  code: that happens in the organization's rooms, with its roster.
 - Two organizations means adding a folder, and connecting a vendor, twice.
   That's the point: each is a decision about which organization gets what.
 - The host protocol changes (`docs/protocol.md`): a new server frame, a new

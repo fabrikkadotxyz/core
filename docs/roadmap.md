@@ -2130,7 +2130,8 @@ invite on the core):
   once per organization, each with its own policy.
 - **An organization's room offers only its folders;** the server refuses any
   other, and the host refuses to run one even if asked. **A personal room
-  offers all of yours,** each marked with its organization.
+  offers only your Personal folders** (amended 2026-10-16 in ADR 0043: until
+  then it offered all of yours, marked).
 - **Leaving an organization** stops its folders being offered or run. (A room
   changing organization re-checked its agents until ADR 0050 removed moving.)
 - **Existing folders are Personal.** One already bound in an organization's
@@ -2156,7 +2157,7 @@ invite on the core):
    Add the same repo **For: Client**, as *Read only*. Both are listed, tagged.
 2. In an Acme room, **Add my agent** offers only the Acme folder → **Add**:
    the agent answers a mention. In a Client room, only the Client one. In a
-   personal room, all of them, marked *Acme* and *Client*.
+   personal room, neither: only folders added *For: Personal*.
 3. *(Removed by ADR 0050: a room's organization is fixed at creation.)*
 4. Settings → Personal integrations: GitHub, connected for all your rooms,
    attaches in an Acme room and in a Client room alike. Then *Use in: only

@@ -71,7 +71,7 @@ function YourAgent() {
   return (
     <div className="your-agent">
       <h3 className="subhead">The agents you use</h3>
-      <AgentChoice picked={agents} onPick={(id) => save(agents.includes(id) ? agents.filter((a) => a !== id) : [...agents, id])} compact />
+      <AgentChoice picked={agents} onPick={(id) => save(agents.includes(id) ? agents.filter((a) => a !== id) : [...agents, id])} />
       <WantedChoice picked={state.wanted} onChange={(w) => save(agents, w)} />
       <p className="muted small">The first comes first in Add my agent; every installed tool stays offered.</p>
     </div>

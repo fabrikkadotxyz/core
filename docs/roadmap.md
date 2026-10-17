@@ -2103,19 +2103,22 @@ on is one-time.
 > 2026-10-17:** several agents, each with its logo, and the ones you wish
 > Fabrikka ran.
 >
-> - **"Which agents do you use?"** One card per tool in the registry (Claude
->   Code, Codex, OpenCode, Antigravity), each with the tool's logo, and
->   *Something else, or none yet*. **Any number may be ticked.** The choice
+> - **"Which agents do you use?"** One narrow list, a row per tool in the
+>   registry (Claude Code, Codex, OpenCode, Antigravity): a checkbox, the
+>   tool's logo, its name, nothing else; then *Something else, or none yet*.
+>   **Any number may be ticked.** (The owner's pick of three on 2026-10-17:
+>   less text, no blurbs.) The choice
 >   is saved to the account (`users.preferred_agents`) and shapes what
 >   follows: *Add my agent* preselects the first of them the folder offers,
 >   *Connect another way* starts on it, *Get started*'s step 3 names it
 >   (*Bring Claude Code*), and *Your devices* shows the same cards. It is a
 >   preference, never a restriction: any installed tool stays offered.
 >   Changed any time at the top of *Your devices*.
-> - **"Which others would you want Fabrikka to run?"** on the same screen,
->   below: chips for agents Fabrikka does not run yet (Cursor, Gemini CLI,
->   GitHub Copilot CLI, Aider, Amp, Cline, Goose, Kiro, Windsurf, Warp,
->   Claude's own app, ChatGPT) and a line for another name. Saved to the
+> - **"Others you'd want Fabrikka to run"** on the same screen, below: one
+>   field that grows a chip per name as you type, with the agents Fabrikka
+>   does not run yet suggested as you go (Cursor, Gemini CLI, GitHub Copilot
+>   CLI, Aider, Amp, Cline, Goose, Kiro, Windsurf, Warp, Claude's own app,
+>   ChatGPT); a name none of them match is kept as typed. Saved to the
 >   account (`users.wanted_agents`), read by nobody but the instance's
 >   admin, as counts: `pnpm admin agents` prints how many people use and
 >   want each. Nothing leaves the instance; it is how the owner learns which

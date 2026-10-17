@@ -1,9 +1,10 @@
 /**
  * The welcome (M47, amended 2026-10-16 and 2026-10-17): once per account, two
- * screens. First "Which agents do you use?", one card per tool in the registry
- * with its logo, any number ticked, plus "something else"; below it, "which
- * others would you want Fabrikka to run?", chips for agents not run yet and a
- * line for another name. The choices shape Add my agent, Connect another way,
+ * screens. First "Which agents do you use?", one narrow list, a row per tool
+ * in the registry with its logo and a checkbox, any number ticked, plus
+ * "something else"; below it, one field for the agents not run yet that you
+ * would want, growing a chip per name, with the known names suggested as you
+ * type. The choices shape Add my agent, Connect another way,
  * Get started and Your devices, and are never a restriction; the wishes are
  * counted by the admin and say which adapter to build next. Then "Pick a look":
  * choosing previews it here; Continue saves everything to the account and goes
@@ -18,78 +19,95 @@ import { markWelcomedLocally, refreshOnboarding } from '../onboarding.ts';
 import { previewTheme, useThemes } from '../themes.ts';
 import { ThemePicker } from './AppearancePage.tsx';
 
-/** What each tool is, in a line, for someone choosing. */
-const BLURB: Record<string, string> = {
-  'claude-code': 'Anthropic’s terminal agent. Fabrikka can also follow a live session.',
-  codex: 'OpenAI’s terminal agent. Confines writes in a folder, not reads.',
-  opencode: 'The open-source terminal agent. Confined fully; free models by default.',
-  antigravity: 'Google’s terminal agent. Confined fully; the room’s tools in Full folders.',
-};
-
-/** The registry's tools and "something else", as cards; any number ticked. */
-export function AgentChoice({ picked, onPick, compact = false }: { picked: string[]; onPick: (id: string) => void; compact?: boolean }) {
-  const card = (id: string, name: string, blurb: string) => {
+/**
+ * The registry's tools and "something else", as one narrow list (the owner's
+ * pick of three, 2026-10-17): a checkbox, the logo, the name, a hairline
+ * between rows. No blurbs: the name and the mark are the whole row. Any
+ * number ticked.
+ */
+export function AgentChoice({ picked, onPick }: { picked: string[]; onPick: (id: string) => void }) {
+  const row = (id: string, name: string) => {
     const on = picked.includes(id);
     return (
-      <button key={id} type="button" role="checkbox" aria-checked={on} className={`agent-card${on ? ' on' : ''}${compact ? ' compact' : ''}`} onClick={() => onPick(id)}>
-        <span className="agent-card-head">
-          <AgentLogo id={id} name={name} size={compact ? 22 : 28} />
-          <strong>{name}</strong>
-          <span className="agent-tick" aria-hidden>
-            {on ? '✓' : ''}
-          </span>
-        </span>
-        {!compact && <span className="muted small">{blurb}</span>}
-      </button>
+      <label key={id} className={`agent-row${on ? ' on' : ''}${id === 'other' ? ' other' : ''}`}>
+        <input type="checkbox" checked={on} onChange={() => onPick(id)} />
+        <AgentLogo id={id} name={name} size={22} />
+        <span>{name}</span>
+      </label>
     );
   };
   return (
-    <div className="agent-cards" role="group" aria-label="Which agents do you use?">
-      {AGENT_TOOLS.map((t) => card(t.id, t.name, BLURB[t.id] ?? `Runs as ${t.command}.`))}
-      {card('other', 'Something else, or none yet', 'Any MCP client can join a room; you can pick a tool later.')}
+    <div className="agent-list" role="group" aria-label="Which agents do you use?">
+      {AGENT_TOOLS.map((t) => row(t.id, t.name))}
+      {row('other', 'Something else, or none yet')}
     </div>
   );
 }
 
-/** Agents Fabrikka does not run yet: chips to tick, and a line for another name. */
+/**
+ * Agents Fabrikka does not run yet: one field that grows a chip per wish as
+ * you type, with the known names suggested as you go; a name none of them
+ * match is kept as typed.
+ */
 export function WantedChoice({ picked, onChange }: { picked: string[]; onChange: (wanted: string[]) => void }) {
-  const [other, setOther] = useState('');
-  const known = new Set<string>(WANTED_AGENTS.map((w) => w.id));
-  const free = picked.filter((w) => !known.has(w));
-  const toggle = (id: string) => onChange(picked.includes(id) ? picked.filter((w) => w !== id) : [...picked, id]);
-  const addOther = () => {
-    const t = other.trim().slice(0, WANTED_NAME_MAX);
-    if (!t || picked.includes(t) || picked.length >= WANTED_MAX) return;
+  const [text, setText] = useState('');
+  const nameOf = (w: string) => WANTED_AGENTS.find((x) => x.id === w)?.name ?? w;
+  const q = text.trim().toLowerCase();
+  const suggestions = WANTED_AGENTS.filter((w) => !picked.includes(w.id) && (q === '' || w.name.toLowerCase().includes(q)));
+  const full = picked.length >= WANTED_MAX;
+  const add = (w: string) => {
+    const t = w.trim().slice(0, WANTED_NAME_MAX);
+    if (!t || picked.includes(t) || full) return;
     onChange([...picked, t]);
-    setOther('');
+    setText('');
+  };
+  const remove = (w: string) => onChange(picked.filter((x) => x !== w));
+  const submit = () => {
+    if (!q) return;
+    // A typed name that matches a known one, or its id, is that one.
+    const known = WANTED_AGENTS.find((w) => w.name.toLowerCase() === q || w.id === q) ?? (suggestions.length === 1 ? suggestions[0] : undefined);
+    add(known ? known.id : text);
   };
   return (
-    <div className="wanted" aria-label="Which others would you want Fabrikka to run?">
-      <p className="wanted-q">Which others would you want Fabrikka to run?</p>
-      <div className="chips">
-        {WANTED_AGENTS.map((w) => (
-          <button key={w.id} type="button" role="checkbox" aria-checked={picked.includes(w.id)} className={`chip wanted-chip${picked.includes(w.id) ? ' on' : ''}`} onClick={() => toggle(w.id)}>
-            {w.name}
-          </button>
+    <div className="wanted">
+      <label htmlFor="wanted-input" className="wanted-q">
+        Others you’d want Fabrikka to run
+      </label>
+      <div className="wanted-box">
+        {picked.map((w) => (
+          <span key={w} className="chip on">
+            {nameOf(w)}
+            <button type="button" className="chip-x" aria-label={`Remove ${nameOf(w)}`} onClick={() => remove(w)}>
+              ×
+            </button>
+          </span>
         ))}
-        {free.map((w) => (
-          <button key={w} type="button" role="checkbox" aria-checked className="chip wanted-chip on" onClick={() => toggle(w)} title="Click to remove">
-            {w}
-          </button>
-        ))}
+        <input
+          id="wanted-input"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submit();
+            } else if (e.key === 'Backspace' && text === '' && picked.length > 0) remove(picked[picked.length - 1]!);
+          }}
+          maxLength={WANTED_NAME_MAX}
+          placeholder={picked.length ? '' : 'type a name…'}
+          disabled={full}
+          aria-label="Another agent you would want"
+        />
       </div>
-      <form
-        className="wanted-other"
-        onSubmit={(e) => {
-          e.preventDefault();
-          addOther();
-        }}
-      >
-        <input value={other} onChange={(e) => setOther(e.target.value)} maxLength={WANTED_NAME_MAX} placeholder="Another one? Its name" aria-label="Another agent you would want" />
-        <button type="submit" disabled={!other.trim() || picked.length >= WANTED_MAX}>
-          Add
-        </button>
-      </form>
+      {q !== '' && suggestions.length > 0 && (
+        <div className="chips wanted-suggest" aria-label="Suggestions">
+          {suggestions.map((w) => (
+            <button key={w.id} type="button" className="chip" onClick={() => add(w.id)}>
+              {w.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {q === '' && suggestions.length > 0 && <p className="muted small wanted-hint">Suggestions as you type: {suggestions.map((w) => w.name).join(' · ')}</p>}
     </div>
   );
 }
@@ -131,14 +149,15 @@ export function WelcomePage() {
     return (
       <main className="column welcome">
         <h1>Welcome to Fabrikka. Which agents do you use?</h1>
-        <p className="muted">Fabrikka runs them in rooms, on your computer. Tick any number; this only sets what comes first, and every installed tool stays offered.</p>
-        <AgentChoice picked={agents} onPick={toggleAgent} />
-        <WantedChoice picked={wanted} onChange={setWanted} />
+        <div className="welcome-narrow">
+          <AgentChoice picked={agents} onPick={toggleAgent} />
+          <WantedChoice picked={wanted} onChange={setWanted} />
+        </div>
         <div className="welcome-actions">
           <button className="primary" onClick={() => setStep('look')}>
             Continue
           </button>
-          <span className="muted small">Change it any time in Your devices.</span>
+          <span className="muted small">change any time</span>
         </div>
       </main>
     );

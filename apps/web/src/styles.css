@@ -2625,24 +2625,23 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, 0.5); }
 .presence.blocked::before { background: var(--warn); }
 
 /* ---- M47 (amended 2026-10-16): which agent do you use ---- */
-.agent-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 12px 0 4px; }
-.agent-card { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text); cursor: pointer; font: inherit; }
-/* Outranks button:hover:not(:disabled), which would paint the card with the accent and lose its text. */
-.agent-card:hover:not(:disabled) { border-color: var(--accent); background: var(--hover, var(--panel)); color: var(--text); }
-.agent-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft, transparent); }
-.agent-card strong { font-size: 0.95rem; }
-.agent-card-head { display: flex; align-items: center; gap: 10px; width: 100%; }
-.agent-card-head strong { flex: 1; }
-.agent-tick { width: 18px; height: 18px; border: 1px solid var(--border); border-radius: 5px; display: inline-grid; place-items: center; font-size: 12px; line-height: 1; color: var(--accent); }
-.agent-card.on .agent-tick { border-color: var(--accent); }
-.agent-card.compact { padding: 8px 12px; }
+/* The welcome's agent list (2026-10-17, the owner's pick of three): one narrow list, a chip field for wishes. */
+.welcome-narrow { max-width: 440px; }
+.agent-list { display: flex; flex-direction: column; border-top: 1px solid var(--border); margin: 8px 0 4px; }
+label.agent-row { display: flex; flex-direction: row; align-items: center; gap: 14px; margin: 0; min-height: 48px; border-bottom: 1px solid var(--border); cursor: pointer; color: var(--muted); font-size: 0.95rem; }
+.agent-row.on { color: var(--text); }
+.agent-row.other { color: var(--muted); }
+.agent-row input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+.agent-row:hover { color: var(--text); }
 .agent-logo { flex: none; display: inline-block; border-radius: 6px; }
 .agent-logo-letter { display: inline-grid; place-items: center; background: var(--panel-2, var(--bg)); border: 1px solid var(--border); font-weight: 600; font-size: 0.8rem; color: var(--muted); }
-.wanted { margin: 18px 0 4px; }
-.wanted-q { margin: 0 0 8px; font-weight: 600; }
-.wanted-chip { cursor: pointer; font: inherit; }
-.wanted-chip.on { border-color: var(--accent); color: var(--accent); }
-.wanted-other { display: flex; gap: 8px; margin-top: 10px; max-width: 420px; }
-.wanted-other input { flex: 1; min-width: 0; }
-.your-agent { margin: 0 0 18px; }
-.your-agent .agent-cards { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.wanted { margin: 18px 0 4px; display: flex; flex-direction: column; gap: 8px; }
+.wanted-q { font-size: 0.8rem; color: var(--muted); }
+.wanted-box { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 40px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.wanted-box:focus-within { border-color: var(--accent); }
+.wanted-box input { flex: 1; min-width: 120px; font: inherit; font-size: 0.9rem; background: transparent; border: 0; color: var(--text); outline: none; padding: 4px; }
+.wanted-box .chip.on { background: transparent; border-color: var(--accent); color: var(--accent); padding-right: 4px; }
+.chip-x { font: inherit; background: none; border: 0; color: inherit; padding: 0 4px; cursor: pointer; line-height: 1; font-weight: 400; }
+.wanted-suggest .chip { cursor: pointer; font: inherit; }
+.wanted-hint { margin: 0; font-size: 0.75rem; }
+.your-agent { margin: 0 0 18px; max-width: 440px; }

@@ -11,6 +11,12 @@ RUN pnpm install --frozen-lockfile \
  && pnpm --filter @fabrikka/web build \
  && pnpm --filter @fabrikka/bridge build \
  && pnpm --filter @fabrikka/server deploy --prod --legacy /out/server
+# The desktop apps (M57, ADR 0056): from a release, when asked; each file's
+# checksum is verified. Without the argument the instance serves no app.
+#   --build-arg FABRIKKA_APPS_URL=https://github.com/<owner>/<repo>/releases/download/app-v0.1.0
+ARG FABRIKKA_APPS_URL=""
+RUN mkdir -p apps/desktop/dist-app \
+ && if [ -n "$FABRIKKA_APPS_URL" ]; then node scripts/fetch-apps.mjs "$FABRIKKA_APPS_URL" apps/desktop/dist-app; fi
 
 FROM node:22-bookworm-slim
 WORKDIR /app
@@ -24,6 +30,7 @@ ENV NODE_ENV=production \
 COPY --from=build --chown=node:node /out/server /app/apps/server
 COPY --from=build --chown=node:node /app/apps/web/dist /app/apps/web/dist
 COPY --from=build --chown=node:node /app/packages/bridge/dist /app/packages/bridge/dist
+COPY --from=build --chown=node:node /app/apps/desktop/dist-app /app/apps/desktop/dist-app
 # The built-in themes (M44). The instance's own go in /data/themes.
 COPY --from=build --chown=node:node /app/themes /app/themes
 COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/fabrikka-entrypoint

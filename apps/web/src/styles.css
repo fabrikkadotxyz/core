@@ -2645,3 +2645,5 @@ label.agent-row { display: flex; flex-direction: row; align-items: center; gap: 
 .wanted-suggest .chip { cursor: pointer; font: inherit; }
 .wanted-hint { margin: 0; font-size: 0.75rem; }
 .your-agent { margin: 0 0 18px; max-width: 440px; }
+.os-switch { display: flex; gap: 6px; margin: 0 0 8px; }
+.os-switch .chip { cursor: pointer; font: inherit; }

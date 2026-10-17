@@ -231,8 +231,24 @@ this instance, which opens the pairing page. Options, passed as
 
 | Option | Effect |
 | --- | --- |
+| `--app` | Install the desktop app for this computer instead (macOS or Linux; no Node needed). See *Desktop app*. |
 | `--no-connect` | Install only; run `fabrikka host` later. |
 | `--no-modify-path` | Don't add `~/.local/bin` to `~/.zshrc` / `~/.bashrc`. |
+
+**On Windows** (M57, [ADR 0056](decisions/0056-apps-for-every-desktop-built-per-platform-in-ci-served-per-instance.md)),
+the line is PowerShell's:
+
+```powershell
+irm https://<your instance>/install.ps1 | iex
+```
+
+It installs the **desktop app** by default (it carries its own Node).
+`$env:FABRIKKA_INSTALL='client'` beforehand installs the command-line client
+instead: Node 22 or newer, into `%LOCALAPPDATA%\fabrikka` with a
+`fabrikka.cmd` shim on your user PATH (new terminals pick it up), then
+`fabrikka host`. `$env:FABRIKKA_NO_CONNECT='1'` installs without opening
+anything. Same rules as the shell script: https only except localhost, the
+checksum must match or nothing is installed, nothing runs elevated.
 
 The instance serves the client it was built with (`pnpm build` builds it), so a
 new server release carries its own client. Connected hosts show "update
@@ -491,12 +507,36 @@ at start (`$SHELL -l -c`, 3 seconds at most), and adds `~/.local/bin`,
 host gets that PATH. It only finds tools; it never installs or updates them.
 
 ```bash
-pnpm --filter @fabrikka/desktop node:fetch   # once: the pinned official Node build, checksum-verified
-pnpm --filter @fabrikka/desktop package      # builds the app and the zip the instance serves
+pnpm --filter @fabrikka/desktop node:fetch   # once: the pinned official Node build for this platform, checksum-verified
+pnpm --filter @fabrikka/desktop package      # builds the app for this platform and the file the instance serves
 ```
 
-Install it on a Mac from the instance: `curl -fsSL https://<instance>/install.sh
-| bash -s -- --app`. If the tray says "the bundled client is missing: unknown
+**Four platforms (M57, ADR 0056).** `package` builds for the machine it runs
+on: a zipped `.app` on macOS (arm64 or x64), an AppImage on Linux x64, an NSIS
+installer on Windows x64. It writes the file, its `.sha256` and a
+`.meta.json` into `apps/desktop/dist-app/`, and regenerates `apps.json` there
+from every `.meta.json` present. The server serves exactly what `apps.json`
+names. The GitHub workflow `.github/workflows/desktop.yml` does this on four
+runners when you push a tag `app-v*` (or run it by hand), and attaches the
+files and the merged `apps.json` to a release of that tag. To serve them from
+the Docker image:
+
+```bash
+docker build -f docker/Dockerfile -t fabrikka \
+  --build-arg FABRIKKA_APPS_URL=https://github.com/<owner>/<repo>/releases/download/app-v0.1.0 .
+```
+
+The build downloads `apps.json` and every file it names, refusing any whose
+checksum differs. Without the argument, the image serves no app. A checkout
+serves whatever is in `dist-app/`; copying a release's files there is enough.
+
+Install it from the instance: on a Mac or Linux, `curl -fsSL
+https://<instance>/install.sh | bash -s -- --app`; on Windows, `irm
+https://<instance>/install.ps1 | iex`. On Linux the AppImage needs `libfuse2`
+(Ubuntu: `sudo apt install libfuse2`); the installer says so when it is
+missing. The app's settings live in Tauri's config folder for the platform:
+`~/Library/Application Support/xyz.fabrikka.app`, `~/.config/xyz.fabrikka.app`,
+`%APPDATA%\xyz.fabrikka.app`. If the tray says "the bundled client is missing: unknown
 path", the app was started from a path that runs through a symlink (as macOS's
 `/var` does): Tauri won't trust its own location there. Install into
 `~/Applications`, which the installer does. It's unsigned until launch: a copy downloaded with a browser
@@ -526,8 +566,9 @@ managed deployment can pin it.
 the API, the MCP endpoint and the bridge. The server serves `apps/web/dist` when
 it exists, with an SPA fallback so deep links survive a refresh.
 
-Windows and Linux targets are configured but must be built on their own
-platforms; there is no cross-compilation here, and nothing is code-signed yet.
+Windows and Linux are built on their own runners (above); there is no
+cross-compilation, and nothing is code-signed yet (ADR 0031): a copy
+installed by the script runs; a copy downloaded with a browser warns.
 
 ## Backups
 

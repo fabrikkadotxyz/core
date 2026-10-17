@@ -1,0 +1,72 @@
+# The desktop apps, one per platform (M57, ADR 0056): built on their own
+# runners when a tag app-v* is pushed (or by hand), attached to a GitHub
+# release of that tag together with the merged apps.json an instance serves.
+#   git tag app-v0.1.0 && git push origin app-v0.1.0
+name: desktop apps
+
+on:
+  push:
+    tags: ['app-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, platform: darwin-arm64 }
+          - { os: macos-15-intel, platform: darwin-x64 }
+          - { os: ubuntu-22.04, platform: linux-x64 }
+          - { os: windows-latest, platform: windows-x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux build dependencies (Tauri 2)
+        if: matrix.platform == 'linux-x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libfuse2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @fabrikka/bridge build
+      - run: pnpm --filter ./apps/web build
+      - run: pnpm --filter @fabrikka/desktop package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.platform }}
+          path: |
+            apps/desktop/dist-app/Fabrikka-*
+            !apps/desktop/dist-app/apps.json
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: app-*
+          path: dist-app
+          merge-multiple: true
+      - name: Merge apps.json
+        run: node apps/desktop/scripts/apps-manifest.mjs dist-app && cat dist-app/apps.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apps
+          path: dist-app/*
+      - name: GitHub release of the tag
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-app/*
+          fail_on_unmatched_files: true

@@ -12,26 +12,45 @@ import { AgentChoice, WantedChoice } from './WelcomePage.tsx';
 import { timeAgo } from '../outputs/Outputs.tsx';
 import { useWorkspace } from '../shell/workspace.tsx';
 
+/** The computer the browser is on (M57): the line shown first. */
+const browserOs = (): 'unix' | 'windows' => (/Windows/i.test(navigator.userAgent) ? 'windows' : 'unix');
+
 /**
  * M33 (ADR 0030): this instance's own installer. Once per computer, so a paste
- * here is the one-time setup the five-click rule allows.
+ * here is the one-time setup the five-click rule allows. M57 (ADR 0056): the
+ * line for the computer you are on, macOS and Linux or Windows, with a switch.
  */
 export function ConnectCommand({ first }: { first: boolean }) {
-  const [command, setCommand] = useState<string | null | undefined>(undefined);
+  const [commands, setCommands] = useState<{ unix: string; windows: string | null } | null | undefined>(undefined);
+  const [os, setOs] = useState<'unix' | 'windows'>(browserOs);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
-    client.get().then((r) => setCommand(r.installCommand)).catch(() => setCommand(null));
+    client
+      .get()
+      .then((r) => setCommands(r.installCommand ? { unix: r.installCommand, windows: r.installCommandWindows ?? null } : null))
+      .catch(() => setCommands(null));
   }, []);
-  if (command === undefined) return null;
-  if (command === null) {
+  if (commands === undefined) return null;
+  if (commands === null) {
     return <p className="muted small">This server has no client to install. Whoever runs it can build one with <code>pnpm build</code>.</p>;
   }
+  const command = os === 'windows' && commands.windows ? commands.windows : commands.unix;
   return (
     <div className="card-hint">
       <p>
         <strong>{first ? 'Run your agents on your own computer.' : 'Connect another computer.'}</strong> Once, in a terminal on
         that computer:
       </p>
+      {commands.windows && (
+        <div className="os-switch" role="tablist" aria-label="Which computer">
+          <button type="button" role="tab" aria-selected={os === 'unix'} className={`chip${os === 'unix' ? ' on' : ''}`} onClick={() => setOs('unix')}>
+            macOS · Linux
+          </button>
+          <button type="button" role="tab" aria-selected={os === 'windows'} className={`chip${os === 'windows' ? ' on' : ''}`} onClick={() => setOs('windows')}>
+            Windows
+          </button>
+        </div>
+      )}
       <div className="row copy-row">
         <code className="endpoint">{command}</code>
         <button
@@ -48,11 +67,18 @@ export function ConnectCommand({ first }: { first: boolean }) {
           {copied ? 'Copied ✓' : 'Copy'}
         </button>
       </div>
-      <p className="muted small">
-        It needs Node.js 22 or newer, installs <code>fabrikka</code> in your home folder (no admin rights), then opens
-        this site to connect: one click. Then grant a folder in the window it opens, and use Setup → Add my agent in
-        any session.
-      </p>
+      {os === 'windows' && commands.windows ? (
+        <p className="muted small">
+          In PowerShell. It installs the Fabrikka app for your user (no Node, no admin rights), pointed at this site, and opens it. Then
+          grant a folder in its Folders window, and use Setup → Add my agent in any session.
+        </p>
+      ) : (
+        <p className="muted small">
+          It needs Node.js 22 or newer, installs <code>fabrikka</code> in your home folder (no admin rights), then opens
+          this site to connect: one click. Then grant a folder in the window it opens, and use Setup → Add my agent in
+          any session. Add <code>-s -- --app</code> at the end to install the desktop app instead (no Node needed).
+        </p>
+      )}
     </div>
   );
 }

@@ -2681,6 +2681,64 @@ and open one-off links as chips. One column on a phone.
 
 **Clicks:** 1 from any item to its room.
 
+## M57 — Apps for every desktop
+
+> **Built 2026-10-17** ([ADR 0056](decisions/0056-apps-for-every-desktop-built-per-platform-in-ci-served-per-instance.md)).
+> The owner's decisions: GitHub Actions, Windows signing later, Intel Macs in.
+>
+> One desktop app existed, for macOS on Apple Silicon, and one installer that
+> knew only it. This gives every desktop an app and a one-line install from
+> the instance, the way *Your devices* already works.
+
+- **Four apps, one workflow.** `.github/workflows/desktop.yml` builds on a
+  tag `app-v*` (or by hand) on four runners: macOS arm64 and x64 (a zipped
+  `.app`), Linux x64 (an AppImage), Windows x64 (an NSIS installer, per user,
+  silent). Each carries the pinned official Node for its platform. The files,
+  their `.sha256` and a merged `apps.json` land on a GitHub release of the
+  tag.
+- **The instance serves them.** `apps/desktop/dist-app/apps.json` names the
+  files; `downloads/manifest.json` lists them under `apps`, one per
+  platform; each is at `/downloads/<file>` with its checksum beside it. The
+  hosted image gets them with `--build-arg FABRIKKA_APPS_URL=<release>`,
+  verifying each checksum at build. A self-packaged instance serves its own.
+- **`install.sh --app` installs the app for the computer it runs on:** the
+  Mac zip into `~/Applications`; on Linux the AppImage into
+  `~/.local/bin/fabrikka-app` with a launcher entry. It writes the server
+  address and opens the app.
+- **`install.ps1` for Windows:** `irm <instance>/install.ps1 | iex` installs
+  the app (no Node needed), verifies the checksum, strips the download mark,
+  runs the installer silently, writes the server address, opens the app.
+  `$env:FABRIKKA_INSTALL='client'` installs the command-line client instead
+  (Node 22+, `%LOCALAPPDATA%\fabrikka`, a `fabrikka.cmd` shim on the user's
+  PATH); `$env:FABRIKKA_NO_CONNECT='1'` installs without opening anything.
+  Same rules as the shell script: https only except localhost, checksum or
+  nothing, no elevation.
+- **Your devices shows the line for your platform**, with a switch for the
+  others, and says what it installs.
+- **The app itself:** the host's search PATH uses the platform's separator
+  and Windows's npm folders; the login-shell lookup is skipped where there
+  is none.
+
+**Test** (the owner, once per platform; the first real CI run is part of it):
+1. Push a tag `app-v0.1.0`. The workflow runs on four runners and the release
+   holds four files, four `.sha256` and `apps.json`.
+2. Build the image with `FABRIKKA_APPS_URL` pointing at that release, or
+   copy the release files into `apps/desktop/dist-app/` of a checkout:
+   `downloads/manifest.json` lists four `apps`.
+3. On a Mac (either chip): *Your devices* shows the `curl … | bash` line;
+   with `--app` the app installs and opens on this instance. **1 paste.**
+4. On Linux: the same line with `--app`: `~/.local/bin/fabrikka-app`
+   exists, Fabrikka is in the launcher, the app opens on this instance,
+   the tray says connected, Folders works.
+5. On Windows: *Your devices* shows the `irm … | iex` line. In PowerShell:
+   the app installs under `%LOCALAPPDATA%\Fabrikka`, opens on this
+   instance; the tray says connected; a folder grants; Add my agent with
+   Claude Code or Codex installed there answers from the folder.
+6. On Windows, `$env:FABRIKKA_INSTALL='client'; irm … | iex`: `fabrikka`
+   runs in a new terminal and `fabrikka host` pairs.
+
+**Clicks:** 1 paste per computer, once.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

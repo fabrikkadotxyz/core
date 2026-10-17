@@ -101,9 +101,11 @@ struct Host {
 fn tool_path() -> &'static str {
     static PATH: OnceLock<String> = OnceLock::new();
     PATH.get_or_init(|| {
+        // ADR 0056: the platform's separator, and its usual folders.
+        let sep = if cfg!(windows) { ';' } else { ':' };
         let mut dirs: Vec<String> = Vec::new();
         let mut add = |list: &str| {
-            for d in list.split(':').map(str::trim).filter(|d| !d.is_empty()) {
+            for d in list.split(sep).map(str::trim).filter(|d| !d.is_empty()) {
                 if !dirs.iter().any(|x| x == d) {
                     dirs.push(d.to_string());
                 }
@@ -113,15 +115,30 @@ fn tool_path() -> &'static str {
             add(&p);
         }
         add(&std::env::var("PATH").unwrap_or_default());
-        if let Ok(home) = std::env::var("HOME") {
-            add(&format!("{home}/.local/bin"));
+        if cfg!(windows) {
+            // npm's global commands (claude, codex, opencode) and the Fabrikka client's shim.
+            if let Ok(appdata) = std::env::var("APPDATA") {
+                add(&format!("{appdata}\\npm"));
+            }
+            if let Ok(local) = std::env::var("LOCALAPPDATA") {
+                add(&format!("{local}\\fabrikka\\bin"));
+                add(&format!("{local}\\Programs\\nodejs"));
+            }
+            if let Ok(pf) = std::env::var("ProgramFiles") {
+                add(&format!("{pf}\\nodejs"));
+            }
+        } else {
+            if let Ok(home) = std::env::var("HOME") {
+                add(&format!("{home}/.local/bin"));
+            }
+            add("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
         }
-        add("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
-        dirs.join(":")
+        dirs.join(&sep.to_string())
     })
 }
 
-/// `$SHELL -l -c 'printf %s "$PATH"'`, given 3 seconds; None on any failure.
+/// `$SHELL -l -c 'printf %s "$PATH"'`, given 3 seconds; None on any failure,
+/// and None where there is no login shell (Windows: SHELL is unset).
 fn login_shell_path() -> Option<String> {
     use std::io::Read;
     use std::process::{Command, Stdio};

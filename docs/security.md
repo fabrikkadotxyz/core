@@ -577,6 +577,8 @@ website to reach. The terminal host keeps its defended `127.0.0.1` page.
 | A compromised instance serves a malicious client | **Not prevented:** the script, manifest and file share an origin, so the checksum can't detect this. Signing with a key the server doesn't hold is the stronger step, and the manifest leaves room for it. |
 | The installer reaches beyond Fabrikka | No `sudo`; it writes only under `~/.local` and one marked line in the shell's startup file (skippable). It installs neither Node nor any agent runtime (ADR 0002). |
 | A client updates itself behind the user's back | It doesn't: the host reports "update available", and the user runs `fabrikka update`. |
+| **Windows: `irm …/install.ps1 \| iex`** (M57, ADR 0056) | The same controls, in PowerShell: https only except localhost; one function called at the end; the installer's SHA-256 from the manifest must match or nothing runs; nothing elevated (a per-user NSIS install, `/S`); only `%LOCALAPPDATA%\fabrikka`, `%LOCALAPPDATA%\Fabrikka`, `%APPDATA%\xyz.fabrikka.app` and one entry on the user's PATH are written. It strips the mark-of-the-web from the installer it just verified, so SmartScreen does not block a file whose checksum it has checked itself. |
+| The desktop app is unsigned (ADR 0031) | A copy installed by the script carries no quarantine flag (macOS) or download mark (Windows) and runs; a copy downloaded with a browser warns on both. Signing and notarisation are launch work. |
 
 ## Needs you: the per-person stream and notifications (M42)
 

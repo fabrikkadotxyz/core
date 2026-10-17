@@ -206,7 +206,7 @@ import {
   startFlow,
 } from './connections/oauth.ts';
 import { mailerFromEnv } from './mail.ts';
-import { APP_ZIP_NAME, appRelease, clientRelease, installCommand, installScript, manifest } from './client.ts';
+import { appFor, appReleases, appStream, clientRelease, installCommand, installCommandWindows, installScript, installScriptWindows, manifest } from './client.ts';
 import { homeFor } from './home.ts';
 import { runBelongsTo, storeResumeArgv, validResumeArgv } from './activity.ts';
 import { completePasswordReset, requestPasswordReset } from './password-reset.ts';
@@ -326,25 +326,18 @@ export function createApp(options: CreateAppOptions = {}) {
     c.header('cache-control', 'no-store');
     return c.body(installScript(PUBLIC_URL));
   });
+  /** M57 (ADR 0056): Windows's installer, with this instance's address written in. */
+  app.get('/install.ps1', async (c) => {
+    if (!(await clientRelease())) return c.notFound();
+    c.header('content-type', 'text/plain; charset=utf-8');
+    c.header('cache-control', 'no-store');
+    return c.body(installScriptWindows(PUBLIC_URL));
+  });
   app.get('/downloads/manifest.json', async (c) => {
     const release = await clientRelease();
     if (!release) return c.notFound();
     c.header('cache-control', 'no-store');
-    return c.json(manifest(release, PUBLIC_URL, await appRelease()));
-  });
-  // M34: the desktop app's zip and its checksum, for `install.sh --app`.
-  app.get(`/downloads/${APP_ZIP_NAME}`, async (c) => {
-    const zip = await appRelease();
-    if (!zip) return c.notFound();
-    c.header('content-type', 'application/zip');
-    c.header('cache-control', 'no-store');
-    return c.body(new Uint8Array(zip.bytes));
-  });
-  app.get(`/downloads/${APP_ZIP_NAME}.sha256`, async (c) => {
-    const zip = await appRelease();
-    if (!zip) return c.notFound();
-    c.header('cache-control', 'no-store');
-    return c.text(`${zip.sha256}  ${APP_ZIP_NAME}\n`);
+    return c.json(manifest(release, PUBLIC_URL, await appReleases()));
   });
   app.get('/downloads/fabrikka.mjs', async (c) => {
     const release = await clientRelease();
@@ -353,12 +346,37 @@ export function createApp(options: CreateAppOptions = {}) {
     c.header('cache-control', 'no-store');
     return c.body(new Uint8Array(release.bytes));
   });
+  // M34, M57: the desktop apps, one per platform, and their checksums, for the installers.
+  app.get('/downloads/:file{.+\\.sha256}', async (c) => {
+    const file = c.req.param('file').slice(0, -'.sha256'.length);
+    const found = (await appReleases()).find((a) => a.file === file);
+    if (!found) return c.notFound();
+    c.header('cache-control', 'no-store');
+    return c.text(`${found.sha256}  ${found.file}\n`);
+  });
+  app.get('/downloads/:file', async (c) => {
+    const file = c.req.param('file');
+    const found = (await appReleases()).find((a) => a.file === file);
+    if (!found) return c.notFound();
+    c.header('content-type', 'application/octet-stream');
+    c.header('content-length', String(found.size));
+    c.header('content-disposition', `attachment; filename="${found.file}"`);
+    c.header('cache-control', 'no-store');
+    return c.body(appStream(found));
+  });
   /** For "Your devices": the command to copy, or null when this instance has no client to serve. */
   app.get('/api/client', async (c) => {
     const release = await clientRelease();
-    // M55: the desktop app's download, when this instance serves one (M34).
-    const appUrl = (await appRelease()) ? `${PUBLIC_URL}/downloads/${APP_ZIP_NAME}` : null;
-    return c.json(release ? { installCommand: installCommand(PUBLIC_URL), version: release.version, appUrl } : { installCommand: null, version: null, appUrl });
+    // M55, M57: the desktop app's download for this browser's platform, when this instance serves one; and every platform it has.
+    const apps = await appReleases();
+    const mine = appFor(apps, c.req.header('user-agent'));
+    const appUrl = mine ? `${PUBLIC_URL}/downloads/${mine.file}` : null;
+    const platforms = apps.map((a) => a.platform);
+    return c.json(
+      release
+        ? { installCommand: installCommand(PUBLIC_URL), installCommandWindows: installCommandWindows(PUBLIC_URL), version: release.version, appUrl, platforms }
+        : { installCommand: null, installCommandWindows: null, version: null, appUrl, platforms },
+    );
   });
 
 

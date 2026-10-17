@@ -4,13 +4,15 @@
  * the app and the installer can't run different clients.
  */
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const from = new URL('../../../packages/bridge/dist/cli.js', import.meta.url).pathname;
-const to = new URL('../src-tauri/resources/fabrikka.mjs', import.meta.url).pathname;
+const from = fileURLToPath(new URL('../../../packages/bridge/dist/cli.js', import.meta.url));
+const dir = fileURLToPath(new URL('../src-tauri/resources/', import.meta.url));
+const to = `${dir}fabrikka.mjs`;
 if (!existsSync(from)) {
   console.error('no client build: run `pnpm --filter @fabrikka/bridge build` first');
   process.exit(1);
 }
-mkdirSync(new URL('../src-tauri/resources/', import.meta.url), { recursive: true });
+mkdirSync(dir, { recursive: true });
 copyFileSync(from, to);
 console.log(`client → ${to}`);

@@ -106,9 +106,9 @@ export async function homeFor(db: Database, userId: string, online: (deviceId: s
     .orderBy(desc(messages.createdAt))
     .limit(20);
 
-  // One-off sessions, open: links you sent for rooms in your own organization that nobody has opened.
+  // One-off links, open: links you sent for rooms in your own organization that still admit people (ADR 0053 amended: reusable).
   const openInvites = await db
-    .select({ id: sessionInvites.id, createdAt: sessionInvites.createdAt, expiresAt: sessionInvites.expiresAt, ...ref })
+    .select({ id: sessionInvites.id, createdAt: sessionInvites.createdAt, expiresAt: sessionInvites.expiresAt, uses: sessionInvites.uses, ...ref })
     .from(sessionInvites)
     .innerJoin(sessions, eq(sessions.id, sessionInvites.sessionId))
     .innerJoin(teams, and(eq(teams.id, sessions.teamId), eq(teams.ownOfUserId, userId)))
@@ -144,7 +144,7 @@ export async function homeFor(db: Database, userId: string, online: (deviceId: s
     finished: finished.map((r) => ({ id: r.id, agent: r.agent, status: r.status as 'done' | 'failed' | 'stopped', endedAt: r.endedAt!.toISOString(), session: toRef(r) })),
     changed: changed.map((r) => ({ session: toRef(r), messages: Number(r.count), lastAt: new Date(r.lastAt).toISOString() })),
     waitingOnOthers: waitingOn.map((r) => ({ session: toRef(r), to: r.to, text: r.text.slice(0, 200), at: r.at.toISOString() })),
-    openInvites: openInvites.map((r) => ({ id: r.id, session: toRef(r), createdAt: r.createdAt.toISOString(), expiresAt: r.expiresAt.toISOString() })),
+    openInvites: openInvites.map((r) => ({ id: r.id, session: toRef(r), createdAt: r.createdAt.toISOString(), expiresAt: r.expiresAt.toISOString(), uses: r.uses })),
     computers,
   };
 }

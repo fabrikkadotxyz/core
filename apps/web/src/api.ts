@@ -487,7 +487,7 @@ export const sessions = {
 
   invites: (ref: SessionRef) => call<InviteSummary[]>(`${base(ref)}/invites`),
   /** `role: 'guest'` (M22): a view-only invite to this one session. */
-  createInvite: (ref: SessionRef, body: { invitedEmail?: string; role?: 'guest' } = {}) =>
+  createInvite: (ref: SessionRef, body: { invitedEmail?: string; role?: 'guest'; reusable?: boolean } = {}) =>
     call<CreatedInviteView>(`${base(ref)}/invites`, { method: 'POST', body }),
   /** M24: what changed since you last looked, and marking that you've looked. */
   catchUp: (ref: SessionRef) => call<CatchUp>(`${base(ref)}/catch-up`),

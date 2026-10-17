@@ -2127,6 +2127,8 @@ export function createApp(options: CreateAppOptions = {}) {
       invitedEmail?: string;
       role?: 'owner' | 'member' | 'guest';
       ttlDays?: number;
+      /** ADR 0053 (amended): one link for everyone who should be in. Members only. */
+      reusable?: boolean;
     };
     // An empty body is valid: it means "a default member invite".
     const body: InviteBody = await c.req.json<InviteBody>().catch(() => ({}));
@@ -2138,6 +2140,7 @@ export function createApp(options: CreateAppOptions = {}) {
       role: body.role === 'owner' ? 'owner' : body.role === 'guest' ? ('guest' as never) : 'member',
       invitedEmail: body.invitedEmail ?? null,
       ttlDays: body.ttlDays,
+      reusable: body.reusable === true && body.role !== 'guest' && body.role !== 'owner' && !body.invitedEmail,
     });
 
     return c.json(

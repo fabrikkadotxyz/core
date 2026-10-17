@@ -495,7 +495,12 @@ export interface InviteSummary {
   role: SessionRole;
   /** Optional scope. When set, only this address may redeem. Nothing is sent. */
   invitedEmail: string | null;
+  /** How many may join through it: 1, or null for a one-off session's reusable link (ADR 0053). */
+  maxUses: number | null;
+  /** How many have. */
+  uses: number;
   expiresAt: string;
+  /** Exhausted. Null while the link still admits people. */
   redeemedAt: string | null;
   revokedAt: string | null;
   createdAt: string;
@@ -639,7 +644,7 @@ export interface HomeView {
   /** Rooms where the last word is yours and mentions a person. */
   waitingOnOthers: { session: WaitingItem['session']; to: string; text: string; at: string }[];
   /** One-off session links you sent that nobody has opened (Self). */
-  openInvites: { id: string; session: WaitingItem['session']; createdAt: string; expiresAt: string }[];
+  openInvites: { id: string; session: WaitingItem['session']; createdAt: string; expiresAt: string; uses: number }[];
   /** Your paired computers, with how many agents each runs. */
   computers: { id: string; name: string; online: boolean; agents: number }[];
 }

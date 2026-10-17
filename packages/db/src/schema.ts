@@ -284,10 +284,19 @@ export const sessionInvites = pgTable(
     role: text('role').notNull().default('member'),
     /** Optional scope: only a user authenticating as this address may redeem. */
     invitedEmail: text('invited_email'),
+    /**
+     * How many people may join through it: 1 for an ordinary invite, null for
+     * a one-off session's link (ADR 0053, amended 2026-10-17), which anyone
+     * you send it to may use until it expires or is revoked.
+     */
+    maxUses: integer('max_uses').default(1),
+    /** How many have joined through it. `redeemed_at` is set when it reaches `max_uses`. */
+    uses: integer('uses').notNull().default(0),
     createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    /** Exhausted: as many joined as it allows. Null for an open reusable link. */
     redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
     redeemedByUserId: uuid('redeemed_by_user_id').references(() => users.id, {
       onDelete: 'set null',

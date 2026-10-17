@@ -1,7 +1,7 @@
 /**
  * M55 acceptance: one-off sessions (ADR 0053).
  *
- * Against the server: a session in Self plus a single-use member invite; the
+ * Against the server: a session in Self plus one reusable member invite; the
  * invite preview names the inviter and says it is a one-off session; the
  * person who redeems it is in that session and in no organization of the
  * inviter's; for them it lists as a session whose organization is none of
@@ -42,7 +42,8 @@ async function req(path, { method = 'GET', body, cookie } = {}) {
 
 const home = read('apps/web/src/pages/HomePage.tsx');
 check(/\{team\?\.own && <OneOffBar onMade=\{load\} \/>\}/.test(home) && /Start a one-off session/.test(home), 'THE SELF HOME HAS THE ONE-OFF SESSION BAR, and only Self');
-check(/const s = await sessions\.create\(title\.trim\(\), undefined, 'private'\);\s*const inv = await sessions\.createInvite\(/.test(home), 'one click: a private session in your own organization, then its invite');
+check(/const s = await sessions\.create\(title\.trim\(\), undefined, 'private'\);[\s\S]{0,200}const inv = await sessions\.createInvite\(\{ owner: s\.ownerSlug, session: s\.publicId \}, \{ reusable: true \}\);/.test(home), 'one click: a private session in your own organization, then ONE REUSABLE INVITE (ADR 0053 amended 2026-10-17)');
+check(/inv\.uses > 0 \? `\$\{inv\.uses\} joined · ` : ''/.test(home), 'the home shows how many joined through each open link');
 check(/Copied ✓/.test(home) && /Open the session/.test(home), 'the link to copy, then the room');
 const side = read('apps/web/src/shell/Sidebar.tsx');
 check(/aria-label="One-off sessions"/.test(side) && /team\.own && \(/.test(side) && /navigate\('\/\?one-off=1'\)/.test(side), 'in Self the first heading is One-off sessions, and its + lands on the card');
@@ -61,7 +62,8 @@ const stamp = Date.now();
 const S = (await req('/sessions', { method: 'POST', body: { title: `One-off ${stamp}`, visibility: 'private' }, cookie: fede })).json;
 check(S.team?.id === own.id && S.individual === true, 'the session is in Self, individual until someone joins');
 const base = `/o/${S.ownerSlug}/s/${S.publicId}`;
-const inv = (await req(`${base}/invites`, { method: 'POST', body: {}, cookie: fede })).json;
+const inv = (await req(`${base}/invites`, { method: 'POST', body: { reusable: true }, cookie: fede })).json;
+check(inv.invite.maxUses === null && inv.invite.uses === 0, 'THE ONE-OFF LINK IS REUSABLE: no limit on how many join through it');
 const preview = (await req(`/invites/${inv.token}`)).json;
 check(preview?.kind === 'session' && preview.oneOff === true && preview.inviter === me.displayName && preview.guest === false, 'THE INVITE PREVIEW SAYS: a one-off session, from whom, to take part');
 
@@ -79,9 +81,23 @@ check(forPat && forPat.team?.id === own.id && !patTeams.some((t) => t.id === for
 check((await req(base, { cookie: pat.cookie })).json?.me?.role === 'member', 'Pat takes part: a member, not a guest');
 const forFede = (await req('/sessions', { cookie: fede })).json.find((s) => s.publicId === S.publicId);
 check(forFede.individual === false && forFede.memberCount === 2, 'for Fede it is no longer individual: a one-off session');
-check((await req(`/invites/${inv.token}`)).status === 404, 'the link is single-use');
+check((await req(`/invites/${inv.token}`)).status === 200, 'THE LINK STILL WORKS after Pat: it is for everyone who should be in');
+const sam = await req('/auth/signup', { method: 'POST', body: { token: inv.token, email: `m55-sam-${stamp}@example.com`, password: 'password123', displayName: `Sam ${stamp}` } });
+check(sam.status === 201 && (await req(base, { cookie: sam.cookie })).json?.me?.role === 'member', 'Sam joins through the same link');
+check((await req('/sessions', { cookie: fede })).json.find((s) => s.publicId === S.publicId).memberCount === 3, 'three people in the one-off session');
+const again = await req(`/invites/${inv.token}/redeem`, { method: 'POST', cookie: pat.cookie });
+check(again.status === 200 && again.json.session?.publicId === S.publicId, 'Pat opens the link again: the room, nothing claimed');
+const listed = (await req(`${base}/invites`, { cookie: fede })).json.find((i) => i.id === inv.invite.id);
+check(listed.uses === 2 && listed.redeemedAt === null, 'two joined, and the link is still open');
+const homeOpen = (await req('/me/home', { cookie: fede })).json.openInvites.find((i) => i.id === inv.invite.id);
+check(homeOpen && homeOpen.uses === 2, 'THE HOME LISTS IT UNDER OPEN LINKS with how many joined');
+check((await req(`/invites/${inv2.token}`)).status === 200 && inv2.invite.maxUses === 1, 'an ordinary invite is still single-use…');
+const guestInv = (await req(`${base}/invites`, { method: 'POST', body: { reusable: true, role: 'guest' }, cookie: fede })).json;
+check(guestInv.invite.maxUses === 1, '…and a guest invite is never reusable, even if asked');
+check((await req(`${base}/invites/${inv.invite.id}/revoke`, { method: 'POST', cookie: fede })).status === 200 && (await req(`/invites/${inv.token}`)).status === 404, 'REVOKED, the link says it can\'t be used');
 
 await req(`${base}/members/${pat.json.user.id}`, { method: 'DELETE', cookie: fede });
+await req(`${base}/members/${sam.json.user.id}`, { method: 'DELETE', cookie: fede });
 check((await req(base, { cookie: pat.cookie })).status === 404, 'removed from the session, Pat has nothing left');
 check((await req('/sessions', { cookie: fede })).json.find((s) => s.publicId === S.publicId).individual === true, '…and for Fede it is individual again');
 

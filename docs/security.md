@@ -117,9 +117,14 @@ one, recovery is the operator's `admin reset-password`.
 This is the real exposure introduced by not sending email. An invite link pasted
 into a public channel admits anyone who reads it. Mitigations:
 
-- **Single use** — redeeming marks it consumed.
+- **Single use** — redeeming marks it consumed. **One exception:** a one-off
+  session's link (ADR 0053, amended 2026-10-17) is reusable, because it is
+  meant for everyone who should be in that one session. It is made only on
+  request, only for members, never with an email scope, and is listed on the
+  owner's home with how many joined. The owner's defence against a forwarded
+  link is the same as for any invite, revoking it, plus reading the roster.
 - **Expiring** — 7 days by default.
-- **Revocable** — an owner can kill an unredeemed invite.
+- **Revocable** — an owner can kill an invite that still admits people.
 - **Hashed at rest** — only SHA-256 is stored; the plaintext is shown exactly
   once at creation and is not recoverable.
 - **Optionally scoped to an email address** — when `invited_email` is set, only a

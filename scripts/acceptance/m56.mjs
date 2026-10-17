@@ -41,7 +41,7 @@ async function req(path, { method = 'GET', body, cookie } = {}) {
 /* ------------------------------------------------ 1. the source */
 
 const home = read('apps/web/src/pages/HomePage.tsx');
-for (const label of ['Needs you', 'Running now', 'Finished while you were away', 'Since you were away', 'Waiting on others', 'One-off sessions, open', 'Your computers']) {
+for (const label of ['Needs you', 'Running now', 'Finished while you were away', 'Since you were away', 'Waiting on others', 'One-off links, open', 'Your computers']) {
   check(new RegExp(`(title|label)="${label}"`).test(home), `the home has ${label}`);
 }
 check(!/Create organization/.test(home) && !/Pick up where you left off/i.test(home), 'no organization form, no "pick up where you left off"');

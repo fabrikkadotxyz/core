@@ -50,8 +50,8 @@ export function InvitePage() {
           <Eyebrow>Invitation</Eyebrow>
           <h1>This invite can't be used</h1>
           <p className="muted">
-            It may have already been redeemed, been revoked, or expired. Invites
-            are single-use and expire after 7 days — ask for a fresh link.
+            It may have already been used, been revoked, or expired. Invites
+            expire after 7 days, and most work once — ask for a fresh link.
           </p>
         </div>
       </AuthStage>

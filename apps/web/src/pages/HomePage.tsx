@@ -185,12 +185,15 @@ export function HomePage() {
               </Card>
             )}
             {home.openInvites.length > 0 && (
-              <Card title="One-off sessions, open" label="One-off sessions, open">
+              <Card title="One-off links, open" label="One-off links, open">
                 <div className="chips">
                   {home.openInvites.map((inv) => (
                     <span key={inv.id} className="chip">
                       <Link to={room(inv.session)}>{inv.session.title}</Link>
-                      <span className="home-count">{daysUntil(inv.expiresAt)} left</span>
+                      <span className="home-count">
+                        {inv.uses > 0 ? `${inv.uses} joined · ` : ''}
+                        {daysUntil(inv.expiresAt)} left
+                      </span>
                       <button
                         className="link small danger"
                         onClick={async () => {
@@ -221,8 +224,9 @@ export function HomePage() {
 
 /**
  * M55 (ADR 0053): a one-off session, from the Self home, as one slim bar. A
- * title, one click: the session in your Self and a single-use member invite,
- * and the link to send. The sidebar's + beside One-off sessions lands here
+ * title, one click: the session in your Self and one reusable member invite
+ * (ADR 0053, amended 2026-10-17: one link for everyone who should be in), and
+ * the link to send. The sidebar's + beside One-off sessions lands here
  * with ?one-off=1.
  */
 function OneOffBar({ onMade }: { onMade: () => void }) {
@@ -245,7 +249,8 @@ function OneOffBar({ onMade }: { onMade: () => void }) {
     setError(null);
     try {
       const s = await sessions.create(title.trim(), undefined, 'private');
-      const inv = await sessions.createInvite({ owner: s.ownerSlug, session: s.publicId }, {});
+      // ADR 0053 (amended 2026-10-17): one link for everyone who should be in; it stays open until it expires or you revoke it.
+      const inv = await sessions.createInvite({ owner: s.ownerSlug, session: s.publicId }, { reusable: true });
       setMade({ url: inv.url, path: `/o/${s.ownerSlug}/s/${s.publicId}`, title: s.title });
       setTitle('');
       refresh();
@@ -293,10 +298,10 @@ function OneOffBar({ onMade }: { onMade: () => void }) {
           <button type="submit" disabled={!title.trim() || busy}>
             {busy ? 'Starting…' : 'Start a one-off session'}
           </button>
-          <span className="muted small hint-inline">One link, one person, nothing to set up for them.</span>
+          <span className="muted small hint-inline">One link for everyone who should be in, nothing to set up for them.</span>
         </form>
       )}
-      {made && <p className="muted small">Send the link; whoever opens it joins this session, nothing else.</p>}
+      {made && <p className="muted small">Send the link to everyone who should be in; each of them joins this session, nothing else. It works for seven days, or until you revoke it from the home.</p>}
       {error && <p className="error small">{error}</p>}
     </section>
   );

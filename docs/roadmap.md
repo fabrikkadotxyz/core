@@ -2563,16 +2563,20 @@ the picker as one.
 
 ## M55 — One-off sessions
 
-> **Built 2026-10-16** ([ADR 0053](decisions/0053-a-one-off-session-is-one-link-to-one-person.md)).
+> **Built 2026-10-16** ([ADR 0053](decisions/0053-a-one-off-session-is-one-link-to-one-person.md)),
+> **amended 2026-10-17:** the link is reusable, one link for everyone.
 >
-> Working with one person who is in none of your organizations took a
+> Working with people who are in none of your organizations took a
 > session, then Setup, then an invite link, and the other side had to find
-> the app. This gives it one name, one card and one heading.
+> the app. This gives it one name, one bar and one heading.
 
-- **A card on the Self home, "One-off session":** a title and **Start a
-  one-off session**. One click makes the session in your Self and a
-  single-use member invite, and shows the link to copy with the sentence to
-  send and a button to open the room.
+- **A bar on the Self home, "One-off session":** a title and **Start a
+  one-off session**. One click makes the session in your Self and **one
+  reusable member invite**: everyone you send the link to joins, until it
+  expires (seven days) or you revoke it; opening it again when you are
+  already in just opens the room. It shows the link to copy with the
+  sentence to send and a button to open the room. Every other invite stays
+  single-use.
 - **One-off sessions in the sidebar.** In Self, the first heading reads
   *One-off sessions* instead of *Organization sessions*: the sessions in your
   Self that are not only you, plus the sessions you are in whose organization
@@ -2592,12 +2596,16 @@ the picker as one.
    session: <title>*, the account form, and *Get the app* below it. Make the
    account: the room opens, Setup → People shows two people, and the sidebar
    shows the session under One-off sessions of the new account's Self, with
-   no other organization anywhere.
+   no other organization anywhere. **Open the same link in a second private
+   window** and make another account: three people. Open it once more as
+   the first new account: the room, nothing else.
 3. Back as you: the session is under One-off sessions in Self, not under
    Individual sessions. Switch to another organization: it is not there.
 4. From the sidebar, **+** beside One-off sessions does the same as the card.
-5. Setup → People → remove the person: they lose the session; it moves back
-   to Individual sessions for you.
+5. Setup → People → remove both: they lose the session; it moves back
+   to Individual sessions for you. On the home, the link still shows under
+   *One-off links, open*, with how many joined; **Revoke**, and the link
+   says it can't be used.
 
 **Clicks:** 2 and a title to a link in hand.
 
@@ -2624,9 +2632,10 @@ new table, one read-only endpoint, `GET /api/me/home`:
 - **Waiting on others:** rooms where the last word is yours and it mentions
   a person, with who. Derived, never stored: the latest message in the room
   is yours and mentions a human other than you.
-- **One-off sessions, open:** in Self, the links you sent that nobody has
-  opened yet, with when they expire and **Revoke**. The link itself is not
-  shown again: it is stored hashed (ADR 0007). *New link* makes another.
+- **One-off links, open:** in Self, the one-off links you sent that still
+  admit people (ADR 0053 amended: they are reusable), with how many have
+  joined, when they expire, and **Revoke**. The link itself is not shown
+  again: it is stored hashed (ADR 0007).
 - **Your computers:** each paired computer, online or offline, with how
   many agents are bound to it, and *Your devices* a click away.
 

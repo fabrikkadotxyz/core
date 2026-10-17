@@ -1,6 +1,7 @@
-# 0053 — A one-off session is one link to one person, in your Self
+# 0053 — A one-off session is one link, in your Self
 
-**Status:** Proposed
+**Status:** Proposed. **Amended 2026-10-17:** the link is reusable, so one
+link reaches everyone who should be in; the title read *to one person*.
 **Date:** 2026-10-16
 **Builds on:** [ADR 0007](0007-invites-are-the-only-way-in.md) (an invite link
 is the only way in), [ADR 0025](0025-teams-and-who-can-see-a-session.md)
@@ -26,12 +27,27 @@ is in the session, never in Self. The owner chose the name on 2026-10-16:
 ## Decision
 
 **1. A one-off session is an ordinary session in your Self, started
-together with one single-use invite link.** The Self home has a card,
+together with one reusable invite link.** The Self home has a bar,
 *One-off session*: a title and **Start a one-off session**. One click
 creates the session and its link, and shows the link to copy, with the
-sentence to send and a button to open the room. The invite is a member invite (the person
-takes part; a view-only guest is a different thing and stays M22's guest
-toggle in Setup → People), single-use, seven days, as every invite.
+sentence to send and a button to open the room. The invite is a member
+invite (the person takes part; a view-only guest is a different thing and
+stays M22's guest toggle in Setup → People), seven days, as every invite.
+
+**Amended 2026-10-17: the link is reusable.** A one-off session is often
+with several people, not one, and the owner asked for one link to send them
+all rather than one link each. So the one-off link admits anyone who opens
+it until it expires or is revoked (`session_invites.max_uses` null, against
+1 for every other invite); someone already in the session who opens it
+again is simply taken there. The home lists open links with how many have
+joined and **Revoke**; Setup → People shows the same. Every other invite,
+including a team invite and a guest invite, stays single-use: a reusable
+link is only made for members, with no email scope, and only when asked
+for (`reusable: true` on `POST …/invites`). The trust model does not
+change: the link was already a bearer credential to one session, and the
+owner's defence was already revoking; the difference is that the owner now
+reads the roster rather than relying on the first opener to close the
+door. See `docs/security.md`.
 
 **2. The sidebar shows it to both people under One-off sessions.** In Self,
 the heading that reads *Organization sessions* elsewhere reads **One-off
@@ -49,10 +65,10 @@ download it, with the one-line install for everything else. Nothing else
 about invites changes: the same token, the same single use, the same
 account.
 
-**4. The other person needs nothing from you but the link.** They are not
+**4. The other people need nothing from you but the link.** They are not
 added to Self, see none of its other rooms, and their own Self is theirs.
-Removing them from the session (Setup → People) ends it; so does the
-session's end.
+Removing someone from the session (Setup → People) ends it for them; so
+does the session's end.
 
 ## Consequences
 
@@ -79,3 +95,8 @@ session already has. What makes it one-off is how it was started and who is
 in it, both of which the record already holds.
 
 **Adding the person to Self.** Self is yours; that is its whole meaning.
+
+**One single-use link per person** (considered 2026-10-17). It keeps every
+link single-use, but the owner has to make and send one link per person,
+and the one who gets a forwarded link finds it used. One reusable link is
+what people expect from "send them the link", and revoking it is one click.

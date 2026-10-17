@@ -7,14 +7,17 @@
  *
  * Single-use, expiring, revocable, hashed at rest, and optionally scoped to an
  * email address. The scope is enforced here at redemption, which is why it needs
- * no delivery mechanism to be meaningful.
+ * no delivery mechanism to be meaningful. One exception to single use: a
+ * one-off session's link (ADR 0053, amended 2026-10-17) is reusable, so one
+ * link reaches everyone who should be in; it still expires and is revocable.
  */
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import {
   generateToken,
   hashToken,
   sessionInvites,
+  sessionMembers,
   sessions as sessionsPublicId,
   teams,
   users,
@@ -45,6 +48,8 @@ export async function createInvite(
     /** Optional scope: only this address may redeem. Nothing is sent to it. */
     invitedEmail?: string | null;
     ttlDays?: number;
+    /** Any number of people may join through it (a one-off session's link). Otherwise one. */
+    reusable?: boolean;
   },
 ): Promise<CreatedInvite> {
   const token = generateToken();
@@ -60,6 +65,7 @@ export async function createInvite(
       tokenHash: hashToken(token),
       role: opts.role ?? 'member',
       invitedEmail: opts.invitedEmail?.trim().toLowerCase() || null,
+      maxUses: opts.reusable ? null : 1,
       createdByUserId: opts.createdByUserId,
       expiresAt,
     })
@@ -120,7 +126,9 @@ export type RedeemResult =
  *
  * The claim is made under a transaction with a conditional update, so two
  * simultaneous redemptions cannot both succeed — single-use has to hold under
- * concurrency, not just in the happy path.
+ * concurrency, not just in the happy path. A reusable link (`max_uses` null)
+ * counts its uses instead; opening it again when you are already in the
+ * session consumes nothing and just takes you there.
  */
 export async function redeemInvite(
   db: Database,
@@ -138,11 +146,22 @@ export async function redeemInvite(
 
     if (!invite) return { ok: false as const, reason: 'not_found' as const };
     if (invite.revokedAt) return { ok: false as const, reason: 'revoked' as const };
-    if (invite.redeemedAt) {
+    if (invite.redeemedAt || (invite.maxUses !== null && invite.uses >= invite.maxUses)) {
       return { ok: false as const, reason: 'already_redeemed' as const };
     }
     if (invite.expiresAt.getTime() <= Date.now()) {
       return { ok: false as const, reason: 'expired' as const };
+    }
+    // Already a direct member of the session (a reusable link opened twice):
+    // nothing to claim. A roster member (M21) still redeems: the direct grant
+    // is the stronger one and the claim records it.
+    if (invite.sessionId && invite.role !== 'guest') {
+      const [member] = await tx
+        .select({ viaTeamId: sessionMembers.viaTeamId })
+        .from(sessionMembers)
+        .where(and(eq(sessionMembers.sessionId, invite.sessionId), eq(sessionMembers.userId, user.id)))
+        .limit(1);
+      if (member && member.viaTeamId === null) return { ok: true as const, sessionId: invite.sessionId, teamId: null, role: null, again: true as const };
     }
     if (
       invite.invitedEmail &&
@@ -152,15 +171,21 @@ export async function redeemInvite(
     }
 
     // Conditional update is the actual single-use guarantee: whoever's UPDATE
-    // matches the still-unredeemed row wins, and the loser sees zero rows.
+    // matches the still-open row wins, and the loser sees zero rows. A reusable
+    // link counts up instead and is exhausted only when it reaches max_uses.
     const won = await tx
       .update(sessionInvites)
-      .set({ redeemedAt: new Date(), redeemedByUserId: user.id })
+      .set({
+        uses: sql`${sessionInvites.uses} + 1`,
+        redeemedAt: sql`case when ${sessionInvites.maxUses} is not null and ${sessionInvites.uses} + 1 >= ${sessionInvites.maxUses} then now() else ${sessionInvites.redeemedAt} end`,
+        redeemedByUserId: user.id,
+      })
       .where(
         and(
           eq(sessionInvites.id, invite.id),
           isNull(sessionInvites.redeemedAt),
           isNull(sessionInvites.revokedAt),
+          or(isNull(sessionInvites.maxUses), sql`${sessionInvites.uses} < ${sessionInvites.maxUses}`),
         ),
       )
       .returning({
@@ -178,6 +203,7 @@ export async function redeemInvite(
       sessionId: won[0]!.sessionId,
       teamId: won[0]!.teamId,
       role: won[0]!.role as SessionRole,
+      again: false as const,
     };
   });
 
@@ -191,7 +217,7 @@ export async function redeemInvite(
   // A guest invite (M22) makes a viewer of this one session, not a member.
   if ((claimed.role as string) === 'guest') await addGuest(db, claimed.sessionId!, user.id);
   // A direct invite: the stronger grant, so it clears any roster origin (M21).
-  else await addMember(db, claimed.sessionId!, user, claimed.role);
+  else if (!claimed.again) await addMember(db, claimed.sessionId!, user, claimed.role!);
 
   const [row] = await db
     .select({
@@ -233,6 +259,8 @@ export async function describeInvite(
       redeemedAt: sessionInvites.redeemedAt,
       revokedAt: sessionInvites.revokedAt,
       expiresAt: sessionInvites.expiresAt,
+      maxUses: sessionInvites.maxUses,
+      uses: sessionInvites.uses,
     })
     .from(sessionInvites)
     .leftJoin(sessionsPublicId, eq(sessionsPublicId.id, sessionInvites.sessionId))
@@ -242,6 +270,7 @@ export async function describeInvite(
 
   if (!row) return null;
   if (row.redeemedAt || row.revokedAt) return null;
+  if (row.maxUses !== null && row.uses >= row.maxUses) return null;
   if (row.expiresAt.getTime() <= Date.now()) return null;
 
   const kind = row.teamName !== null ? 'team' : 'session';
@@ -259,6 +288,8 @@ function toSummary(row: typeof sessionInvites.$inferSelect): InviteSummary {
     id: row.id,
     role: row.role as SessionRole,
     invitedEmail: row.invitedEmail,
+    maxUses: row.maxUses,
+    uses: row.uses,
     expiresAt: row.expiresAt.toISOString(),
     redeemedAt: row.redeemedAt?.toISOString() ?? null,
     revokedAt: row.revokedAt?.toISOString() ?? null,

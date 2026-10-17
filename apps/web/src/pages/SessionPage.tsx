@@ -1166,8 +1166,10 @@ function PendingInvites({ ref_ }: { ref_: SessionRef }) {
       <ul className="participants">
         {pending.map((i) => (
           <li key={i.id}>
-            <span className="small">{i.invitedEmail ?? 'anyone with the link'}</span>
-            <span className="muted small">expires {new Date(i.expiresAt).toLocaleDateString()}</span>
+            <span className="small">{i.invitedEmail ?? (i.maxUses === null ? 'anyone with the link, any number' : 'anyone with the link, once')}</span>
+            <span className="muted small">
+              {i.uses > 0 ? `${i.uses} joined · ` : ''}expires {new Date(i.expiresAt).toLocaleDateString()}
+            </span>
             <span className="row-end">
               <button
                 className="link small"

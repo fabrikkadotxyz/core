@@ -261,10 +261,14 @@ teams             + own_of_user_id uuid -> users.id unique null  -- M53: the acc
 session_members   + via_team_id  uuid -> teams.id   -- set when added from the roster
 session_invites   + team_id      uuid -> teams.id   -- a team invite; session_id is then null
                   (exactly one of session_id, team_id)
+                  + max_uses     integer default 1  -- null: a one-off session's reusable link (ADR 0053 amended)
+                  + uses         integer not null   -- how many joined; redeemed_at is set when uses reaches max_uses
 ```
 
 **A team invite is a session invite with a different target.** Same table, same
-single-use claim, same hashing, same optional email scope, same signup path.
+single-use claim (a one-off session's link is the one reusable kind: `max_uses`
+null, counted in `uses`), same hashing, same optional email scope, same signup
+path.
 `session_invites` keeps its name, but since M21 a row targets a session **or** a
 team, never both. One redemption path, not two (ADR 0007's rule).
 

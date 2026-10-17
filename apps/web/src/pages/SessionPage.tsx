@@ -1324,9 +1324,9 @@ function AgentsPanel({
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [tokens, setTokens] = useState<TokenSummary[]>([]);
   const [name, setName] = useState('');
-  // 2026-10-16: the agent they said they use comes first; any tool stays offered.
+  // 2026-10-16: the agent they said they use comes first; any tool stays offered. 2026-10-17: the first of several.
   const { state: onboardingState } = useOnboarding();
-  const preferred = onboardingState?.agent && agentTool(onboardingState.agent) ? onboardingState.agent : null;
+  const preferred = onboardingState?.agents?.find((a) => agentTool(a)) ?? null;
   const [provider, setProvider] = useState(preferred ?? 'claude-code');
   const [fresh, setFresh] = useState<CreatedAgentView | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -2627,7 +2627,22 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, 0.5); }
 /* ---- M47 (amended 2026-10-16): which agent do you use ---- */
 .agent-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 12px 0 4px; }
 .agent-card { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text); cursor: pointer; font: inherit; }
-.agent-card:hover { border-color: var(--accent); }
+/* Outranks button:hover:not(:disabled), which would paint the card with the accent and lose its text. */
+.agent-card:hover:not(:disabled) { border-color: var(--accent); background: var(--hover, var(--panel)); color: var(--text); }
 .agent-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft, transparent); }
 .agent-card strong { font-size: 0.95rem; }
-.your-agent { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
+.agent-card-head { display: flex; align-items: center; gap: 10px; width: 100%; }
+.agent-card-head strong { flex: 1; }
+.agent-tick { width: 18px; height: 18px; border: 1px solid var(--border); border-radius: 5px; display: inline-grid; place-items: center; font-size: 12px; line-height: 1; color: var(--accent); }
+.agent-card.on .agent-tick { border-color: var(--accent); }
+.agent-card.compact { padding: 8px 12px; }
+.agent-logo { flex: none; display: inline-block; border-radius: 6px; }
+.agent-logo-letter { display: inline-grid; place-items: center; background: var(--panel-2, var(--bg)); border: 1px solid var(--border); font-weight: 600; font-size: 0.8rem; color: var(--muted); }
+.wanted { margin: 18px 0 4px; }
+.wanted-q { margin: 0 0 8px; font-weight: 600; }
+.wanted-chip { cursor: pointer; font: inherit; }
+.wanted-chip.on { border-color: var(--accent); color: var(--accent); }
+.wanted-other { display: flex; gap: 8px; margin-top: 10px; max-width: 420px; }
+.wanted-other input { flex: 1; min-width: 0; }
+.your-agent { margin: 0 0 18px; }
+.your-agent .agent-cards { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }

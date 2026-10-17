@@ -57,8 +57,10 @@ export const users = pgTable('users', {
   theme: text('theme'),
   /** M47: the welcome (pick a look) was shown. Null = show it on next sign-in. */
   welcomedAt: timestamp('welcomed_at', { withTimezone: true }),
-  /** M47 (amended 2026-10-16): the agent tool this person said they use, an AGENT_TOOLS id or 'other'; null until asked. */
-  preferredAgent: text('preferred_agent'),
+  /** M47 (amended 2026-10-17: the agent tools they said they use (AGENT_TOOLS ids and/or 'other'); null until asked. Was one, preferred_agent. */
+  preferredAgents: jsonb('preferred_agents').$type<string[]>(),
+  /** 2026-10-17: agents they wish Fabrikka ran (WANTED_AGENTS ids, or a short free name). Counted by `admin agents`, never shown to others. */
+  wantedAgents: jsonb('wanted_agents').$type<string[]>(),
   /** M47: the person dismissed Get started. Its steps are derived, never stored. */
   gettingStartedDismissedAt: timestamp('getting_started_dismissed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true })

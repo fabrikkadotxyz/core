@@ -18,6 +18,7 @@ import {
   listUsers,
   resetPassword,
 } from './users.ts';
+import { agentCounts } from './onboarding.ts';
 
 const USAGE = `fabrikka admin
 
@@ -25,6 +26,7 @@ const USAGE = `fabrikka admin
   reset-password --email <email> [--password-stdin]
   list-users
   delete-user   --email <email>
+  agents                        how many people use, and wish for, each agent tool (counts only)
 
 Passwords are read from a TTY prompt, or from stdin with --password-stdin so
 they never appear in shell history or ps output:
@@ -143,6 +145,21 @@ try {
           `${u.email}  (${u.displayName}, slug ${u.ownerSlug})  ${u.createdAt.toISOString().slice(0, 10)}${owner}`,
         );
       }
+      break;
+    }
+
+    case 'agents': {
+      // 2026-10-17: the welcome's answers, as counts. Says which adapter to build next.
+      const { used, wanted, answered } = await agentCounts(db);
+      console.log(`${answered} account${answered === 1 ? '' : 's'} answered the welcome's agent question.`);
+      const print = (title: string, counts: Record<string, number>) => {
+        console.log(`\n${title}`);
+        const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        if (rows.length === 0) console.log('  (none yet)');
+        for (const [k, n] of rows) console.log(`  ${String(n).padStart(4)}  ${k}`);
+      };
+      print('Used:', used);
+      print('Wished for (not run yet):', wanted);
       break;
     }
 

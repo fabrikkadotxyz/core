@@ -2099,20 +2099,35 @@ on is one-time.
 ### Welcome: your agent, then a look (once per account)
 
 > **Amended 2026-10-16 (the owner's ask): the welcome asks which agent you
-> use before the look.** Two screens, one Continue each.
+> use before the look.** Two screens, one Continue each. **Amended
+> 2026-10-17:** several agents, each with its logo, and the ones you wish
+> Fabrikka ran.
 >
-> - **"Which agent do you use?"** One card per tool in the registry (Claude
->   Code, Codex, OpenCode, Antigravity) and *Something else, or none yet*.
->   The choice is saved to the account (`users.preferred_agent`) and shapes
->   what follows: *Add my agent* preselects it when the folder offers it,
+> - **"Which agents do you use?"** One card per tool in the registry (Claude
+>   Code, Codex, OpenCode, Antigravity), each with the tool's logo, and
+>   *Something else, or none yet*. **Any number may be ticked.** The choice
+>   is saved to the account (`users.preferred_agents`) and shapes what
+>   follows: *Add my agent* preselects the first of them the folder offers,
 >   *Connect another way* starts on it, *Get started*'s step 3 names it
->   (*Bring Claude Code*), and *Your devices* says what the app will find.
->   It is a preference, never a restriction: any installed tool stays
->   offered. Changed any time at the top of *Your devices*.
+>   (*Bring Claude Code*), and *Your devices* shows the same cards. It is a
+>   preference, never a restriction: any installed tool stays offered.
+>   Changed any time at the top of *Your devices*.
+> - **"Which others would you want Fabrikka to run?"** on the same screen,
+>   below: chips for agents Fabrikka does not run yet (Cursor, Gemini CLI,
+>   GitHub Copilot CLI, Aider, Amp, Cline, Goose, Kiro, Windsurf, Warp,
+>   Claude's own app, ChatGPT) and a line for another name. Saved to the
+>   account (`users.wanted_agents`), read by nobody but the instance's
+>   admin, as counts: `pnpm admin agents` prints how many people use and
+>   want each. Nothing leaves the instance; it is how the owner learns which
+>   adapter to build next (M16's slots).
 > - Then **"Pick a look."**, as before.
 >
 > **Clicks:** 2 to get through with the defaults (Continue, Continue); 4 to
-> choose both.
+> choose one agent and a look, one more per extra agent or wish.
+>
+> The logos are drawn by hand as stand-ins, one SVG per tool under
+> `apps/web/src/assets/agents/`; dropping an official mark in with the same
+> name replaces it, no code change.
 
 - **On first sign-in**, before anything else: *"Welcome to Fabrikka. Pick a
   look."* with the theme cards from Appearance and the default, **Fabrikka**,

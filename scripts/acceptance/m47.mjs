@@ -11,7 +11,7 @@
  *
  * Requires: the server on :9090 and the test account (_setup.mjs).
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const BASE = 'http://localhost:9090';
 const EMAIL = process.env.FABRIKKA_TEST_EMAIL ?? 'acceptance@example.com';
@@ -72,15 +72,26 @@ check(g.room === null, 'no room to bring an agent into yet');
 
 check((await req('/me/welcome', { method: 'POST', body: { theme: '../../etc' }, jar: newbie })).status === 400, 'A THEME THE INSTANCE DOES NOT OFFER IS REFUSED');
 check(!(await req('/me/getting-started', { jar: newbie })).json.welcomed, '…and a refused Continue does not count as welcomed');
-check((await req('/me/welcome', { method: 'POST', body: { theme: 'terminal', agent: 'vim' }, jar: newbie })).status === 400, 'AN AGENT NOT IN THE REGISTRY IS REFUSED (2026-10-16)');
+check((await req('/me/welcome', { method: 'POST', body: { theme: 'terminal', agents: ['vim'] }, jar: newbie })).status === 400, 'AN AGENT NOT IN THE REGISTRY IS REFUSED (2026-10-16)');
 check(!(await req('/me/getting-started', { jar: newbie })).json.welcomed, '…and that does not count as welcomed either');
-check((await req('/me/welcome', { method: 'POST', body: { theme: 'terminal', agent: 'antigravity' }, jar: newbie })).status === 200, 'Continue with Terminal, having said you use Antigravity');
-check((await req('/me/getting-started', { jar: newbie })).json.agent === 'antigravity', 'THE AGENT YOU USE IS REMEMBERED on the account');
-check((await req('/me/agent', { method: 'PUT', body: { agent: 'other' }, jar: newbie })).status === 200 && (await req('/me/getting-started', { jar: newbie })).json.agent === 'other', '…and can be changed later (Your devices)');
-check((await req('/me/agent', { method: 'PUT', body: { agent: 'emacs' }, jar: newbie })).status === 400, 'changing it to something not in the registry is refused');
+check((await req('/me/welcome', { method: 'POST', body: { theme: 'terminal', agents: ['antigravity', 'antigravity'] }, jar: newbie })).status === 400, 'the same agent twice is refused');
+check((await req('/me/welcome', { method: 'POST', body: { theme: 'terminal', agents: ['antigravity'], wanted: ['bad\u0007name'] }, jar: newbie })).status === 400, 'a wished-for name with control characters is refused');
+const welcomed = await req('/me/welcome', { method: 'POST', body: { theme: 'terminal', agents: ['antigravity', 'claude-code'], wanted: ['cursor', '  My own thing  ', 'cursor'] }, jar: newbie });
+check(welcomed.status === 200, 'Continue with Terminal, having said you use Antigravity and Claude Code and wish for Cursor and your own thing (2026-10-17: SEVERAL)');
+let gs = (await req('/me/getting-started', { jar: newbie })).json;
+check(JSON.stringify(gs.agents) === '["antigravity","claude-code"]', 'THE AGENTS YOU USE ARE REMEMBERED on the account, in your order');
+check(JSON.stringify(gs.wanted) === '["cursor","My own thing"]', 'THE ONES YOU WISH FOR TOO, trimmed, once each');
+check((await req('/me/agents', { method: 'PUT', body: { agents: ['other'] }, jar: newbie })).status === 200 && JSON.stringify((await req('/me/getting-started', { jar: newbie })).json.agents) === '["other"]', '…and can be changed later (Your devices)');
+check(JSON.stringify((await req('/me/getting-started', { jar: newbie })).json.wanted) === '["cursor","My own thing"]', 'changing the agents leaves the wishes alone');
+check((await req('/me/agents', { method: 'PUT', body: { agents: ['emacs'] }, jar: newbie })).status === 400, 'changing it to something not in the registry is refused');
+check((await req('/me/agents', { method: 'PUT', body: { agents: ['codex'], wanted: [] }, jar: newbie })).status === 200 && (await req('/me/getting-started', { jar: newbie })).json.wanted.length === 0, 'the wishes can be cleared');
 const welcomeSrc = readFileSync('apps/web/src/pages/WelcomePage.tsx', 'utf8');
-check(/Which agent do you use\?/.test(welcomeSrc) && /Pick a look\./.test(welcomeSrc) && welcomeSrc.indexOf('Which agent do you use?') < welcomeSrc.indexOf('Pick a look.'), 'THE WELCOME ASKS YOUR AGENT, THEN THE LOOK');
-check(/AGENT_TOOLS\.map\(/.test(welcomeSrc) && /Something else, or none yet/.test(welcomeSrc), 'one card per registry tool, and something else');
+check(/Which agents do you use\?/.test(welcomeSrc) && /Pick a look\./.test(welcomeSrc) && welcomeSrc.indexOf('Which agents do you use?') < welcomeSrc.indexOf('Pick a look.'), 'THE WELCOME ASKS YOUR AGENTS, THEN THE LOOK');
+check(/AGENT_TOOLS\.map\(/.test(welcomeSrc) && /Something else, or none yet/.test(welcomeSrc) && /role="checkbox"/.test(welcomeSrc), 'one card per registry tool, and something else; any number ticked');
+check(/<AgentLogo id=\{id\} name=\{name\}/.test(welcomeSrc) && existsSync('apps/web/src/assets/agents/claude-code.svg') && existsSync('apps/web/src/assets/agents/codex.svg') && existsSync('apps/web/src/assets/agents/opencode.svg') && existsSync('apps/web/src/assets/agents/antigravity.svg'), 'EACH CARD CARRIES THE TOOL’S LOGO, one SVG per registry tool');
+check(/Which others would you want Fabrikka to run\?/.test(welcomeSrc) && /WANTED_AGENTS\.map\(/.test(welcomeSrc) && /placeholder="Another one\? Its name"/.test(welcomeSrc), 'AND ASKS WHICH OTHERS YOU WOULD WANT: chips for the ones not run yet, and a line for another');
+check(/<AgentChoice picked=\{agents\}/.test(readFileSync('apps/web/src/pages/DevicesPage.tsx', 'utf8')) && /<WantedChoice/.test(readFileSync('apps/web/src/pages/DevicesPage.tsx', 'utf8')), 'Your devices shows the same cards and wishes');
+check(/case 'agents': \{/.test(readFileSync('apps/server/src/cli.ts', 'utf8')) && /`admin agents`/.test(readFileSync('docs/operations.md', 'utf8')), 'the admin counts who uses and wishes for what: `admin agents`');
 check(/useState\(preferred \?\? 'claude-code'\)/.test(readFileSync('apps/web/src/pages/SessionPage.tsx', 'utf8')) && /useState\(preferred \?\? ''\)/.test(readFileSync('apps/web/src/pages/SessionPage.tsx', 'utf8')), 'Add my agent and Connect another way start on your agent');
 check((await req('/me/getting-started', { jar: newbie })).json.welcomed === true, '…marks the account welcomed (so no other browser shows it)');
 check((await req('/me/theme', { jar: newbie })).json?.theme === 'terminal', '…and saves the look to the account, the same setting as Appearance');

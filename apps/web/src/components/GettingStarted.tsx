@@ -7,6 +7,9 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { onboarding, sessions, type GettingStartedStep } from '../api.ts';
 import { AGENT_TOOLS, agentTool } from '@fabrikka/types';
+
+/** The first registry tool among the ones they said they use (2026-10-17: several). */
+const firstTool = (agents: string[] | null) => agents?.map(agentTool).find((t) => t) ?? undefined;
 import { useOnboarding } from '../onboarding.ts';
 import { useWorkspace } from '../shell/workspace.tsx';
 
@@ -94,7 +97,7 @@ export function GettingStarted() {
             <span className="step-mark" aria-hidden>{s.done ? '✓' : i + 1}</span>
             <span className="step-text">
               <strong>
-                {s.id === 'agent' && state.agent && agentTool(state.agent) ? `Bring ${agentTool(state.agent)!.name}` : LABELS[s.id].title}
+                {s.id === 'agent' && firstTool(state.agents) ? `Bring ${firstTool(state.agents)!.name}` : LABELS[s.id].title}
                 {s.optional && <span className="muted small"> (optional)</span>}
               </strong>
               <span className="muted small">{LABELS[s.id].hint}</span>

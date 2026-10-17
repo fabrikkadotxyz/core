@@ -419,7 +419,8 @@ and is left as it is, so reinstalling the theme brings the choice back.
 users  (additions)
   welcomed_at                     timestamptz  -- the welcome was shown; null = show it
   getting_started_dismissed_at    timestamptz  -- the person dismissed Get started
-  preferred_agent                 text         -- 2026-10-16: the agent tool they said they use (an AGENT_TOOLS id, or 'other'); null until asked
+  preferred_agents                jsonb        -- 2026-10-17: the agent tools they said they use (AGENT_TOOLS ids and/or 'other'), replacing preferred_agent (one); null until asked
+  wanted_agents                   jsonb        -- 2026-10-17: agents they wish Fabrikka ran (WANTED_AGENTS ids, or a short free name); read only as counts by `admin agents`
 ```
 
 **Two timestamps, and nothing else.** Whether each *Get started* step is done is

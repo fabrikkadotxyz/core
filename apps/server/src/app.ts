@@ -44,7 +44,7 @@ import {
 import { publish, subscribe } from './bus.ts';
 import { createSetup, SetupError } from './setup.ts';
 import { allowedHostsFor, createMcpApp } from './mcp.ts';
-import { dismissGettingStarted, gettingStarted, markWelcomed, setPreferredAgent, validAgentChoice } from './onboarding.ts';
+import { cleanWanted, dismissGettingStarted, gettingStarted, markWelcomed, setPreferredAgents, validAgentChoices } from './onboarding.ts';
 import { broadcastAbort, onAbort, pauseState, setPaused } from './rails.ts';
 import { catchUp, endRun, recordActivity, startRun } from './activity.ts';
 import {
@@ -476,25 +476,32 @@ export function createApp(options: CreateAppOptions = {}) {
 
   /** The welcome's Continue: the look it chose (as PUT /api/me/theme), and never again. */
   app.post('/api/me/welcome', requireUser(db), async (c) => {
-    const body = await c.req.json<{ theme?: unknown; agent?: unknown }>().catch(() => ({}) as { theme?: unknown; agent?: unknown });
+    type Body = { theme?: unknown; agents?: unknown; wanted?: unknown };
+    const body = await c.req.json<Body>().catch(() => ({}) as Body);
     const theme = body.theme === undefined ? undefined : (body.theme ?? null);
     if (theme !== undefined && theme !== null && theme !== 'system' && (typeof theme !== 'string' || !themes.has(theme))) {
       return c.json({ error: 'this instance offers no such theme' }, 400);
     }
-    // 2026-10-16: the agent they use, a registry id or 'other'; anything else is refused, nothing is marked.
-    if (body.agent !== undefined && body.agent !== null && !validAgentChoice(body.agent)) return c.json({ error: 'no such agent tool' }, 400);
+    // 2026-10-17: the agents they use, registry ids and/or 'other', and the ones they wish for; anything else is refused, nothing is marked.
+    if (body.agents !== undefined && body.agents !== null && !validAgentChoices(body.agents)) return c.json({ error: 'no such agent tool' }, 400);
+    const wanted = body.wanted === undefined ? undefined : cleanWanted(body.wanted);
+    if (wanted === null) return c.json({ error: 'wanted agents: a short list of short names' }, 400);
     if (theme !== undefined) await setUserTheme(db, c.get('user').id, theme as string | null);
-    if (body.agent !== undefined) await setPreferredAgent(db, c.get('user').id, (body.agent as string | null) ?? null);
+    if (body.agents !== undefined || wanted !== undefined) await setPreferredAgents(db, c.get('user').id, (body.agents as string[] | null | undefined) ?? null, wanted);
     await markWelcomed(db, c.get('user').id);
     return c.json({ ok: true });
   });
 
-  /** The agent you use, changed later from Your devices. A preference, never a restriction. */
-  app.put('/api/me/agent', requireUser(db), async (c) => {
-    const { agent } = await c.req.json<{ agent?: unknown }>().catch(() => ({}) as { agent?: unknown });
-    if (agent !== null && !validAgentChoice(agent)) return c.json({ error: 'no such agent tool' }, 400);
-    await setPreferredAgent(db, c.get('user').id, (agent as string | null) ?? null);
-    return c.json({ ok: true, agent: (agent as string | null) ?? null });
+  /** The agents you use, and wish for, changed later from Your devices. A preference, never a restriction. */
+  app.put('/api/me/agents', requireUser(db), async (c) => {
+    type Body = { agents?: unknown; wanted?: unknown };
+    const body = await c.req.json<Body>().catch(() => ({}) as Body);
+    const agents = body.agents ?? null;
+    if (agents !== null && !validAgentChoices(agents)) return c.json({ error: 'no such agent tool' }, 400);
+    const wanted = body.wanted === undefined ? undefined : cleanWanted(body.wanted);
+    if (wanted === null) return c.json({ error: 'wanted agents: a short list of short names' }, 400);
+    await setPreferredAgents(db, c.get('user').id, agents as string[] | null, wanted);
+    return c.json({ ok: true, agents: agents as string[] | null, wanted: wanted ?? undefined });
   });
 
   app.post('/api/me/getting-started/dismiss', requireUser(db), async (c) => {

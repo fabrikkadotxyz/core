@@ -738,3 +738,27 @@ export const AGENT_TOOLS: readonly AgentTool[] = [
 ];
 
 export const agentTool = (id: string): AgentTool | undefined => AGENT_TOOLS.find((t) => t.id === id);
+
+/**
+ * Agents Fabrikka does not run yet (2026-10-17), offered on the welcome as
+ * "which others would you want?". The answers are counted by `admin agents`
+ * and say which adapter to build next. Adding one here is all it takes to
+ * ask about it; moving one into AGENT_TOOLS is building it.
+ */
+export const WANTED_AGENTS: readonly { id: string; name: string }[] = [
+  { id: 'cursor', name: 'Cursor' },
+  { id: 'gemini-cli', name: 'Gemini CLI' },
+  { id: 'copilot-cli', name: 'GitHub Copilot CLI' },
+  { id: 'aider', name: 'Aider' },
+  { id: 'amp', name: 'Amp' },
+  { id: 'cline', name: 'Cline' },
+  { id: 'goose', name: 'Goose' },
+  { id: 'kiro', name: 'Kiro' },
+  { id: 'windsurf', name: 'Windsurf' },
+  { id: 'warp', name: 'Warp' },
+  { id: 'claude-app', name: 'Claude, the app' },
+  { id: 'chatgpt', name: 'ChatGPT' },
+];
+/** A free name for a wanted agent is kept short. */
+export const WANTED_NAME_MAX = 60;
+export const WANTED_MAX = 12;

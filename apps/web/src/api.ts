@@ -114,16 +114,19 @@ export interface GettingStarted {
   dismissed: boolean;
   steps: { id: GettingStartedStep; done: boolean; optional: boolean }[];
   room: { ownerSlug: string; publicId: string } | null;
-  /** The agent tool you said you use (an AGENT_TOOLS id or 'other'); null until asked. */
-  agent: string | null;
+  /** The agent tools you said you use (AGENT_TOOLS ids and/or 'other'); null until asked. */
+  agents: string[] | null;
+  /** Agents you wish Fabrikka ran (WANTED_AGENTS ids, or a short free name). */
+  wanted: string[];
 }
 
 export const onboarding = {
   get: () => call<GettingStarted>('/me/getting-started'),
   /** The welcome's Continue: saves the look (as Appearance does) and is never shown again. */
-  welcome: (theme: string | null, agent?: string | null) => call<{ ok: true }>('/me/welcome', { method: 'POST', body: { theme, ...(agent !== undefined ? { agent } : {}) } }),
-  /** Change the agent you use, any time, from Your devices. */
-  setAgent: (agent: string | null) => call<{ ok: true; agent: string | null }>('/me/agent', { method: 'PUT', body: { agent } }),
+  welcome: (theme: string | null, agents?: string[], wanted?: string[]) =>
+    call<{ ok: true }>('/me/welcome', { method: 'POST', body: { theme, ...(agents !== undefined ? { agents } : {}), ...(wanted !== undefined ? { wanted } : {}) } }),
+  /** Change the agents you use, and wish for, any time, from Your devices. */
+  setAgents: (agents: string[], wanted?: string[]) => call<{ ok: true }>('/me/agents', { method: 'PUT', body: { agents, ...(wanted !== undefined ? { wanted } : {}) } }),
   dismiss: () => call<{ ok: true }>('/me/getting-started/dismiss', { method: 'POST', body: {} }),
 };
 

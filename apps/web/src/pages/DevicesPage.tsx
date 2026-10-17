@@ -6,10 +6,9 @@ import { useCallback, useEffect, useState } from 'react';
 import type { DeviceSummary } from '@fabrikka/types';
 import { client, devices } from '../api.ts';
 import { inDesktopApp, openFolders } from '../desktop.ts';
-import { AGENT_TOOLS } from '@fabrikka/types';
-import { Select } from '../components/Select.tsx';
 import { onboarding } from '../api.ts';
 import { useOnboarding } from '../onboarding.ts';
+import { AgentChoice, WantedChoice } from './WelcomePage.tsx';
 import { timeAgo } from '../outputs/Outputs.tsx';
 import { useWorkspace } from '../shell/workspace.tsx';
 
@@ -59,23 +58,22 @@ export function ConnectCommand({ first }: { first: boolean }) {
 }
 
 /** 2026-10-16: the agent you said you use at the welcome, changeable here. A preference, never a restriction. */
+/** 2026-10-17: the same cards as the welcome, any number ticked, and the ones you wish for. */
 function YourAgent() {
   const { state, refresh } = useOnboarding();
   if (!state) return null;
+  const agents = state.agents ?? [];
+  const save = (next: string[], wanted?: string[]) =>
+    onboarding
+      .setAgents(next, wanted)
+      .then(() => refresh())
+      .catch(() => {});
   return (
     <div className="your-agent">
-      <span>The agent you use</span>
-      {/* M36: the app's own selector, never a native select. */}
-      <Select
-        label="The agent you use"
-        value={state.agent ?? 'other'}
-        options={[...AGENT_TOOLS.map((t) => ({ value: t.id, label: t.name })), { value: 'other', label: 'Something else, or none yet' }]}
-        onChange={async (v) => {
-          await onboarding.setAgent(v).catch(() => {});
-          refresh().catch(() => {});
-        }}
-      />
-      <span className="muted small">Comes first in Add my agent; every installed tool stays offered.</span>
+      <h3 className="subhead">The agents you use</h3>
+      <AgentChoice picked={agents} onPick={(id) => save(agents.includes(id) ? agents.filter((a) => a !== id) : [...agents, id])} compact />
+      <WantedChoice picked={state.wanted} onChange={(w) => save(agents, w)} />
+      <p className="muted small">The first comes first in Add my agent; every installed tool stays offered.</p>
     </div>
   );
 }

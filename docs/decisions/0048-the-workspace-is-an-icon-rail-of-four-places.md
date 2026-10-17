@@ -38,7 +38,8 @@ place, and the page.**
   label, then the account at the bottom. It is fixed in width and never
   scrolls. Sessions and Chats carry the *needs you* number for the rooms of
   their kind (M42), and a dot when something is unread; the rail is where the
-  M42 signal lives when the room is in another place.
+  M42 signal lives when the room is in another place. In Self (ADR 0051,
+  amended 2026-10-16) the rail has no Chats: three places.
 - **The list** is the resizable column M36 built. It shows the organization
   switcher at the top, always, because every place is scoped to the chosen
   organization, then what belongs to the place:

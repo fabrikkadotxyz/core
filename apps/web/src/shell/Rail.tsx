@@ -7,6 +7,9 @@
  * Sessions and Chats carry M42's "needs you" number for the rooms of their
  * kind, and a dot when one is unread: the rail is where the signal lives when
  * the room is in another place.
+ *
+ * In Self (ADR 0051) there is no Chats: a chat with yourself is not a chat,
+ * and a direct message lives under the organization the two of you share.
  */
 import { Link } from 'react-router-dom';
 import type { SessionSummary } from '@fabrikka/types';
@@ -17,6 +20,9 @@ import { useWorkspace } from './workspace.tsx';
 export type Place = 'sessions' | 'chats' | 'integrations' | 'settings';
 export const PLACES: Place[] = ['sessions', 'chats', 'integrations', 'settings'];
 export const PLACE_LABEL: Record<Place, string> = { sessions: 'Sessions', chats: 'Chats', integrations: 'Integrations', settings: 'Settings' };
+
+/** The places an organization has: Self has no Chats (ADR 0051). */
+export const placesOf = (own: boolean | undefined): Place[] => (own ? PLACES.filter((p) => p !== 'chats') : PLACES);
 
 /** Which place a room belongs to (ADR 0026): chats and direct messages under Chats. */
 export const placeOfRoom = (s: Pick<SessionSummary, 'kind'>): Place => (s.kind === 'chat' || s.kind === 'direct' ? 'chats' : 'sessions');
@@ -64,7 +70,7 @@ const ICON: Record<Place, React.ReactElement> = {
 
 export function Rail({ place, onPick }: { place: Place; onPick: (p: Place) => void }) {
   const { user } = useAuth();
-  const { sessions, needsYou } = useWorkspace();
+  const { sessions, needsYou, team } = useWorkspace();
   const active = sessions.filter((s) => s.status === 'active');
   const count = (p: Place) => (p === 'sessions' || p === 'chats' ? active.filter((s) => placeOfRoom(s) === p).reduce((n, s) => n + needsYou(s), 0) : 0);
   const unread = (p: Place) => (p === 'sessions' || p === 'chats') && active.some((s) => placeOfRoom(s) === p && s.unread);
@@ -75,7 +81,7 @@ export function Rail({ place, onPick }: { place: Place; onPick: (p: Place) => vo
       <Link to="/" className="rail-home" title="Home" aria-label="Home" onClick={() => onPick('sessions')}>
         <Mark size={26} />
       </Link>
-      {PLACES.map((p) => {
+      {placesOf(team?.own).map((p) => {
         const n = count(p);
         const title = n ? `${PLACE_LABEL[p]} — ${n} need${n === 1 ? 's' : ''} you` : PLACE_LABEL[p];
         return (

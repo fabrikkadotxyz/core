@@ -339,7 +339,7 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
         </section>
       )}
 
-      {/* ADR 0051: Self has no organization chats; a chat with yourself is not a chat. */}
+      {/* ADR 0051: Self has no Chats place at all; the shell never lands here in Self. */}
       {place === 'chats' && team && !team.own && (
         <section className="side-section" aria-label="Organization chats">
           <h2>Organization chats</h2>
@@ -350,7 +350,7 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
         </section>
       )}
 
-      {place === 'chats' && (
+      {place === 'chats' && team && !team.own && (
         <section className="side-section" aria-label="Direct messages">
           <h2>Direct messages</h2>
           {directs.map((s) => (

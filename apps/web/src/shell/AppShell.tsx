@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar.tsx';
-import { placeOfPath, Rail, type Place } from './Rail.tsx';
+import { placeOfPath, placesOf, Rail, type Place } from './Rail.tsx';
 import { useWorkspace } from './workspace.tsx';
 
 /** M36: the sidebar's width — dragged, remembered, bounded. */
@@ -105,11 +105,13 @@ export function AppShell({ children }: { children: ReactNode }) {
    * ADR 0048: the place follows the page. Clicking another place while a room
    * (or the home) is open changes the list, not the page: that pick is kept
    * for this address only, so the next page shows its own place again. From
-   * any other page, Sessions and Chats go home with that list shown.
+   * any other page, Sessions and Chats go home with that list shown. Self has
+   * no Chats (ADR 0051): a place it lacks falls back to Sessions.
    */
   const [pick, setPick] = useState<{ path: string; place: Place } | null>(null);
   const asked = (location.state as { place?: Place } | null)?.place;
-  const place: Place = pick?.path === location.pathname ? pick.place : location.pathname === '/' && asked ? asked : placeOfPath(location.pathname, sessions);
+  const wanted: Place = pick?.path === location.pathname ? pick.place : location.pathname === '/' && asked ? asked : placeOfPath(location.pathname, sessions);
+  const place: Place = placesOf(team?.own).includes(wanted) ? wanted : 'sessions';
   const pickPlace = (p: Place) => {
     const isRoom = /^\/o\//.test(location.pathname);
     if (p === 'integrations' || p === 'settings') {

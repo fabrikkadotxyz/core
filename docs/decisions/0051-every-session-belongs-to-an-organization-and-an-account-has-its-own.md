@@ -40,8 +40,12 @@ leave it or be removed from it, so the account is never without one, and it
 is renamable like any organization. **Inside Self there is no distinction
 between personal and organization integrations:** the Integrations place
 shows one list, your own connections, and Self has no shared connections of
-its own. Self has no *#general* either: a chat with yourself is not a chat.
-Sessions, folders and the People page work as in any organization.
+its own. **Self has no Chats place at all** (amended 2026-10-16): a chat
+with yourself is not a chat, so there is no *#general*, and a direct message
+needs an organization the two of you share, so it is listed under that
+organization and never under Self. In Self the rail (ADR 0048) shows three
+places: Sessions · Integrations · Settings. Sessions, folders and the People
+page work as in any organization.
 
 Existing accounts get theirs in the migration, and their sessions in no
 organization move into it. Nobody gains access by this: the own organization

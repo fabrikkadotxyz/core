@@ -2478,8 +2478,10 @@ room you attach the connection to as owner.
 - **Each account has its own organization, "Self"**, made with the account.
   Renamable; sessions, folders and People like any other; you cannot leave
   it. **Inside Self, integrations are one list**: your own connections, with
-  no organization integrations beside them, and Self has no *#general*
-  (amended 2026-10-16: it was named after the person at first). Existing
+  no organization integrations beside them, and **Self has no Chats place**:
+  no *#general*, and a direct message lives under the organization the two
+  of you share, so the rail shows three places in Self (amended 2026-10-16:
+  it was named after the person at first, and showed Chats). Existing
   accounts get theirs in the migration, and their sessions in no
   organization move into it with their members, guests and visibility
   untouched.
@@ -2496,8 +2498,8 @@ room you attach the connection to as owner.
 - **The switcher lists your own organization first.**
 
 **Test:**
-1. Sign up a new account: the switcher shows *Self*, and no *#general*
-   under Chats. Under Sessions, two headings: Organization sessions and
+1. Sign up a new account: the switcher shows *Self*, and the rail has no
+   Chats. Under Sessions, two headings: Organization sessions and
    Individual sessions, both empty. Under Integrations, one entry.
 2. **+** beside Individual sessions, a title, Enter: the session opens and is
    listed under Individual. Setup → People: only you. **2 clicks and a

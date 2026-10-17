@@ -53,6 +53,10 @@ check(!/name: 'Personal'/.test(read('apps/desktop/src/folders.html')) && !/name:
 check(/const folderOrg = grant\.org \?\? this\.ownOrg\(\);/.test(read('packages/bridge/src/host/host.ts')) && /teamId: g\.org \?\? own/.test(read('apps/server/src/devices.ts')), "AN OLDER PERSONAL FOLDER COUNTS AS SELF'S, on the machine and on the server");
 check(/team && !team\.own && <PageLink to="\/integrations\/organization"/.test(side) && /scope === 'organization' && \(!team \|\| team\.own\)/.test(read('apps/web/src/pages/IntegrationsHubPage.tsx')), 'INSIDE SELF, INTEGRATIONS ARE ONE LIST: no organization integrations beside your own');
 check(/place === 'chats' && team && !team\.own && \(/.test(side), 'Self has no organization chats in the sidebar');
+const rail = read('apps/web/src/shell/Rail.tsx');
+check(/export const placesOf = \(own: boolean \| undefined\): Place\[\] => \(own \? PLACES\.filter\(\(p\) => p !== 'chats'\) : PLACES\)/.test(rail) && /\{placesOf\(team\?\.own\)\.map\(\(p\) => \{/.test(rail), 'SELF HAS NO CHATS PLACE: the rail shows three places there (amended 2026-10-16)');
+check(/const place: Place = placesOf\(team\?\.own\)\.includes\(wanted\) \? wanted : 'sessions';/.test(read('apps/web/src/shell/AppShell.tsx')), 'a place Self lacks falls back to Sessions');
+check(!/\{place === 'chats' && \(/.test(side), 'no Direct messages list in Self either: a direct message lives under a shared organization');
 check(/if \(team\.ownOf\) return;/.test(read('apps/server/src/chats.ts')), 'the server never makes a #general for Self');
 check(!/Create organization/.test(read('apps/web/src/pages/HomePage.tsx')) && /key: 'organizations', label: 'Organizations', org: true, self: true/.test(read('apps/web/src/pages/SettingsPage.tsx')) && /team\?\.own && <PageLink to="\/settings\/organizations"/.test(side), 'ORGANIZATIONS ARE CREATED IN SETTINGS, IN SELF ONLY, not on the home');
 

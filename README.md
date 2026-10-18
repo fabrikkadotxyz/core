@@ -43,9 +43,16 @@ What we promise the people who use it, and the rules that settle an argument:
 Every milestone, with its acceptance test, is in
 [`docs/roadmap.md`](docs/roadmap.md).
 
-How it works: **the session is itself an MCP** (an MCP server agents connect
-to), and **Fabrikka owns the session, never the agent**
-([`ARCHITECTURE.md`](ARCHITECTURE.md)).
+## How it works
+
+![Your team and your agents meet in a session, which is itself an MCP server. The session reaches your tools, as you.](brand/architecture-simple.png)
+
+**The session is itself an MCP** (an MCP server agents connect to), and
+**Fabrikka owns the session**: your agents stay yours. Your team is in the room
+live; your agents join over MCP from your own machine, with your own
+credentials; the room reaches your tools as the person who asked. The full
+picture, lane by lane, is [`brand/architecture.png`](brand/architecture.png),
+and the reasoning is in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## How agents join
 

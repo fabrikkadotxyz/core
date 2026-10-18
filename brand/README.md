@@ -11,6 +11,8 @@ their agents, each bringing a piece, producing something together.
 | `app-icon-1024.png` | The tile rendered at 1024 px, for stores and press. |
 | `social-card.svg` | The card a pasted link shows (Slack, X, LinkedIn, a search result): the mark, the name and the line on the tile's gradient, 2:1. |
 | `social-preview.png` | The card at 1280×640, for the GitHub repository's *Social preview* (Settings → General). GitHub can't read it from the repository; the owner uploads it once. |
+| `architecture.svg` | How Fabrikka works in one picture: a session, the people in it, the agents they bring (lane A and lane B), and the vendor tools reached as each person. For talks, posts and the docs; `architecture.png` is its 1600×1000 render. Keep it true to `ARCHITECTURE.md`. |
+| `architecture-simple.svg` | The same in one breath: four boxes, three arrows. For a slide, a tweet, the top of a post; `architecture-simple.png` is its 1600×900 render. |
 
 In the web app the mark is a component, `apps/web/src/components/Mark.tsx`,
 the same shape and cuts. With `assemble`, the three pieces arrive from apart
@@ -41,6 +43,8 @@ rsvg-convert -w 512 -h 512 brand/app-icon.svg -o apps/desktop/src-tauri/icons/ic
 rsvg-convert -w 1024 -h 1024 brand/app-icon.svg -o brand/app-icon-1024.png
 rsvg-convert -w 1280 -h 640 brand/social-card.svg -o brand/social-preview.png
 rsvg-convert -w 1200 -h 600 brand/social-card.svg -o apps/web/public/og-image.png
+rsvg-convert -w 1600 -h 1000 brand/architecture.svg -o brand/architecture.png
+rsvg-convert -w 1600 -h 900 brand/architecture-simple.svg -o brand/architecture-simple.png
 rsvg-convert -w 44 -h 44 brand/favicon.svg | magick - -fill black -colorize 100 apps/desktop/src-tauri/icons/tray.png
 ```
 

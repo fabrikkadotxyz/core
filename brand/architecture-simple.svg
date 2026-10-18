@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <!-- Fabrikka in one breath: people and their agents meet in a session; the
+       session reaches their tools as them. The detailed picture is
+       architecture.svg. Palette: brand/README.md. -->
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#3d5a80"/>
+    </marker>
+    <style>
+      .big { font-size: 40px; font-weight: 700; fill: #293241; letter-spacing: -0.5px; }
+      .small { font-size: 24px; fill: #5b6b80; }
+      .lbl { font-size: 22px; font-weight: 600; fill: #3d5a80; }
+      .box { fill: #ffffff; stroke: #c9d6e2; stroke-width: 2; }
+      .wire { stroke: #3d5a80; stroke-width: 4; fill: none; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="#f7fcfd"/>
+
+  <!-- People -->
+  <rect x="100" y="300" width="360" height="200" rx="24" class="box"/>
+  <g>
+    <circle cx="240" cy="372" r="26" fill="#3d5a80"/>
+    <circle cx="300" cy="372" r="26" fill="#3d5a80" stroke="#ffffff" stroke-width="4"/>
+    <circle cx="360" cy="372" r="26" fill="none" stroke="#3d5a80" stroke-width="3"/>
+  </g>
+  <text x="280" y="450" class="big" text-anchor="middle" font-size="36">Your team</text>
+
+  <!-- Session -->
+  <rect x="580" y="240" width="440" height="320" rx="32" fill="#3d5a80"/>
+  <text x="800" y="356" font-size="52" font-weight="700" fill="#e0fbfc" text-anchor="middle" letter-spacing="-1">Session</text>
+  <text x="800" y="406" font-size="24" fill="#e0fbfc" opacity="0.85" text-anchor="middle">one problem, one room</text>
+  <text x="800" y="472" font-size="22" fill="#e0fbfc" opacity="0.7" text-anchor="middle">messages · context · outputs</text>
+  <text x="800" y="506" font-size="22" fill="#e0fbfc" opacity="0.7" text-anchor="middle">itself an MCP server</text>
+
+  <!-- Agents -->
+  <rect x="1140" y="300" width="360" height="200" rx="24" class="box"/>
+  <g fill="none" stroke="#3d5a80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="1260" y="344" width="60" height="52" rx="10"/>
+    <rect x="1340" y="344" width="60" height="52" rx="10"/>
+    <circle cx="1279" cy="370" r="4" fill="#3d5a80"/><circle cx="1301" cy="370" r="4" fill="#3d5a80"/>
+    <circle cx="1359" cy="370" r="4" fill="#3d5a80"/><circle cx="1381" cy="370" r="4" fill="#3d5a80"/>
+  </g>
+  <text x="1320" y="450" class="big" text-anchor="middle" font-size="36">Your agents</text>
+
+  <!-- Tools -->
+  <rect x="580" y="680" width="440" height="140" rx="24" class="box"/>
+  <text x="800" y="740" class="big" text-anchor="middle" font-size="36">Your tools</text>
+  <text x="800" y="782" class="small" text-anchor="middle">GitHub, Jira, Google, …</text>
+
+  <!-- Wires -->
+  <path d="M460 400 H580" class="wire" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text x="520" y="376" class="lbl" text-anchor="middle">live</text>
+
+  <path d="M1020 400 H1140" class="wire" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text x="1080" y="376" class="lbl" text-anchor="middle">MCP</text>
+
+  <path d="M800 560 V680" class="wire" marker-end="url(#a)"/>
+  <text x="820" y="628" class="lbl">as you</text>
+
+  <!-- Captions -->
+  <text x="280" y="560" class="small" text-anchor="middle">Watch, redirect, hand off.</text>
+  <text x="1320" y="560" class="small" text-anchor="middle">Claude Code, Codex, any MCP client,</text>
+  <text x="1320" y="594" class="small" text-anchor="middle">on your machine, with your keys.</text>
+
+  <text x="800" y="140" class="big" text-anchor="middle">Fabrikka</text>
+  <text x="800" y="180" class="small" text-anchor="middle">One room for your team and the agents it already uses.</text>
+</svg>

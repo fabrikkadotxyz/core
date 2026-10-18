@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <!-- How Fabrikka works, in one picture: a session, the people in it, the
+       agents they bring, and the tools those agents reach through it
+       (ARCHITECTURE.md, PRINCIPLES.md). Palette: brand/README.md. -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#3d5a80"/>
+    </marker>
+    <mask id="cuts" maskUnits="userSpaceOnUse" x="238" y="12" width="547" height="547">
+      <rect x="238" y="12" width="547" height="547" fill="#fff"/>
+      <g fill="none" stroke="#000" stroke-width="14" stroke-linejoin="round">
+        <path d="M413 180 V368 C413 381 425 382 432 375 A34 34 0 1 1 432 429 C425 422 413 423 413 436 V520"/>
+        <path d="M610 180 V368 C610 381 622 382 629 375 A34 34 0 1 1 629 429 C622 422 610 423 610 436 V520"/>
+      </g>
+    </mask>
+    <style>
+      .h1 { font-size: 34px; font-weight: 700; fill: #293241; letter-spacing: -0.5px; }
+      .sub { font-size: 20px; fill: #3d5a80; }
+      .col { font-size: 24px; font-weight: 700; fill: #293241; }
+      .colsub { font-size: 17px; fill: #5b6b80; }
+      .name { font-size: 21px; font-weight: 700; fill: #293241; }
+      .body { font-size: 17px; fill: #3b4756; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; fill: #3d5a80; }
+      .lbl { font-size: 16px; fill: #3d5a80; font-weight: 600; }
+      .card { fill: #ffffff; stroke: #c9d6e2; stroke-width: 1.5; }
+      .wire { stroke: #3d5a80; stroke-width: 2.5; fill: none; }
+      .wire-dashed { stroke: #3d5a80; stroke-width: 2.5; fill: none; stroke-dasharray: 8 7; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#f7fcfd"/>
+
+  <!-- Title -->
+  <svg x="56" y="34" width="56" height="56" viewBox="238 12 547 547">
+    <path fill="#293241" mask="url(#cuts)" d="M248 208 L368 296 V208 L488 296 V208 L605 296 H648 L668 68 H737 L757 296 H775 V503 H248 Z"/>
+  </svg>
+  <text x="128" y="64" class="h1">How Fabrikka works</text>
+  <text x="128" y="92" class="sub">One session. The people in it, the agents they already use, and the tools those agents reach as each person.</text>
+
+  <!-- ===================== PEOPLE (left) ===================== -->
+  <text x="60" y="170" class="col">People</text>
+  <text x="60" y="194" class="colsub">In the browser or the desktop app</text>
+
+  <g>
+    <rect x="60" y="214" width="340" height="96" rx="14" class="card"/>
+    <circle cx="100" cy="262" r="22" fill="#3d5a80"/>
+    <text x="100" y="269" font-size="19" font-weight="700" fill="#e0fbfc" text-anchor="middle">F</text>
+    <text x="138" y="254" class="name">@fede</text>
+    <text x="138" y="280" class="body">Owner · decides who's in</text>
+  </g>
+  <g>
+    <rect x="60" y="326" width="340" height="96" rx="14" class="card"/>
+    <circle cx="100" cy="374" r="22" fill="#3d5a80"/>
+    <text x="100" y="381" font-size="19" font-weight="700" fill="#e0fbfc" text-anchor="middle">A</text>
+    <text x="138" y="366" class="name">@alice</text>
+    <text x="138" y="392" class="body">Team member · many sessions</text>
+  </g>
+  <g>
+    <rect x="60" y="438" width="340" height="96" rx="14" class="card"/>
+    <circle cx="100" cy="486" r="22" fill="none" stroke="#3d5a80" stroke-width="2.5"/>
+    <text x="100" y="493" font-size="19" font-weight="700" fill="#3d5a80" text-anchor="middle">G</text>
+    <text x="138" y="478" class="name">a guest</text>
+    <text x="138" y="504" class="body">Invited by link · this session only</text>
+  </g>
+
+  <text x="60" y="580" class="body">Everyone sees the same room, live:</text>
+  <text x="60" y="604" class="body">messages, context, outputs, and each</text>
+  <text x="60" y="628" class="body">agent working. Anyone can redirect an</text>
+  <text x="60" y="652" class="body">agent or hand it off. Nobody pastes context.</text>
+
+  <!-- people → session -->
+  <path d="M400 374 H480" class="wire" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+  <text x="440" y="358" class="lbl" text-anchor="middle">live</text>
+
+  <!-- ===================== INSTANCE + SESSION (center) ===================== -->
+  <rect x="488" y="128" width="624" height="610" rx="22" fill="#e9f3f7" stroke="#b7cad8" stroke-width="1.5"/>
+  <text x="520" y="162" class="colsub">A Fabrikka instance · your own server, or app.fabrikka.xyz · Postgres</text>
+
+  <rect x="520" y="184" width="560" height="500" rx="18" fill="#3d5a80"/>
+  <text x="552" y="228" font-size="28" font-weight="700" fill="#e0fbfc">Session</text>
+  <text x="662" y="228" font-size="18" fill="#e0fbfc" opacity="0.85">“debug the webhook” · private by default</text>
+
+  <g font-size="17" fill="#e0fbfc">
+    <rect x="552" y="252" width="496" height="1" fill="#e0fbfc" opacity="0.25"/>
+    <text x="552" y="290" font-weight="700">Participants</text>
+    <text x="684" y="290" opacity="0.9">people and agents, one list, one id space</text>
+    <text x="552" y="330" font-weight="700">Messages</text>
+    <text x="684" y="330" opacity="0.9">with @mentions; a mention wakes an agent</text>
+    <text x="552" y="370" font-weight="700">Context</text>
+    <text x="684" y="370" opacity="0.9">objective, facts, decisions, open questions</text>
+    <text x="552" y="410" font-weight="700">Outputs</text>
+    <text x="684" y="410" opacity="0.9">documents, papers, files; co-edited live</text>
+    <text x="552" y="450" font-weight="700">Tools</text>
+    <text x="684" y="450" opacity="0.9">the vendor connections attached, per tool</text>
+    <text x="552" y="490" font-weight="700">Permissions</text>
+    <text x="684" y="490" opacity="0.9">who's in, what each agent may call; 404 to others</text>
+    <text x="552" y="530" font-weight="700">Record</text>
+    <text x="684" y="530" opacity="0.9">catch-up and handoffs; it outlives the chat</text>
+  </g>
+
+  <rect x="552" y="566" width="496" height="86" rx="12" fill="#293241"/>
+  <text x="574" y="598" font-size="17" font-weight="700" fill="#e0fbfc">The session is itself an MCP server</text>
+  <text x="574" y="626" class="mono" style="fill:#e0fbfc;opacity:.85">https://&lt;instance&gt;/mcp/o/fede/s/debug-the-webhook</text>
+
+  <text x="800" y="716" font-size="17" fill="#3b4756" text-anchor="middle" font-style="italic">One problem, one room, one record.</text>
+
+  <!-- ===================== AGENTS (right) ===================== -->
+  <text x="1200" y="170" class="col">Agents</text>
+  <text x="1200" y="194" class="colsub">On their owners' machines, as their owners</text>
+
+  <g>
+    <rect x="1200" y="214" width="340" height="150" rx="14" class="card"/>
+    <text x="1224" y="246" class="name">@claude-fede</text>
+    <text x="1224" y="272" class="body">Claude Code on Fede's laptop</text>
+    <text x="1224" y="300" class="body">Lane B: a bridge the agent itself starts.</text>
+    <text x="1224" y="324" class="body">An @mention is pushed into the live session;</text>
+    <text x="1224" y="348" class="body">repo open, context loaded.</text>
+  </g>
+  <g>
+    <rect x="1200" y="384" width="340" height="150" rx="14" class="card"/>
+    <text x="1224" y="416" class="name">@codex-alice</text>
+    <text x="1224" y="442" class="body">Codex on Alice's machine</text>
+    <text x="1224" y="470" class="body">Lane A: plain MCP over HTTP.</text>
+    <text x="1224" y="494" class="body">When nobody's at the terminal, an @mention</text>
+    <text x="1224" y="518" class="body">spawns a headless run that joins over MCP.</text>
+  </g>
+  <g>
+    <rect x="1200" y="554" width="340" height="72" rx="14" fill="none" stroke="#c9d6e2" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <text x="1224" y="584" class="name" fill="#5b6b80">anything that speaks MCP</text>
+    <text x="1224" y="608" class="body">Cursor, OpenCode, Gemini, yours · no plugin</text>
+  </g>
+
+  <text x="1200" y="672" class="body">Your agent, your credentials, your machine.</text>
+  <text x="1200" y="696" class="body">Fabrikka holds no model key and runs</text>
+  <text x="1200" y="720" class="body">nothing you did not start.</text>
+
+  <!-- session ↔ agents -->
+  <path d="M1112 289 H1200" class="wire" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+  <text x="1156" y="273" class="lbl" text-anchor="middle">MCP + push</text>
+  <path d="M1112 459 H1200" class="wire" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+  <text x="1156" y="443" class="lbl" text-anchor="middle">MCP</text>
+  <path d="M1112 590 H1200" class="wire-dashed" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+  <text x="1156" y="574" class="lbl" text-anchor="middle">MCP</text>
+
+  <!-- ===================== TOOLS (bottom) ===================== -->
+  <path d="M800 738 V800" class="wire" marker-end="url(#arrow)"/>
+  <text x="816" y="776" class="lbl">as the person who asked, with their own token</text>
+
+  <text x="60" y="834" class="col">Tools</text>
+  <text x="60" y="858" class="colsub">The vendor's own MCP servers,</text>
+  <text x="60" y="880" class="colsub">connected by each person, as them</text>
+
+  <g>
+    <rect x="400" y="812" width="200" height="72" rx="14" class="card"/>
+    <text x="500" y="844" class="name" text-anchor="middle">GitHub</text>
+    <text x="500" y="868" class="mono" text-anchor="middle">github__list_issues</text>
+
+    <rect x="620" y="812" width="200" height="72" rx="14" class="card"/>
+    <text x="720" y="844" class="name" text-anchor="middle">Jira · Confluence</text>
+    <text x="720" y="868" class="mono" text-anchor="middle">jira__search</text>
+
+    <rect x="840" y="812" width="200" height="72" rx="14" class="card"/>
+    <text x="940" y="844" class="name" text-anchor="middle">Linear</text>
+    <text x="940" y="868" class="mono" text-anchor="middle">linear__create_issue</text>
+
+    <rect x="1060" y="812" width="200" height="72" rx="14" class="card"/>
+    <text x="1160" y="844" class="name" text-anchor="middle">Google Workspace</text>
+    <text x="1160" y="868" class="mono" text-anchor="middle">drive__search</text>
+
+    <rect x="1280" y="812" width="260" height="72" rx="14" fill="none" stroke="#c9d6e2" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <text x="1410" y="844" class="name" text-anchor="middle" fill="#5b6b80">any HTTP MCP server</text>
+    <text x="1410" y="868" class="body" text-anchor="middle">Sentry, Grafana, your own</text>
+  </g>
+
+  <text x="400" y="928" class="body">Default-deny: attaching a vendor grants nothing until the owner allows specific tools (“GitHub read, not merge”).</text>
+  <text x="400" y="954" class="body">Every call goes upstream with the caller's own credentials, so the vendor's audit log names the right person.</text>
+</svg>

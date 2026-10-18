@@ -1105,6 +1105,8 @@ serve its own pages as well as its own `/api/<name>/…` routes.
 | `onUserDeleted(listener)` | `listener({ userId, teamIds })` after a deletion has committed, with the teams the person was on, so a deployment can clean up what it keeps about the person. Never before. |
 | `audit(event)` | *(M60, ADR 0058)* One event in the trail, as `deployment`: `{ action: 'deployment.<name>', actorUserId?, subjectUserId?, teamId?, sessionId?, detail?, outcome? }`. Names and identifiers in `detail`, never content or a credential. Never throws. |
 | `auditEvents(teamId, { limit?, before?, since?, action? })` | An organization's trail, newest first, names resolved: what *Settings → Activity* shows its owners. The deployment checks who is asking. |
+| `setRetention(teamId, { messageDays?, outputDays?, fileDays? })` | *(M63)* How long the organization's rooms keep messages, documents (by last edit) and files: each 30, 90, 180, 365 or 730 days, or `null` for forever; an absent key keeps its value. Prunes at once; recorded as `team.retention_changed` by the deployment. |
+| `retention(teamId)` | The three windows, or null for no such organization. |
 
 `GET /api/auth/options` returns what the login page should offer:
 `{ passwordReset: boolean, signupUrl: string | null }`.

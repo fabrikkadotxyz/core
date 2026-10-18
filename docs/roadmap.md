@@ -2961,6 +2961,43 @@ archive lists the thirteen files; `messages.json` has the account's messages
 from both rooms and nothing from the third or by anyone else;
 `connections.json` carries no sealed field; the trail has the event.
 
+## M63 — Retention: what the rooms keep
+
+> **Built 2026-10-18** ([ADR 0058](decisions/0058-the-trail-who-did-what-kept-per-organization-never-what-they-said.md), amended).
+> The scripted check passes, the owner's manual test is pending. Until it,
+> only call records and the trail expired; messages, documents and files
+> stayed forever with no way to say otherwise.
+
+- **Three windows per organization**, off by default: messages by when they
+  were written, documents by their last edit, uploaded files by when they
+  were added; each 30, 90, 180, 365 or 730 days, or forever
+  (`teams.message_days`, `output_days`, `file_days`). `retention.ts`.
+- **Deleted daily, and at once when shortened**, across the organization's
+  rooms. Each run that removed something is one `retention.pruned` event with
+  counts; an owner's change is `team.retention_changed`. The context, links,
+  trail and roster are never touched.
+- **Settings → Activity → What the rooms keep**, for owners: three selects,
+  the count of what a change deleted. `GET`/`PUT /api/teams/:id/retention`.
+  The kit: `setRetention(teamId, policy)` and `retention(teamId)`, so a
+  deployment can set a default. `admin prune-retention` runs the job now.
+- **Not built:** a bin for deleted rooms with restore. Named in the ADR as a
+  later milestone.
+
+**Test** (an organization you own, with a room holding a few messages):
+1. Settings → Activity → *What the rooms keep* → Messages: **30 days**.
+   **2 clicks** from Settings. The line says nothing was older.
+2. Have the operator run `psql … -c "update messages set created_at = now() -
+   interval '40 days' where …"` on one message, then `pnpm admin
+   prune-retention`. The message is gone from the room; the room's decisions
+   are not; Activity shows *retention.pruned: 1 message*.
+3. Set Messages back to **forever**. Nothing else changes.
+
+**Scripted** (`scripts/acceptance/m63.mjs`): as an owner, sets a 30-day
+window, backdates one message and one file row through `psql`, runs the job
+through the CLI, asserts the old message and file are gone and the new ones
+and the context stay, that the trail has the event with counts, that a
+member is refused the setting, and that the choices are the five listed.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

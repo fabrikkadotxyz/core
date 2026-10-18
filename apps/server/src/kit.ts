@@ -24,6 +24,7 @@ import { rateLimit } from './rate-limit.ts';
 import { createUser } from './users.ts';
 import { deactivateUser, deleteUserNow, onUserDeleted, reactivateUser, scheduleDeletion } from './leaving.ts';
 import { audit, auditForTeam } from './audit.ts';
+import { getRetention, setRetention } from './retention.ts';
 import type { AuditEventView } from '@fabrikka/types';
 
 const MAX_TEAM_NAME = 80;
@@ -102,6 +103,10 @@ export interface Kit {
   }): Promise<void>;
   /** An organization's trail, newest first, names resolved. The deployment checks who is asking. */
   auditEvents(teamId: string, filter?: { limit?: number; before?: Date; since?: Date; action?: string }): Promise<AuditEventView[]>;
+  /* M63 (ADR 0058 amended): what an organization keeps, and for how long. */
+  /** Messages, documents (by last edit) and files: each 30, 90, 180, 365 or 730 days, or null for forever. An absent key keeps its value. Prunes at once. */
+  setRetention(teamId: string, policy: { messageDays?: number | null; outputDays?: number | null; fileDays?: number | null }): Promise<boolean>;
+  retention(teamId: string): Promise<{ messageDays: number | null; outputDays: number | null; fileDays: number | null } | null>;
 }
 
 /** What extensions advertised, for GET /api/auth/options. */
@@ -223,6 +228,12 @@ export function createKit(opts: {
     onUserDeleted,
     audit: (event) => audit(db, { ...event, actorKind: 'deployment' }),
     auditEvents: (teamId, filter) => auditForTeam(db, teamId, filter),
+    setRetention: async (teamId, policy) => {
+      const r = await setRetention(db, teamId, policy);
+      if (r.ok) await audit(db, { action: 'team.retention_changed', actorKind: 'deployment', teamId, detail: { ...r.policy } });
+      return r.ok;
+    },
+    retention: (teamId) => getRetention(db, teamId),
   };
 }
 

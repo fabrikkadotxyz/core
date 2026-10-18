@@ -21,6 +21,7 @@ import { agentCounts } from './onboarding.ts';
 import { deactivateUser, deleteUserNow, findUserForLeaving, GRACE_DAYS, previewDeletion, reactivateUser, scheduleDeletion } from './leaving.ts';
 import { audit, auditForInstance, type AuditAction } from './audit.ts';
 import { BackupError, createBackup, listBackups, readManifest, restoreBackup } from './backup.ts';
+import { pruneRetention, summarize as summarizeRetention } from './retention.ts';
 import { STORAGE_DIR } from './artifacts.ts';
 /** M60 (ADR 0058): every command leaves one event, as the operator. */
 const record = (action: AuditAction, e: { subjectUserId?: string | null; detail?: Record<string, string | number | boolean | null> } = {}) =>
@@ -43,6 +44,7 @@ const USAGE = `fabrikka admin
   backups       [--dir <dir>]   the archives in a directory, newest first
   restore       --file <archive> [--force]
                                 into an empty instance (DATABASE_URL, ARTIFACT_DIR); --force replaces
+  prune-retention [--team <id>] delete what organizations chose not to keep (M63), now
 
 Passwords are read from a TTY prompt, or from stdin with --password-stdin so
 they never appear in shell history or ps output:
@@ -302,6 +304,13 @@ try {
         if (err instanceof BackupError) die(err.message);
         throw err;
       }
+      break;
+    }
+
+    case 'prune-retention': {
+      // M63: run the daily retention job now, for one organization or all.
+      const pruned = await pruneRetention(db, flag(argv, 'team'));
+      console.log(summarizeRetention(pruned) ? `deleted ${summarizeRetention(pruned)}` : 'nothing past its window');
       break;
     }
 

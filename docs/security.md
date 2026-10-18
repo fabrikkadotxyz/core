@@ -682,6 +682,13 @@ actions is fixed, in `audit.ts`; adding to it starts here.
 | The trail outlives its purpose | Per-organization retention, a fixed list of 90, 180, 365 or 730 days, pruned daily; shortening prunes at once. Events in no organization follow the instance's `FABRIKKA_AUDIT_DAYS`. |
 | A person who left is still named | Names resolve at read time from `users`, so after ADR 0057's `former-member` the trail says `former-member` too. |
 
+**Retention beyond the trail (M63).** An organization's owners may choose how
+long its rooms keep messages, documents and files (off by default; one of
+five windows). What that never touches: the context, links, the trail and the
+roster, so the record of *what was decided and by whom* outlives the chat the
+policy chose to drop. Only owners set it; a change is itself in the trail with
+what it deleted, and the daily run is too.
+
 What the trail is not: alerting, shipping to a log system, or a tamper-evident
 chain. A SOC 2 report wants the first two; they are deployment concerns on top
 of this table.

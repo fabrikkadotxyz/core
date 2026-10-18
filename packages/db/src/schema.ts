@@ -102,6 +102,14 @@ export const teams = pgTable(
     /** M60 (ADR 0058): how long this organization's audit_events are kept. A fixed list, like call records. */
     auditDays: integer('audit_days').notNull().default(365),
     /**
+     * M63 (ADR 0058 amended): how long the organization keeps messages, documents
+     * (by last edit) and uploaded files in its rooms. Null: forever, the default
+     * for a self-hoster; a deployment sets a value through the kit. Fixed lists.
+     */
+    messageDays: integer('message_days'),
+    outputDays: integer('output_days'),
+    fileDays: integer('file_days'),
+    /**
      * M53 (ADR 0051): the account whose own organization this is. Created with
      * the account, named after the person; they cannot be removed from it.
      */
@@ -110,6 +118,9 @@ export const teams = pgTable(
   (t) => [
     check('teams_call_record_days', sql`${t.callRecordDays} in (30, 60, 90, 180, 365)`),
     check('teams_audit_days', sql`${t.auditDays} in (90, 180, 365, 730)`),
+    check('teams_message_days', sql`${t.messageDays} is null or ${t.messageDays} in (30, 90, 180, 365, 730)`),
+    check('teams_output_days', sql`${t.outputDays} is null or ${t.outputDays} in (30, 90, 180, 365, 730)`),
+    check('teams_file_days', sql`${t.fileDays} is null or ${t.fileDays} in (30, 90, 180, 365, 730)`),
   ],
 );
 

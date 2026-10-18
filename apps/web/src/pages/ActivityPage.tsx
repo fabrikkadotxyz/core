@@ -6,7 +6,65 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { AuditEventView } from '@fabrikka/types';
-import { teams } from '../api.ts';
+import { teams, type RetentionView } from '../api.ts';
+
+/** M63: what the organization's rooms keep, and for how long. Owners only. */
+function Retention({ teamId }: { teamId: string }) {
+  const [state, setState] = useState<RetentionView | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    teams.retention(teamId).then(setState).catch(() => setState(null));
+  }, [teamId]);
+  if (!state) return null;
+  const rows: { key: 'messageDays' | 'outputDays' | 'fileDays'; label: string; by: string }[] = [
+    { key: 'messageDays', label: 'Messages', by: 'from when they were written' },
+    { key: 'outputDays', label: 'Documents', by: 'from their last edit' },
+    { key: 'fileDays', label: 'Uploaded files', by: 'from when they were added' },
+  ];
+  return (
+    <section aria-label="What the rooms keep">
+      <h2>What the rooms keep</h2>
+      <p className="muted small">
+        By default everything stays. Choosing a window deletes what is older, daily, in every room of this organization; choosing a shorter one deletes it now.
+        Decisions, facts and the trail are not affected.
+      </p>
+      {rows.map((r) => (
+        <p key={r.key} className="small">
+          <label>
+            {r.label}: keep{' '}
+            <select
+              value={state[r.key] ?? ''}
+              onChange={async (e) => {
+                setError(null);
+                setNote(null);
+                const value = e.target.value === '' ? null : Number(e.target.value);
+                try {
+                  const res = await teams.setRetention(teamId, { [r.key]: value });
+                  setState(res);
+                  const gone = res.pruned.messages + res.pruned.outputs + res.pruned.files;
+                  setNote(gone ? `Deleted ${res.pruned.messages} message(s), ${res.pruned.outputs} document(s), ${res.pruned.files} file(s) past the window.` : 'Nothing was older than that.');
+                } catch (err) {
+                  setError((err as Error).message);
+                }
+              }}
+            >
+              <option value="">forever</option>
+              {state.choices.map((d) => (
+                <option key={d} value={d}>
+                  {d} days
+                </option>
+              ))}
+            </select>
+          </label>{' '}
+          <span className="muted">{r.by}</span>
+        </p>
+      ))}
+      {note && <p className="hint">{note}</p>}
+      {error && <p className="error">{error}</p>}
+    </section>
+  );
+}
 
 const KINDS: { key: string; label: string }[] = [
   { key: '', label: 'Everything' },
@@ -157,6 +215,8 @@ export function OrganizationActivity({ teamId }: { teamId: string }) {
         </p>
         {error && <p className="error">{error}</p>}
       </section>
+
+      <Retention teamId={teamId} />
     </>
   );
 }

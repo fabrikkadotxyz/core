@@ -31,6 +31,8 @@ export const AUDIT_ACTIONS = [
   'team.created',
   'team.member_removed',
   'team.audit_days_changed',
+  'team.retention_changed',
+  'retention.pruned',
   'invite.created',
   'invite.revoked',
   'invite.redeemed',

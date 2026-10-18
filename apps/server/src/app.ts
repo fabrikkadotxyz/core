@@ -134,6 +134,7 @@ import { AUDIT_DAYS, audit, auditCsv, auditForTeam, auditForUser, getAuditDays, 
 import { BACKUP_KEEP_DAYS, createBackup, pruneBackups } from './backup.ts';
 import { STORAGE_DIR } from './artifacts.ts';
 import { exportAccount } from './account-export.ts';
+import { getRetention, pruneRetention, RETENTION_DAYS, setRetention, summarize as summarizeRetention } from './retention.ts';
 import { addStream, refreshRoom, startAttention } from './attention.ts';
 import { DEFAULT_THEME, SYSTEM_THEMES, loadThemes, publicTheme, themeDirs, themeFile } from './themes.ts';
 import {
@@ -1138,6 +1139,32 @@ export function createApp(options: CreateAppOptions = {}) {
     await setAuditDays(db, teamId, days);
     trail(c, { action: 'team.audit_days_changed', teamId, detail: { days } });
     return c.json({ auditDays: days });
+  });
+
+  /* ---- M63 (ADR 0058 amended): how long an organization keeps what its rooms hold ---- */
+
+  app.get('/api/teams/:id/retention', requireUser(db), async (c) => {
+    const teamId = c.req.param('id');
+    if ((await teamRole(db, teamId, c.get('user').id)) !== 'owner') return c.notFound();
+    const policy = await getRetention(db, teamId);
+    return policy ? c.json({ ...policy, choices: RETENTION_DAYS }) : c.notFound();
+  });
+
+  app.put('/api/teams/:id/retention', requireUser(db), async (c) => {
+    const teamId = c.req.param('id');
+    const role = await teamRole(db, teamId, c.get('user').id);
+    if (!role) return c.notFound();
+    if (role !== 'owner') return c.json({ error: 'only organization owners choose how long its rooms keep things' }, 403);
+    type RetentionBody = Partial<Record<'messageDays' | 'outputDays' | 'fileDays', unknown>>;
+    const body = await c.req.json<RetentionBody>().catch(() => ({}) as RetentionBody);
+    const policy: Partial<{ messageDays: number | null; outputDays: number | null; fileDays: number | null }> = {};
+    for (const k of ['messageDays', 'outputDays', 'fileDays'] as const) {
+      if (k in body) policy[k] = body[k] === null ? null : Number(body[k]);
+    }
+    const r = await setRetention(db, teamId, policy);
+    if (!r.ok) return c.json({ error: r.error }, 400);
+    trail(c, { action: 'team.retention_changed', teamId, detail: { ...r.policy, prunedMessages: r.pruned.messages, prunedOutputs: r.pruned.outputs, prunedFiles: r.pruned.files } });
+    return c.json({ ...r.policy, pruned: r.pruned, choices: RETENTION_DAYS });
   });
 
   app.get('/api/me/audit', requireUser(db), async (c) => {
@@ -3206,6 +3233,16 @@ export function createApp(options: CreateAppOptions = {}) {
       } else if (backupDir) {
         console.warn('[backup] FABRIKKA_BACKUP_DIR is set but FABRIKKA_BACKUP_KEY is not: no backups will be written (docs/operations.md, "Backups")');
       }
+      // M63: what organizations chose not to keep. Once now, then daily.
+      const keep = () =>
+        pruneRetention(db)
+          .then((p) => {
+            const line = summarizeRetention(p);
+            if (line) console.log(`[retention] deleted ${line}`);
+          })
+          .catch((err) => console.warn(`[retention] prune failed: ${(err as Error).message}`));
+      void keep();
+      setInterval(keep, 24 * 60 * 60 * 1000).unref();
       return new Promise<ReturnType<typeof serve>>((resolveStart) => {
         const server = serve({ fetch: app.fetch, port }, (info) => {
           console.log(`fabrikka server on http://localhost:${info.port}`);

@@ -318,6 +318,14 @@ export const templates = {
 
 /* ----------------------------------------------------------------- teams */
 
+/** M63: an organization's retention, as its owners see it. */
+export interface RetentionView {
+  messageDays: number | null;
+  outputDays: number | null;
+  fileDays: number | null;
+  choices: readonly number[];
+}
+
 export const teams = {
   list: () => call<TeamSummary[]>('/teams'),
   create: (name: string) => call<TeamSummary>('/teams', { method: 'POST', body: { name } }),
@@ -327,6 +335,10 @@ export const teams = {
   audit: (id: string, action?: string) =>
     call<{ events: AuditEventView[]; auditDays: number; choices: readonly number[] }>(`/teams/${id}/audit${action ? `?action=${encodeURIComponent(action)}` : ''}`),
   setAuditDays: (id: string, days: number) => call<{ auditDays: number }>(`/teams/${id}/audit-days`, { method: 'PUT', body: { days } }),
+  /** M63: how long the organization's rooms keep messages, documents and files; null is forever. Owners only. */
+  retention: (id: string) => call<RetentionView>(`/teams/${id}/retention`),
+  setRetention: (id: string, policy: Partial<Pick<RetentionView, 'messageDays' | 'outputDays' | 'fileDays'>>) =>
+    call<RetentionView & { pruned: { messages: number; outputs: number; files: number } }>(`/teams/${id}/retention`, { method: 'PUT', body: policy }),
   removeMember: (id: string, userId: string) =>
     call<{ ok: true }>(`/teams/${id}/members/${userId}`, { method: 'DELETE' }),
 };

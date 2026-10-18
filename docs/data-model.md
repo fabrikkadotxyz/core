@@ -490,6 +490,21 @@ becomes null; its title survives in `detail`.
 `audit_days`, events in none (a sign-in, a personal connection) by
 `FABRIKKA_AUDIT_DAYS`. Shortening the setting prunes at once.
 
+### M63 — retention (ADR 0058 amended)
+
+```
+teams  (additions)
+  message_days     integer   -- null: forever. Else one of 30, 90, 180, 365, 730
+  output_days      integer   -- documents, by updated_at
+  file_days        integer   -- uploaded files (artifacts), by created_at
+```
+
+The daily job deletes `messages` (their mentions cascade), `outputs` (edits
+and comments cascade) and `artifacts` rows past their organization's window;
+a file's blob stays on disk, as when a file is removed by hand. Context,
+links, the trail and memberships are never touched. One `retention.pruned`
+event per organization per run that removed something.
+
 ### M25 — templates
 
 ```

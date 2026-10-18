@@ -88,3 +88,23 @@ actions is the core's; a deployment prefixes its own with `deployment.`.
 - Not in scope: alerting on the trail, shipping it elsewhere, or signing it.
   A SOC 2 report will want the first two; they are deployment concerns on top
   of this table, not changes to it.
+
+## Amended 2026-10-18: retention beyond the trail (M63)
+
+The same model, §4, extends to what the rooms hold. `teams` gains
+`message_days`, `output_days` and `file_days`: how long an organization keeps
+messages (by when they were written), documents (by their last edit) and
+uploaded files (by when they were added). Each is **null, forever, by
+default**: a self-hoster who said nothing loses nothing. Each is one of 30,
+90, 180, 365 or 730 days once set, by an owner in *Settings → Activity* or by
+a deployment through the kit (`setRetention`), so a deployment can set a
+default. The daily job deletes past the windows across the organization's
+rooms, shortening a window deletes at once, and every run that removed
+something is one event (`retention.pruned`, with counts) in the trail.
+
+What retention never touches: the room's context (objective, facts,
+decisions, questions), its links, the trail itself, and who was in the room.
+A message's deletion takes its mentions; a document's takes its edits and
+comments; a file's takes its row and leaves the blob, as removing a file by
+hand does. Not built here: a bin for deleted rooms. A deleted room is gone at
+once, as before; a 30-day bin with restore is a later milestone.

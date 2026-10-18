@@ -124,9 +124,7 @@ root; in Docker, `docker compose exec server pnpm admin <command>`.
 | `admin reset-password --email <e>` | Set a new password. **This is the password recovery path** — there is no emailed reset link. |
 | `admin list-users` | Emails, display names, owner flag, created date. |
 | `admin agents` | *(2026-10-17)* How many people said they use each agent tool, and how many wish Fabrikka ran each one not yet supported, from the welcome's answers. Counts only, no names. Says which adapter to build next. |
-| `admin deactivate-user --email <e>` | *(M58)* The account cannot sign in and every login session ends; nothing else changes. Reversible. |
-| `admin reactivate-user --email <e>` | *(M58)* Undo a deactivation, or cancel a deletion that has not happened yet. |
-| `admin delete-user --email <e> [--erase-name] [--now] [--yes]` | *(M58, ADR 0057)* Delete the account: personal data goes, what they wrote stays under their name, or under `former-member` with `--erase-name`. Without `--now` it is scheduled after the grace period (`FABRIKKA_DELETION_GRACE_DAYS`, 14) and the account is deactivated meanwhile. Prints what will pass to whom and what will be deleted, and asks for the address again. |
+| `admin delete-user --email <e>` | Remove an account and its memberships. |
 | `admin funnel [--since <date>]` | *(M17)* Aggregate invite-loop counts: invites created and redeemed, redeemed by a new account, redeemers who connected an agent within 7 days, and redeemers who went on to create a session or send an invite. Counts only, no emails or names, read from this instance's own tables. Nothing is sent anywhere. |
 
 The CLI and the HTTP API are thin wrappers over the same functions, so they
@@ -163,14 +161,6 @@ are copied by hand and password resets go through the CLI.
 Configuring one adds email-shaped affordances on top of the same flows. It is not
 a different code path and there is no deployment-mode flag. Since M32
 ([ADR 0029](decisions/0029-the-core-is-a-library-a-deployment-extends-it.md)):
-
-**With a transport, addresses are proven (M64).** An account that joined
-through a link gets a confirmation link (`/verify/<token>`, 24 hours, once).
-Until it is used, the person can use Fabrikka but not download or delete
-their account, or change its address; *Settings → Account* shows the state
-and resends. Accounts you create with `admin create-user`, and a deployment's
-sign-ups that verified first, are vouched for. Without a transport nothing is
-required: every account came from an invite someone sent.
 
 | `FABRIKKA_MAIL` | Effect |
 | --- | --- |
@@ -233,19 +223,15 @@ command, shown with a **Copy** button under *Your devices*, is:
 curl -fsSL https://<your instance>/install.sh | bash
 ```
 
-When the instance serves a desktop app for the computer it runs on (macOS on
-Apple Silicon or Intel, Linux x64; see *Desktop app*), it installs **the app**,
-which carries its own Node, and opens it on this instance. Otherwise it installs
-the **command-line client**, which needs **Node 22 or newer**: only Fabrikka's
-own client, into `~/.local/share/fabrikka/` with a `fabrikka` launcher in
+It needs **Node 22 or newer** on the machine, and installs only Fabrikka's own
+client, into `~/.local/share/fabrikka/` with a `fabrikka` launcher in
 `~/.local/bin` (no `sudo`). It then starts `fabrikka host` already pointed at
 this instance, which opens the pairing page. Options, passed as
 `… | bash -s -- --no-connect`:
 
 | Option | Effect |
 | --- | --- |
-| `--client` | Install the command-line client even when an app is served (Node 22 or newer). |
-| `--app` | Install the app or nothing: stop with an error when this instance serves none for this computer. |
+| `--app` | Install the desktop app for this computer instead (macOS or Linux; no Node needed). See *Desktop app*. |
 | `--no-connect` | Install only; run `fabrikka host` later. |
 | `--no-modify-path` | Don't add `~/.local/bin` to `~/.zshrc` / `~/.bashrc`. |
 
@@ -458,66 +444,21 @@ database, and separately from it.
 A credential is never returned by any API and never logged; the UI shows only
 whether one is set.
 
-## Files
+## Artifacts
 
-Uploaded files live in one of two stores, the operator's choice
-([ADR 0060](decisions/0060-files-live-on-disk-or-in-an-s3-compatible-bucket.md)):
+Uploaded files are stored on local disk — a self-hoster should not have to
+configure object storage to attach a CSV. The location is `ARTIFACT_DIR`,
+defaulting to `.artifacts/` in the repo root.
 
-- **On disk** (the default, `FABRIKKA_FILES=disk`): a self-hoster should not
-  have to configure object storage to attach a CSV. The location is
-  `ARTIFACT_DIR`, defaulting to `.artifacts/` in the repo root, `/data/artifacts`
-  in the image.
-- **In an S3-compatible bucket** (`FABRIKKA_FILES=s3`, M66): AWS S3,
-  Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces, Scaleway,
-  Hetzner, MinIO, Garage, anything that speaks the S3 API. For a hosted
-  instance on an ephemeral or one-machine disk, and to choose the files'
-  region.
-
-| Variable | Meaning |
-| --- | --- |
-| `FABRIKKA_FILES` | `disk` (default) or `s3` |
-| `FABRIKKA_S3_ENDPOINT` | The store's URL, e.g. `https://<account>.r2.cloudflarestorage.com`, `https://s3.eu-central-003.backblazeb2.com`, `http://minio:9000`. Empty means AWS for the region. |
-| `FABRIKKA_S3_BUCKET` | The bucket, which must exist. Keep it private: nothing is ever served from it directly. |
-| `FABRIKKA_S3_REGION` | Default `us-east-1`. R2 takes `auto`. |
-| `FABRIKKA_S3_ACCESS_KEY_ID`, `FABRIKKA_S3_SECRET_ACCESS_KEY` | A key that may read, write and list that bucket. Never logged. |
-| `FABRIKKA_S3_PREFIX` | Optional, e.g. `fabrikka/`, to share a bucket. |
-| `FABRIKKA_S3_PATH_STYLE` | `true` for `https://host/bucket/key`, `false` for `https://bucket.host/key`. Default: `true` when an endpoint is given, `false` for AWS. |
-
-With a bucket, the server writes and reads back a small `fabrikka-check`
-object at start, and **refuses to start** if it can't, saying why: the key was
-rejected, no such bucket, the region, or the endpoint not reachable. It never
-falls back to disk. Its first lines name the store in use.
-
-Files are named by the **SHA-256 of their content**, sharded two levels deep
-(`ab/cd/abcd…`), the same keys on disk and in a bucket. Two people uploading
-`notes.md` share one blob and neither overwrites the other
-([ADR 0013](decisions/0013-context-is-append-only-with-explicit-removal.md)).
-Downloads always go through the server and the room's membership check: no
-presigned URL, no public bucket.
-
-**Profile pictures** (M67, ADR 0061) live in the same store under
-`avatars/`, at most 512 KB each, and are the one thing Fabrikka deletes from
-it: when replaced, removed, or their account deleted. They are in the backup
-and in `files copy` like everything else.
+Files are named by the **SHA-256 of their content**, sharded two levels deep. Two
+people uploading `notes.md` therefore share one blob and neither overwrites the
+other ([ADR 0013](decisions/0013-context-is-append-only-with-explicit-removal.md)).
 
 Limits: 10 MB per file. Deleting an artifact removes the row but **leaves the
 blob**, because another artifact may reference the same content; at MVP scale we
 do not collect that garbage, and say so rather than letting you discover it.
 
-**Moving to a bucket** (or back). Stop the server, add the `FABRIKKA_S3_*`
-settings, then:
-
-```bash
-pnpm admin files copy --to s3   # every blob from ARTIFACT_DIR into the bucket; rerunnable
-pnpm admin files status         # with FABRIKKA_FILES=s3: the store, and any file missing from it
-```
-
-Set `FABRIKKA_FILES=s3` and start the server. `--to disk` goes the other way.
-The copy skips what is already there, so a second run after new uploads only
-copies those. Keep the disk tree until `files status` says nothing is missing.
-
-The backup copies every file from whichever store is in use (*Backups*,
-below); the database rows are useless without them.
+Back up `ARTIFACT_DIR` alongside the database — the rows are useless without it.
 
 ## Outputs
 
@@ -590,8 +531,7 @@ checksum differs. Without the argument, the image serves no app. A checkout
 serves whatever is in `dist-app/`; copying a release's files there is enough.
 
 Install it from the instance: on a Mac or Linux, `curl -fsSL
-https://<instance>/install.sh | bash` (the app is the default whenever one is
-served for that computer); on Windows, `irm
+https://<instance>/install.sh | bash -s -- --app`; on Windows, `irm
 https://<instance>/install.ps1 | iex`. On Linux the AppImage needs `libfuse2`
 (Ubuntu: `sudo apt install libfuse2`); the installer says so when it is
 missing. The app's settings live in Tauri's config folder for the platform:
@@ -630,116 +570,14 @@ Windows and Linux are built on their own runners (above); there is no
 cross-compilation, and nothing is code-signed yet (ADR 0031): a copy
 installed by the script runs; a copy downloaded with a browser warns.
 
-## The activity trail (M60)
+## Backups
 
-Every privileged action leaves one event in `audit_events`
-([ADR 0058](decisions/0058-the-trail-who-did-what-kept-per-organization-never-what-they-said.md)):
-sign-ins and their failures, membership, invites, grants, connections,
-exports, deletions, and every command below. Ids, names and outcomes; never
-message content, tool arguments or a credential.
-
-- **Owners** read their organization's trail in *Settings → Activity*, filter
-  it by kind, download it as CSV, and choose how long it is kept: 90, 180,
-  365 or 730 days (365 by default). Shortening deletes the older events at
-  once.
-- **A person** sees what they did, and what was done to them, in *Settings →
-  Account*.
-- **You** read everything: `admin audit [--team <id>] [--since <YYYY-MM-DD>]
-  [--action <prefix>] [--limit <n>]`. Prefixes are the first word of an
-  action: `login`, `account`, `member`, `invite`, `grant`, `connection`,
-  `admin`, `deployment`.
-- **Events in no organization** (a sign-in, a personal connection) are kept
-  for `FABRIKKA_AUDIT_DAYS` (365). The daily job prunes both kinds.
-
-The trail is a table, not a log pipeline. Alerting on it, or shipping it to
-a log system, is a deployment's job; the SQL is one `select` on
-`audit_events`.
-
-## Retention (M63)
-
-An organization's owners choose, in *Settings → Activity → What the rooms
-keep*, how long its rooms keep **messages** (from when they were written),
-**documents** (from their last edit) and **uploaded files** (from when they
-were added): forever, the default, or 30, 90, 180, 365 or 730 days. A daily
-job deletes what is older across the organization's rooms; shortening a
-window deletes at once and says how much went. Notes, links, the trail and
-memberships are never touched. Every run that removed something is a
-`retention.pruned` event in the trail, with counts. `pnpm admin
-prune-retention [--team <id>]` runs the job now. A deployment can set a
-default for every new organization through the kit (`docs/protocol.md`).
-
-## Backups (M61)
-
-Everything an instance keeps is the database and the artifact files, plus two
-secrets that are in neither: `FABRIKKA_ENCRYPTION_KEY` (seals vendor tokens)
-and `FABRIKKA_BACKUP_KEY` (seals the archives). A backup is **one encrypted
-archive** of the first two; the secrets you keep yourself.
-
-**What a backup is.** `fabrikka-<instant>.fbk`: a gzipped tar holding
-`db.dump` (`pg_dump --format=custom`), `artifacts/` (every file, read from
-the store in use, disk or bucket) and
-`manifest.json` (when, the instance, the dump's size and SHA-256, the file
-count), encrypted with AES-256-GCM under a key derived from
-`FABRIKKA_BACKUP_KEY`. A copy that leaks is just bytes; an archive restored
-with the wrong passphrase fails before touching anything.
-
-**Daily, by the server.** With `FABRIKKA_BACKUP_DIR` and `FABRIKKA_BACKUP_KEY`
-set, the server writes an archive a minute after it starts and every 24 hours
-after that, and removes archives older than `FABRIKKA_BACKUP_KEEP_DAYS` (30),
-never the newest. Each run is in the activity trail (`admin.backup`). **The
-image does this by default:** `/data/backups`, with a passphrase it generates
-into `/data/backup.key` the first time. Set `FABRIKKA_BACKUP_DIR=` (empty) to
-turn it off.
-
-**A backup beside its data is not one.** `/data/backups` is on the same
-volume as `/data`. Copy the archives off it: a platform's disk snapshots
-(Render, Fly volumes), an `rclone` or `aws s3 sync` of the directory from a
-cron, or `docker cp`. Copy `backup.key` and `encryption.key` **once, to
-somewhere else**, and never with the archives. Shipping straight to an
-S3-compatible bucket from the server is the next step and is not built.
-
-By hand, from the repo root or `docker compose exec server pnpm admin …`:
+All durable state is in Postgres. Artifacts (M7) add object storage.
 
 ```bash
-FABRIKKA_BACKUP_KEY=… pnpm admin backup --to /path/to/backups   # one archive now
-pnpm admin backups --dir /path/to/backups                        # what is there
+docker compose -f docker/docker-compose.yml exec postgres \
+  pg_dump -U fabrikka fabrikka > fabrikka-$(date +%F).sql
 ```
-
-**Restoring.** Into an **empty** instance: a fresh database (`createdb`, or a
-new managed one) and the file store you want, an empty `ARTIFACT_DIR` or a
-bucket (`FABRIKKA_FILES=s3`), with the same
-`FABRIKKA_ENCRYPTION_KEY` as before (or every vendor connection must be
-attached again).
-
-```bash
-DATABASE_URL=postgres://…/fabrikka_new ARTIFACT_DIR=/data/artifacts \
-FABRIKKA_BACKUP_KEY=… pnpm admin restore --file /path/to/fabrikka-….fbk
-```
-
-It checks the checksum, refuses a database that already has tables (pass
-`--force` to replace one that was started and is empty), runs `pg_restore`,
-writes the files into the configured store, and records `admin.restore` in
-the trail. An archive taken on disk restores into a bucket, and the other
-way round. Then start the
-server: it applies any migration newer than the archive. Point `PUBLIC_URL`
-at the new address if it changed.
-
-**Targets.** Recovery point: 24 hours, the daily archive (make one by hand
-before anything risky). Recovery time: under an hour, dominated by
-provisioning the database and copying the archive back.
-
-**The restore drill.** Once a quarter, restore the newest archive into a
-scratch database and open a room there. The scripted check does the same
-against a copy of the development database:
-
-```bash
-FABRIKKA_TEST_BACKUP=1 node scripts/acceptance/m61.mjs
-```
-
-It needs `pg_dump`, `pg_restore`, `psql` and `tar` on the machine, at least
-the server's major version. `.github/workflows/backup-restore.yml` runs it
-every week against a fresh Postgres, so an archive that stops restoring is
-noticed before it is needed.
 
 ## The hostnames it answers to
 

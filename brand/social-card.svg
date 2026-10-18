@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <!-- Fabrikka's social card: what a link to the repository or an instance shows
+       when it's pasted into Slack, X, LinkedIn or a search result. The mark in
+       Light Cyan on the app tile's gradient, the name and the line. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4a6a94"/>
+      <stop offset="0.55" stop-color="#3d5a80"/>
+      <stop offset="1" stop-color="#293241"/>
+    </linearGradient>
+    <mask id="cuts" maskUnits="userSpaceOnUse" x="238" y="12" width="547" height="547">
+      <rect x="238" y="12" width="547" height="547" fill="#fff"/>
+      <g fill="none" stroke="#000" stroke-width="14" stroke-linejoin="round">
+        <path d="M413 180 V368 C413 381 425 382 432 375 A34 34 0 1 1 432 429 C425 422 413 423 413 436 V520"/>
+        <path d="M610 180 V368 C610 381 622 382 629 375 A34 34 0 1 1 629 429 C622 422 610 423 610 436 V520"/>
+      </g>
+    </mask>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <svg x="104" y="128" width="384" height="384" viewBox="238 12 547 547">
+    <path fill="#e0fbfc" mask="url(#cuts)" d="M248 208 L368 296 V208 L488 296 V208 L605 296 H648 L668 68 H737 L757 296 H775 V503 H248 Z"/>
+  </svg>
+  <g fill="#e0fbfc" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+    <text x="544" y="300" font-size="116" font-weight="700" letter-spacing="-3">Fabrikka</text>
+    <text x="548" y="378" font-size="54" font-weight="600" opacity="0.95">Multiplayer AI.</text>
+    <text x="548" y="440" font-size="32" opacity="0.8">One room for your team</text>
+    <text x="548" y="482" font-size="32" opacity="0.8">and the agents it already uses.</text>
+    <text x="548" y="566" font-size="26" opacity="0.6">fabrikka.xyz · open source · AGPL-3.0</text>
+  </g>
+</svg>

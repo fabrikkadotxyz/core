@@ -2,6 +2,11 @@
   "name": "fabrikka",
   "version": "0.0.0",
   "private": true,
+  "description": "Multiplayer AI: a room where your team and the AI agents you already use (Claude Code, Codex, any MCP client) work one problem together, live. Self-hosted, AGPL-3.0.",
+  "keywords": ["ai-agents", "mcp", "model-context-protocol", "claude-code", "codex", "multiplayer", "collaboration", "self-hosted", "realtime"],
+  "homepage": "https://fabrikka.xyz",
+  "repository": { "type": "git", "url": "git+https://github.com/fabrikkadotxyz/core.git" },
+  "bugs": "https://github.com/fabrikkadotxyz/core/issues",
   "license": "AGPL-3.0-only",
   "packageManager": "pnpm@10.15.1",
   "engines": {

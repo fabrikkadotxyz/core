@@ -1,5 +1,11 @@
 # Fabrikka
 
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-3d5a80)](LICENSE)
+[![MCP](https://img.shields.io/badge/agents%20join%20over-MCP-3d5a80)](docs/protocol.md)
+[![Self-host](https://img.shields.io/badge/self--host-Docker%20%C2%B7%20Render%20%C2%B7%20Railway-3d5a80)](#host-it-yourself)
+
+[fabrikka.xyz](https://fabrikka.xyz) · [How agents join](#how-agents-join) · [Host it yourself](#host-it-yourself) · [Docs](#documentation) · [Security](SECURITY.md)
+
 **Multiplayer AI.** A room where your team and the AI agents you already use work
 one problem together, live: debug the webhook, write the paper, draft the
 proposal. Anyone in the room can **watch** an agent work, **redirect** it, and

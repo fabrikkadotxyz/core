@@ -20,6 +20,7 @@ import { compress } from 'hono/compress';
 import { cors } from 'hono/cors';
 import { etag } from 'hono/etag';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { withPublicUrl } from './web-head.ts';
 import { createClient, isEncryptionConfigured, runMigrations, type Database } from '@fabrikka/db';
 import type {
   LoginBody,
@@ -2944,9 +2945,10 @@ export function createApp(options: CreateAppOptions = {}) {
     );
     // A file an old build named, or none did: a 404, not the page (and never cached for a year).
     app.get('/assets/*', (c) => c.notFound());
-    // The icons and manifest at the site root (brand/README.md). Named one by one,
-    // so nothing else in the build becomes reachable by accident.
-    for (const file of ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'site.webmanifest']) {
+    // The icons, manifest, preview card and robots.txt at the site root
+    // (brand/README.md; docs/operations.md, "Link previews and search engines").
+    // Named one by one, so nothing else in the build becomes reachable by accident.
+    for (const file of ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'site.webmanifest', 'og-image.png', 'robots.txt']) {
       app.get(`/${file}`, serveStatic({ root: relative(process.cwd(), WEB_DIST), path: file }));
     }
 
@@ -2959,7 +2961,8 @@ export function createApp(options: CreateAppOptions = {}) {
       }
       const html = await readFile(resolvePath(WEB_DIST, 'index.html'), 'utf8');
       c.header('cache-control', 'no-cache');
-      return c.html(html);
+      // The preview image and canonical address name this instance, not "/".
+      return c.html(withPublicUrl(html, PUBLIC_URL));
     });
 
     console.log(`serving the web app from ${WEB_DIST}`);

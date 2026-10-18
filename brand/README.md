@@ -9,6 +9,8 @@ their agents, each bringing a piece, producing something together.
 | `favicon.svg` | The mark for small sizes: wider cuts so the puzzle joints survive at 16–32 px. Jet Black, Light Cyan in dark mode. |
 | `app-icon.svg` | The app tile: the mark in Light Cyan on a Dusk Blue to Jet Black gradient, rounded. The desktop app, touch and install icons. |
 | `app-icon-1024.png` | The tile rendered at 1024 px, for stores and press. |
+| `social-card.svg` | The card a pasted link shows (Slack, X, LinkedIn, a search result): the mark, the name and the line on the tile's gradient, 2:1. |
+| `social-preview.png` | The card at 1280×640, for the GitHub repository's *Social preview* (Settings → General). GitHub can't read it from the repository; the owner uploads it once. |
 
 In the web app the mark is a component, `apps/web/src/components/Mark.tsx`,
 the same shape and cuts. With `assemble`, the three pieces arrive from apart
@@ -21,6 +23,8 @@ Generated from these, and committed:
 - `apps/web/public/favicon.svg`, `favicon.ico` (16, 32 and 48 px);
 - `apple-touch-icon.png` (180 px), `icon-192.png`, `icon-512.png` and
   `site.webmanifest`;
+- `apps/web/public/og-image.png` (1200×600), the card every instance serves
+  for link previews (`docs/operations.md`, *Link previews and search engines*);
 - `apps/desktop/src-tauri/icons/icon.png` (the app, 512 px);
 - `icons/tray.png` (the menu bar, a 44 px black template that macOS tints).
 
@@ -35,6 +39,8 @@ rsvg-convert -w 192 -h 192 brand/app-icon.svg -o apps/web/public/icon-192.png
 rsvg-convert -w 512 -h 512 brand/app-icon.svg -o apps/web/public/icon-512.png
 rsvg-convert -w 512 -h 512 brand/app-icon.svg -o apps/desktop/src-tauri/icons/icon.png
 rsvg-convert -w 1024 -h 1024 brand/app-icon.svg -o brand/app-icon-1024.png
+rsvg-convert -w 1280 -h 640 brand/social-card.svg -o brand/social-preview.png
+rsvg-convert -w 1200 -h 600 brand/social-card.svg -o apps/web/public/og-image.png
 rsvg-convert -w 44 -h 44 brand/favicon.svg | magick - -fill black -colorize 100 apps/desktop/src-tauri/icons/tray.png
 ```
 

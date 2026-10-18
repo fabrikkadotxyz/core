@@ -1,0 +1,8 @@
+# An instance's front door is public; everything behind it is a room, and a
+# room is invisible to anyone not in it. Crawlers get the sign-in page and
+# nothing else (docs/operations.md, "Link previews and search engines").
+User-agent: *
+Allow: /$
+Allow: /login
+Allow: /og-image.png
+Disallow: /

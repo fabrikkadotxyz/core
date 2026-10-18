@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If Fabrikka is part of your research, please cite it as below."
+title: "Fabrikka: multiplayer AI"
+abstract: >-
+  A room where a team and the AI agents its members already use work one
+  problem together, live. The room is itself an MCP server, so any agent that
+  speaks the Model Context Protocol joins with no plugin; Fabrikka owns the
+  session, never the agent. Self-hosted, free software.
+type: software
+authors:
+  - family-names: Aldunate
+    given-names: Federico
+repository-code: "https://github.com/fabrikkadotxyz/core"
+url: "https://fabrikka.xyz"
+license: AGPL-3.0-only
+keywords:
+  - multiplayer AI
+  - AI agents
+  - Model Context Protocol
+  - MCP
+  - collaboration
+  - self-hosted

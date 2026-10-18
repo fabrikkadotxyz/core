@@ -5,6 +5,9 @@
   "private": true,
   "type": "module",
   "description": "Local bridge that lets a running Claude Code session participate in a Fabrikka session",
+  "keywords": ["fabrikka", "mcp", "model-context-protocol", "claude-code", "ai-agents", "bridge"],
+  "homepage": "https://fabrikka.xyz",
+  "repository": { "type": "git", "url": "git+https://github.com/fabrikkadotxyz/core.git", "directory": "packages/bridge" },
   "bin": {
     "fabrikka": "./dist/cli.js"
   },

@@ -129,6 +129,7 @@ import {
 } from './outputs/core.ts';
 import { createUser, getUserTheme, setUserTheme } from './users.ts';
 import { GRACE_DAYS, requestDeletion, runDueDeletions } from './leaving.ts';
+import { loginThrottle } from './login-throttle.ts';
 import { addStream, refreshRoom, startAttention } from './attention.ts';
 import { DEFAULT_THEME, SYSTEM_THEMES, loadThemes, publicTheme, themeDirs, themeFile } from './themes.ts';
 import {
@@ -421,10 +422,20 @@ export function createApp(options: CreateAppOptions = {}) {
       return c.json({ error: 'email and password are required' }, 400);
     }
 
+    // M59: a full window of failures refuses even the right password, with the
+    // same answer, so a guesser learns neither the password nor the lock.
+    const ip = clientIp(c);
+    if (!loginThrottle.allowed(email, ip)) {
+      console.warn(`[login] refused: too many failed sign-ins (${loginThrottle.failuresFor(email)} for the address) from ${ip}`);
+      return c.json({ error: 'invalid email or password' }, 401);
+    }
     const signedIn = await login(db, email, password);
     // One message for "no such user", "wrong password" and (M58) a deactivated
     // or deleted account, so the endpoint is not an account enumeration oracle.
-    if (!signedIn) return c.json({ error: 'invalid email or password' }, 401);
+    if (!signedIn) {
+      loginThrottle.failed(email, ip);
+      return c.json({ error: 'invalid email or password' }, 401);
+    }
 
     issueCookie(c, signedIn.token, SECURE_COOKIES);
     void pruneExpiredSessions(db);
@@ -599,6 +610,10 @@ export function createApp(options: CreateAppOptions = {}) {
    * signup and invite-acceptance are one code path rather than two (ADR 0007).
    */
   app.post('/api/auth/signup', async (c) => {
+    // M59: an invite token is 128 random bits, so this is a brake on abuse, not the defence.
+    if (!rateLimit(`signup:ip:${clientIp(c)}`, { max: 300, windowMs: 15 * 60_000 })) {
+      return c.json({ error: 'too many sign-ups from this address; try again later' }, 429);
+    }
     const body = await c.req.json<SignupBody>();
     if (!body.token) return c.json({ error: 'an invite token is required' }, 400);
     if (!body.email || !body.password || !body.displayName) {
@@ -652,6 +667,10 @@ export function createApp(options: CreateAppOptions = {}) {
 
   /** Redeem as an already-logged-in user. */
   app.post('/api/invites/:token/redeem', requireUser(db), async (c) => {
+    // M59: the same brake, per account, on trying invite tokens.
+    if (!rateLimit(`redeem:user:${c.get('user').id}`, { max: 300, windowMs: 15 * 60_000 })) {
+      return c.json({ error: 'too many attempts; try again later' }, 429);
+    }
     const result = await redeemInvite(db, c.req.param('token'), c.get('user'));
     if (!result.ok) return c.json({ error: result.reason }, 400);
     if (result.team) membersChanged(db, result.team.id);

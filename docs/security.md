@@ -55,6 +55,24 @@ password has to cut access immediately.
 - 30-day expiry, `last_seen_at` refreshed on use.
 - A password reset deletes every `auth_sessions` row for that user.
 
+### Guessing passwords (M59)
+
+scrypt makes each guess slow for us too, so the server also refuses to take
+many. `login-throttle.ts` keeps a fixed window of **failed** sign-ins, in
+memory like the reset limiter.
+
+| Threat | Control |
+| --- | --- |
+| Guessing one account's password | After **10 failed sign-ins for an address in 15 minutes**, every attempt for it is refused until the window passes, the right password included. |
+| Spraying one password across many accounts | After **100 failures from one client in 15 minutes**, across addresses, that client is refused. The client is the socket's address, or the platform's header behind `FABRIKKA_TRUSTED_PROXIES` (*Rate limits* in `docs/operations.md`). |
+| Learning that an account exists from the lock | A refused attempt answers exactly what a wrong password does, `invalid email or password`, and sets no header. The only trace is one line in the server log, with the client address and the count, never the password. |
+| Locking a team out of its own account by failing on purpose | Only failures count: a successful sign-in costs nothing. The window is per address, not per account state, and nothing persists past 15 minutes. |
+| Trying invite tokens, or sign-ups, in bulk | `/api/auth/signup` takes 300 attempts per client and `/api/invites/:token/redeem` 300 per account in 15 minutes, then 429. A token is 128 random bits: these are brakes on abuse, not the defence. |
+
+A single process keeps the windows. A deployment that runs several needs them
+in Postgres, as the turn budget is; until then each process has its own
+window, which only makes the lock later, never absent.
+
 ### No open registration
 
 The first account is created **in the browser with the setup code**
@@ -671,3 +689,5 @@ These must pass before a session is ever shared with another human:
 | No TeX engine runs on the server; `\write18` and `\input{/etc/passwd}` do nothing | M13 |
 | An agent's Google Doc edit goes out with its owner's token, never the creator's | M14 |
 | Connecting Google without an encryption key is refused | M14 |
+| Deleting an account removes nothing another person is in, and a deleted or deactivated account cannot sign in or act | M58 |
+| Ten failed sign-ins refuse the eleventh with the same answer, the right password included | M59 |

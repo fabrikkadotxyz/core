@@ -2800,6 +2800,41 @@ server through invites, requests deletion with the password, asserts the
 sign-out and the cancellation on sign-in, then deletes now through the CLI
 and asserts the row counts, names, ownership and the failed sign-in.
 
+## M59 — The door: sign-in that resists guessing
+
+> **Built 2026-10-18.** The scripted check passes, the owner's manual test is
+> pending. The second of the milestones toward an instance a privacy
+> policy and an auditor can be shown; the cheapest real fix on the list.
+> Password reset was rate-limited since M32; sign-in itself was not.
+
+- **Failures count, successes don't.** `login-throttle.ts`: after 10 failed
+  sign-ins for an address in 15 minutes, or 100 from one client across
+  addresses, `/api/auth/login` refuses until the window passes, the right
+  password included. The answer is the one a wrong password gets, so the
+  lock tells a guesser nothing. One line in the server log, with the client
+  address and the count, is the trace M60 will record.
+- **Brakes on bulk.** `/api/auth/signup` takes 300 attempts per client and
+  `/api/invites/:token/redeem` 300 per account in 15 minutes, then 429.
+  Tokens are 128 random bits; this stops abuse, not guessing.
+- **Nothing to configure, nothing persisted.** In memory, per process, like
+  the reset limiter. `docs/security.md`, *Guessing passwords*.
+
+**Test** (any account that is not yours to lose for 15 minutes):
+1. Sign in with the wrong password ten times. Each time: *invalid email or
+   password*.
+2. Sign in with the right password: the same answer. **0 clicks beyond the
+   form.**
+3. From another account on the same computer, sign in: it works.
+4. Fifteen minutes later, the first account signs in normally.
+
+**Scripted** (`scripts/acceptance/m59.mjs`): makes a throwaway account
+through an invite, fails ten sign-ins, asserts the right password is refused
+with the identical body and status and no distinguishing header, asserts
+another account from the same client still signs in, and from the source that
+the throttle counts failures only and that signup and redeem carry their
+brakes. The unit test (`login-throttle.test.mts`) moves the clock past the
+window.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

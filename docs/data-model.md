@@ -427,6 +427,38 @@ users  (additions)
 derived from the records it describes (devices, rooms, agents, messages,
 invites, team members, connections), like unread. The migration sets
 `welcomed_at` for every existing account, so only new ones see the welcome.
+
+### M58 — leaving (ADR 0057)
+
+```
+users  (additions)
+  deactivated_at          timestamptz  -- cannot sign in; reversible unless deleted_at is set
+  deletion_requested_at   timestamptz  -- the person asked; the daily job deletes after the grace period
+  deleted_at              timestamptz  -- the tombstone: personal data gone, the row kept for what it wrote
+  erase_name              boolean      -- their choice: false keeps the display name on content, true made it `former-member`
+```
+
+**The `users` row is never deleted by the application.** A deleted account is
+a tombstone: `email` is a sentinel (`deleted-<id>@deleted.invalid`), the hash
+and the personal columns are null, and everything that joins `users` for a
+name (comments, members, chats) still resolves. Three cascades that reached
+shared content are gone: `teams.created_by_user_id`, `teams.own_of_user_id`
+and `sessions.owner_id` are `on delete restrict`; `participants.user_id` is
+`on delete set null`. The personal-data cascades (memberships, guest access,
+tokens, devices, flows, read marks, templates, grant defaults) stay: they are
+what deletion removes.
+
+**What deletion touches,** by table: deletes from `auth_sessions`,
+`password_resets`, `oauth_flows`, `mcp_servers` (the person's own; team ones
+lose `added_by_user_id`), `grant_defaults`, `devices`, `device_pairings`,
+`session_templates` (theirs), `agents` (theirs, with their connections and
+tokens), `session_reads`, `session_guests`, `session_members`,
+`team_members`; sets `revoked_at` on `session_invites` they created; deletes
+`sessions` with no other human member; updates `sessions.owner_id` and
+`session_members.role`, `team_members.role` for the ownership that passes;
+deletes `teams` nobody else is in and no session of which has another human;
+renames `participants.display_name` when `erase_name`. `team_mcp_calls` keep
+their participant and lose `user_id`, as before.
 ### M25 — templates
 
 ```

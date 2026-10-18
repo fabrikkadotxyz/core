@@ -119,6 +119,8 @@ export async function resolveDevice(db: Database, token: string | undefined) {
   const [d] = await db
     .select({ id: devices.id, userId: devices.userId, name: devices.name })
     .from(devices)
+    // M58 (ADR 0057): a deactivated or deleted person's computer acts for nobody.
+    .innerJoin(users, and(eq(users.id, devices.userId), isNull(users.deactivatedAt), isNull(users.deletedAt)))
     .where(and(eq(devices.tokenHash, hashToken(token)), isNull(devices.revokedAt)))
     .limit(1);
   return d ?? null;

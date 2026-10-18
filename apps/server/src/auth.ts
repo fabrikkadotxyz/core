@@ -5,11 +5,17 @@
  * logout, member removal and password reset all have to take effect now, not
  * whenever a token would have expired. See docs/security.md.
  */
-import { and, eq, gt, lt } from 'drizzle-orm';
+import { and, eq, gt, isNull, lt } from 'drizzle-orm';
 import type { Context, MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Database } from '@fabrikka/db';
 import { authSessions, generateToken, hashToken, users, verifyPassword } from '@fabrikka/db';
+
+export interface LoginResult {
+  token: string;
+  /** M58: the sign-in cancelled a pending deletion and brought the account back. */
+  reactivated: boolean;
+}
 
 export const COOKIE_NAME = 'fabrikka_session';
 const SESSION_TTL_DAYS = 30;
@@ -37,7 +43,7 @@ export async function login(
   db: Database,
   email: string,
   password: string,
-): Promise<string | null> {
+): Promise<LoginResult | null> {
   const [user] = await db
     .select()
     .from(users)
@@ -49,7 +55,18 @@ export async function login(
   const ok = await verifyPassword(password, user?.passwordHash ?? null);
   if (!user || !ok) return null;
 
-  return openLoginSession(db, user.id);
+  // M58 (ADR 0057): a deleted account never signs in; a deactivated one only
+  // if the deactivation was its own deletion request, which signing in cancels.
+  // Both refusals read exactly like a wrong password.
+  if (user.deletedAt) return null;
+  let reactivated = false;
+  if (user.deactivatedAt) {
+    if (!user.deletionRequestedAt) return null;
+    await db.update(users).set({ deactivatedAt: null, deletionRequestedAt: null }).where(eq(users.id, user.id));
+    reactivated = true;
+  }
+
+  return { token: await openLoginSession(db, user.id), reactivated };
 }
 
 /**
@@ -101,6 +118,10 @@ export async function resolveToken(
       and(
         eq(authSessions.tokenHash, hashToken(token)),
         gt(authSessions.expiresAt, new Date()),
+        // M58: a deactivated or deleted account has no sessions left, but a
+        // cookie that raced the deactivation must not work either.
+        isNull(users.deactivatedAt),
+        isNull(users.deletedAt),
       ),
     )
     .limit(1);

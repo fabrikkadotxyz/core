@@ -2739,6 +2739,67 @@ and open one-off links as chips. One column on a phone.
 
 **Clicks:** 1 paste per computer, once.
 
+## M58 — Leaving: deactivated, then deleted; the record stays
+
+> **Built 2026-10-18** ([ADR 0057](decisions/0057-leaving-an-account-is-deactivated-then-deleted-the-record-stays.md));
+> the scripted check passes, the owner's manual test is pending.
+> The owner's decisions: deactivation is its own state; a deleted account's
+> name stays on what it wrote by default, marked deactivated, and the person
+> may choose `former-member` instead.
+>
+> The first of the milestones that make an instance answerable to a
+> privacy policy and an auditor. Until it, `admin delete-user` deleted the
+> `users` row and the cascades took every room in every team the person
+> created, with everyone else's work in it.
+
+- **Two states.** `users` gains `deactivated_at`, `deletion_requested_at`,
+  `deleted_at` and `erase_name`. A deactivated or deleted account cannot sign
+  in and every login session it had is gone. Rosters, People and the mention
+  picker read the state: the name is shown with a *deactivated* mark and is
+  not mentionable. Deactivation is reversible by the operator or the
+  deployment.
+- **Settings → Account → Delete my account.** Password, what stays, and the
+  choice: keep my name on what I wrote (default) or remove it. The account is
+  deactivated at once. Signing in within the grace period
+  (`FABRIKKA_DELETION_GRACE_DAYS`, 14) cancels and reactivates, and the
+  sign-in says so. A daily job deletes what is due. With mail configured, a
+  confirmation names the date.
+- **What deletion does** (`leaving.ts`, one transaction): removes the email
+  (a sentinel under `.invalid`), password, verification, preferences, login
+  sessions, resets, vendor connections and tokens, OAuth flows, devices,
+  pairings, grant defaults, personal templates, registered agents, read
+  marks, memberships and guest access; revokes invites the person created;
+  deletes sessions with no other human; passes owned sessions and teams to
+  their oldest remaining owner, else member; deletes a team nobody else is in
+  unless one of its sessions still has another human; keeps every
+  participant row and what hangs off it, with the name as it was or, on
+  request, `former-member` (numbered per session).
+- **Never a row delete.** `teams.created_by_user_id`, `teams.own_of_user_id`
+  and `sessions.owner_id` restrict; `participants.user_id` sets null. A stray
+  `DELETE FROM users` fails instead of destroying a record.
+- **The verbs, everywhere the same:** `admin deactivate-user`,
+  `admin reactivate-user`, `admin delete-user --email <e> [--erase-name]
+  [--now]`; the kit's `deactivateUser`, `reactivateUser`, `deleteUser` and
+  `onUserDeleted` (`docs/protocol.md`).
+
+**Test** (two accounts, Fede owning the team, Alice a member, one shared room
+with a message from each, plus a room only Fede is in):
+1. Fede: Settings → Account → **Delete my account**, password, keep the
+   default choice, **Delete**. Signed out at once. **3 clicks** from Settings.
+2. Fede signs in again the same day: a notice says the deletion was
+   cancelled, and everything is as it was.
+3. Fede asks again, this time choosing *Remove my name*. The operator runs
+   `admin delete-user --email fede@… --now`.
+4. Alice opens the shared room: Fede's messages are there, authored by
+   `former-member`, marked deactivated in People; Alice is the team's owner;
+   the room only Fede was in is gone; Fede's email gets "invalid email or
+   password" on sign-in; `list-users` shows no address for the account.
+
+**Scripted** (`scripts/acceptance/m58.mjs`): builds that fixture against the
+server through invites, requests deletion with the password, asserts the
+sign-out and the cancellation on sign-in, then deletes now through the CLI
+and asserts the row counts, names, ownership and the failed sign-in.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

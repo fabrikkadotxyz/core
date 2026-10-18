@@ -955,7 +955,14 @@ function PeoplePanel({
           const name = m.participantName ?? m.displayName;
           return (
             <li key={m.userId}>
-              <span>{name}</span>
+              <span>
+                {name}
+                {m.account && (
+                  <span className="badge" title={m.account === 'deleted' ? 'This account was deleted. What they wrote stays.' : 'This account cannot sign in.'}>
+                    {m.account}
+                  </span>
+                )}
+              </span>
               <span className="role">
                 {m.role}
                 {m.viaTeam && <span title="Added from the organization. Leaving the organization ends this access."> · via organization</span>}
@@ -1016,7 +1023,10 @@ function PeoplePanel({
               <ul className="participants">
                 {roster.map((m) => (
                   <li key={m.userId}>
-                    <span>{m.displayName}</span>
+                    <span>
+                      {m.displayName}
+                      {m.account && <span className="badge">{m.account}</span>}
+                    </span>
                     <span className="row-end">
                       <button
                         className="link small"

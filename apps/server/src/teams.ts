@@ -11,6 +11,7 @@ import { sessionMembers, sessions, teamMembers, teams, users } from '@fabrikka/d
 import type { TeamDetail, TeamMember, TeamRole, TeamSummary } from '@fabrikka/types';
 import { addMember } from './sessions.ts';
 import { ensureGeneral, joinTeamChats } from './chats.ts';
+import { accountMark } from './leaving.ts';
 
 const MAX_NAME = 80;
 
@@ -66,12 +67,20 @@ export async function teamRole(db: Database, teamId: string, userId: string): Pr
 
 export async function listTeamMembers(db: Database, teamId: string): Promise<TeamMember[]> {
   const rows = await db
-    .select({ userId: users.id, displayName: users.displayName, email: users.email, role: teamMembers.role })
+    .select({
+      userId: users.id,
+      displayName: users.displayName,
+      email: users.email,
+      role: teamMembers.role,
+      deactivatedAt: users.deactivatedAt,
+      deletedAt: users.deletedAt,
+    })
     .from(teamMembers)
     .innerJoin(users, eq(users.id, teamMembers.userId))
     .where(eq(teamMembers.teamId, teamId))
     .orderBy(asc(users.displayName));
-  return rows.map((r) => ({ ...r, role: r.role as TeamRole }));
+  // M58: a member whose account left is listed with the mark.
+  return rows.map(({ deactivatedAt, deletedAt, ...r }) => ({ ...r, role: r.role as TeamRole, account: accountMark({ deactivatedAt, deletedAt }) }));
 }
 
 export async function getTeam(db: Database, teamId: string, userId: string): Promise<TeamDetail | null> {
@@ -143,12 +152,19 @@ export async function roster(db: Database, sessionId: string): Promise<TeamMembe
     .from(sessionMembers)
     .where(eq(sessionMembers.sessionId, sessionId));
   const rows = await db
-    .select({ userId: users.id, displayName: users.displayName, email: users.email, role: teamMembers.role })
+    .select({
+      userId: users.id,
+      displayName: users.displayName,
+      email: users.email,
+      role: teamMembers.role,
+      deactivatedAt: users.deactivatedAt,
+      deletedAt: users.deletedAt,
+    })
     .from(teamMembers)
     .innerJoin(users, eq(users.id, teamMembers.userId))
     .where(and(eq(teamMembers.teamId, team.id), notInArray(teamMembers.userId, inSession)))
     .orderBy(asc(users.displayName));
-  return rows.map((r) => ({ ...r, role: r.role as TeamRole }));
+  return rows.map(({ deactivatedAt, deletedAt, ...r }) => ({ ...r, role: r.role as TeamRole, account: accountMark({ deactivatedAt, deletedAt }) }));
 }
 
 /** Add a teammate from the roster. Refused for anyone not on the session's team. */

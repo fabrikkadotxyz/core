@@ -134,8 +134,12 @@ export const onboarding = {
 
 export const auth = {
   me: () => call<{ user: AuthUser }>('/auth/me'),
+  /** M58: `notice` when the sign-in cancelled a pending deletion. */
   login: (body: LoginBody) =>
-    call<{ user: AuthUser }>('/auth/login', { method: 'POST', body }),
+    call<{ user: AuthUser; notice?: string }>('/auth/login', { method: 'POST', body }),
+  /** M58 (ADR 0057): Settings → Account → Delete my account. Signs this browser out. */
+  requestDeletion: (body: { password: string; eraseName: boolean }) =>
+    call<{ ok: true; effectiveAt: string; graceDays: number }>('/me/deletion', { method: 'POST', body }),
   logout: () => call<{ ok: true }>('/auth/logout', { method: 'POST' }),
   /** M39, ADR 0035: whether this instance still needs its owner, and creating them. */
   setupNeeded: () => call<{ needed: boolean }>('/setup'),

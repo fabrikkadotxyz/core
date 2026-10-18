@@ -124,7 +124,9 @@ root; in Docker, `docker compose exec server pnpm admin <command>`.
 | `admin reset-password --email <e>` | Set a new password. **This is the password recovery path** — there is no emailed reset link. |
 | `admin list-users` | Emails, display names, owner flag, created date. |
 | `admin agents` | *(2026-10-17)* How many people said they use each agent tool, and how many wish Fabrikka ran each one not yet supported, from the welcome's answers. Counts only, no names. Says which adapter to build next. |
-| `admin delete-user --email <e>` | Remove an account and its memberships. |
+| `admin deactivate-user --email <e>` | *(M58)* The account cannot sign in and every login session ends; nothing else changes. Reversible. |
+| `admin reactivate-user --email <e>` | *(M58)* Undo a deactivation, or cancel a deletion that has not happened yet. |
+| `admin delete-user --email <e> [--erase-name] [--now] [--yes]` | *(M58, ADR 0057)* Delete the account: personal data goes, what they wrote stays under their name, or under `former-member` with `--erase-name`. Without `--now` it is scheduled after the grace period (`FABRIKKA_DELETION_GRACE_DAYS`, 14) and the account is deactivated meanwhile. Prints what will pass to whom and what will be deleted, and asks for the address again. |
 | `admin funnel [--since <date>]` | *(M17)* Aggregate invite-loop counts: invites created and redeemed, redeemed by a new account, redeemers who connected an agent within 7 days, and redeemers who went on to create a session or send an invite. Counts only, no emails or names, read from this instance's own tables. Nothing is sent anywhere. |
 
 The CLI and the HTTP API are thin wrappers over the same functions, so they

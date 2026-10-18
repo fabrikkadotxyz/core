@@ -18,6 +18,7 @@ import {
   users,
 } from '@fabrikka/db';
 import type { AgentSummary, TrustTier } from '@fabrikka/types';
+import { isActiveUser } from './leaving.ts';
 
 export type AgentTrustPolicy = 'owner_only' | 'session_trusted';
 
@@ -70,6 +71,7 @@ export async function resolveSessionToken(
       agentId: agents.id,
       agentProvider: agents.provider,
       agentOwnerId: agents.ownerId,
+      participantUserId: participants.userId,
     })
     .from(sessionTokens)
     .innerJoin(sessions, eq(sessions.id, sessionTokens.sessionId))
@@ -89,6 +91,9 @@ export async function resolveSessionToken(
   const row = rows[0];
   if (!row) return null;
   if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return null;
+  // M58 (ADR 0057): a deactivated or deleted person acts through nothing, their agents included.
+  const actor = row.agentOwnerId ?? row.participantUserId;
+  if (actor && !(await isActiveUser(db, actor))) return null;
 
   // Fire-and-forget: a failed liveness write must not fail the request.
   void db

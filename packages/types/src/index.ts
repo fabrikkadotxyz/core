@@ -19,11 +19,16 @@ export type ConnectionStatus = 'connected' | 'working' | 'blocked' | 'idle' | 'o
 /** M15 slice 1: why an agent is blocked, where it reported one. An unknown value is shown as "waiting". */
 export type BlockedReason = 'permission' | 'elicitation' | 'input';
 
+/** M58 (ADR 0057): an account that left. Absent for an active one. */
+export type AccountMark = 'deactivated' | 'deleted';
+
 export interface Participant {
   id: string;
   sessionId: string;
   kind: ParticipantKind;
   displayName: string;
+  /** M58: set for a human whose account is deactivated or deleted: shown with a mark, not mentionable. */
+  account?: AccountMark;
   /** Absent for humans and for agents with no live connection. */
   status?: ConnectionStatus;
   /** M15 slice 1: with `blocked`, what the agent waits on (reason, redacted detail). */
@@ -445,6 +450,8 @@ export interface Member {
   participantId?: string | null;
   /** M50: the name they go by in this session (a rename is per session). */
   participantName?: string | null;
+  /** M58: their account left; shown with a mark. */
+  account?: AccountMark;
 }
 
 export interface SessionSummary {
@@ -518,6 +525,14 @@ export interface LoginBody {
   password: string;
 }
 
+/** M58 (ADR 0057): Settings → Account → Delete my account. */
+export interface DeletionRequestBody {
+  /** Proven again, so a stolen cookie cannot delete an account. */
+  password: string;
+  /** True: the name on what they wrote becomes "former-member". False: it stays, marked deactivated. */
+  eraseName: boolean;
+}
+
 /** Signup always carries an invite token: there is no open registration. */
 export interface SignupBody {
   token: string;
@@ -573,6 +588,8 @@ export interface TeamMember {
   displayName: string;
   email: string;
   role: TeamRole;
+  /** M58: their account left; shown with a mark. */
+  account?: AccountMark;
 }
 
 export interface TeamDetail {

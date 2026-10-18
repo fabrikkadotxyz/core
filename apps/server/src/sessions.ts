@@ -25,6 +25,7 @@ import {
   teams,
   users,
 } from '@fabrikka/db';
+import { accountMark } from './leaving.ts';
 import type {
   Mention,
   Message,
@@ -436,6 +437,8 @@ export async function listMembers(
       // M50: People is one list, so a member row carries their participant.
       participantId: participants.id,
       participantName: participants.displayName,
+      deactivatedAt: users.deactivatedAt,
+      deletedAt: users.deletedAt,
     })
     .from(sessionMembers)
     .innerJoin(users, eq(users.id, sessionMembers.userId))
@@ -446,7 +449,8 @@ export async function listMembers(
     .where(eq(sessionMembers.sessionId, sessionId))
     .orderBy(asc(users.displayName));
 
-  return rows.map((r) => ({ ...r, role: r.role as SessionRole }));
+  // M58: a member whose account left is listed with the mark.
+  return rows.map(({ deactivatedAt, deletedAt, ...r }) => ({ ...r, role: r.role as SessionRole, account: accountMark({ deactivatedAt, deletedAt }) }));
 }
 
 /**
@@ -529,18 +533,31 @@ export async function listParticipants(
   db: Database,
   sessionId: string,
 ): Promise<Participant[]> {
+  // M58: a human participant whose account left carries the mark.
   const rows = await db
-    .select()
+    .select({
+      id: participants.id,
+      sessionId: participants.sessionId,
+      kind: participants.kind,
+      displayName: participants.displayName,
+      deactivatedAt: users.deactivatedAt,
+      deletedAt: users.deletedAt,
+    })
     .from(participants)
+    .leftJoin(users, eq(users.id, participants.userId))
     .where(eq(participants.sessionId, sessionId))
     .orderBy(asc(participants.displayName));
 
-  return rows.map((p) => ({
-    id: p.id,
-    sessionId: p.sessionId,
-    kind: p.kind as Participant['kind'],
-    displayName: p.displayName,
-  }));
+  return rows.map((p) => {
+    const account = accountMark({ deactivatedAt: p.deactivatedAt ?? null, deletedAt: p.deletedAt ?? null });
+    return {
+      id: p.id,
+      sessionId: p.sessionId,
+      kind: p.kind as Participant['kind'],
+      displayName: p.displayName,
+      ...(account ? { account } : {}),
+    };
+  });
 }
 
 export interface ListMessagesOptions {

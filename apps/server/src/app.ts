@@ -30,6 +30,7 @@ import type {
   SetupLane,
   SessionView,
   SignupBody,
+  DeletionRequestBody,
 } from '@fabrikka/types';
 import {
   type AuthEnv,
@@ -127,6 +128,7 @@ import {
   renameOutput,
 } from './outputs/core.ts';
 import { createUser, getUserTheme, setUserTheme } from './users.ts';
+import { GRACE_DAYS, requestDeletion, runDueDeletions } from './leaving.ts';
 import { addStream, refreshRoom, startAttention } from './attention.ts';
 import { DEFAULT_THEME, SYSTEM_THEMES, loadThemes, publicTheme, themeDirs, themeFile } from './themes.ts';
 import {
@@ -403,10 +405,10 @@ export function createApp(options: CreateAppOptions = {}) {
         displayName: String(body.displayName ?? ''),
         password: String(body.password ?? ''),
       });
-      const token = await login(db, email, String(body.password ?? ''));
-      if (!token) return c.json({ error: 'the owner was created, but signing in failed; sign in normally' }, 500);
-      issueCookie(c, token, SECURE_COOKIES);
-      return c.json({ user: await resolveToken(db, token) }, 201);
+      const signedIn = await login(db, email, String(body.password ?? ''));
+      if (!signedIn) return c.json({ error: 'the owner was created, but signing in failed; sign in normally' }, 500);
+      issueCookie(c, signedIn.token, SECURE_COOKIES);
+      return c.json({ user: await resolveToken(db, signedIn.token) }, 201);
     } catch (err) {
       if (err instanceof SetupError) return err.status === 404 ? c.notFound() : c.json({ error: err.message }, err.status);
       throw err;
@@ -419,16 +421,48 @@ export function createApp(options: CreateAppOptions = {}) {
       return c.json({ error: 'email and password are required' }, 400);
     }
 
-    const token = await login(db, email, password);
-    // One message for both "no such user" and "wrong password", so the endpoint
-    // is not an account enumeration oracle.
-    if (!token) return c.json({ error: 'invalid email or password' }, 401);
+    const signedIn = await login(db, email, password);
+    // One message for "no such user", "wrong password" and (M58) a deactivated
+    // or deleted account, so the endpoint is not an account enumeration oracle.
+    if (!signedIn) return c.json({ error: 'invalid email or password' }, 401);
 
-    issueCookie(c, token, SECURE_COOKIES);
+    issueCookie(c, signedIn.token, SECURE_COOKIES);
     void pruneExpiredSessions(db);
 
-    const user = await resolveToken(db, token);
-    return c.json({ user });
+    const user = await resolveToken(db, signedIn.token);
+    // M58 (ADR 0057): signing in during the grace period cancels the deletion.
+    const notice = signedIn.reactivated
+      ? 'You had asked for this account to be deleted. Signing in cancelled that: your account and everything in it are as you left them.'
+      : undefined;
+    return c.json(notice ? { user, notice } : { user });
+  });
+
+  /* ---- M58 (ADR 0057): Settings → Account → Delete my account ---- */
+
+  app.post('/api/me/deletion', requireUser(db), async (c) => {
+    const body = await c.req.json<Partial<DeletionRequestBody>>().catch(() => ({}) as Partial<DeletionRequestBody>);
+    if (typeof body.password !== 'string' || !body.password) return c.json({ error: 'your password is required' }, 400);
+    const me = c.get('user');
+    const result = await requestDeletion(db, me.id, { password: body.password, eraseName: body.eraseName === true });
+    if (!result.ok) return c.json({ error: result.error }, result.status);
+    // Signed out everywhere, this tab included.
+    clearCookie(c, SECURE_COOKIES);
+    const effective = result.effectiveAt.toISOString().slice(0, 10);
+    if (mailer.configured) {
+      void mailer
+        .send({
+          to: me.email,
+          subject: 'Your Fabrikka account will be deleted',
+          text:
+            `You asked for your Fabrikka account (${me.email}) to be deleted. It is deactivated now and will be deleted on ${effective}.\n\n` +
+            `Changed your mind? Sign in before then at ${PUBLIC_URL}/login and the deletion is cancelled.\n\n` +
+            (body.eraseName
+              ? 'What you wrote in rooms other people are in stays there, under the name "former-member".\n'
+              : 'What you wrote in rooms other people are in stays there, under your name, marked as deactivated.\n'),
+        })
+        .catch((err) => console.warn(`[leaving] confirmation email failed: ${(err as Error).message}`));
+    }
+    return c.json({ ok: true, effectiveAt: result.effectiveAt.toISOString(), graceDays: GRACE_DAYS });
   });
 
   app.post('/api/auth/logout', async (c) => {
@@ -598,8 +632,8 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!redeemed.ok) return c.json({ error: `invite ${redeemed.reason}` }, 400);
     if (redeemed.team) membersChanged(db, redeemed.team.id);
 
-    const token = await login(db, body.email, body.password);
-    if (token) issueCookie(c, token, SECURE_COOKIES);
+    const signedIn = await login(db, body.email, body.password);
+    if (signedIn) issueCookie(c, signedIn.token, SECURE_COOKIES);
 
     // A session invite lands you in the session; a team invite on the team (M21).
     return c.json({ user: created.user, session: redeemed.session, team: redeemed.team }, 201);
@@ -2986,6 +3020,13 @@ export function createApp(options: CreateAppOptions = {}) {
           .catch((err) => console.warn(`[call records] cleanup failed: ${(err as Error).message}`));
       void prune();
       setInterval(prune, 24 * 60 * 60 * 1000).unref();
+      // M58 (ADR 0057): deletions past their grace period. Once now, then daily.
+      const leave = () =>
+        runDueDeletions(db)
+          .then((n) => n && console.log(`[leaving] deleted ${n} account${n === 1 ? '' : 's'} past the grace period`))
+          .catch((err) => console.warn(`[leaving] due deletions failed: ${(err as Error).message}`));
+      void leave();
+      setInterval(leave, 24 * 60 * 60 * 1000).unref();
       return new Promise<ReturnType<typeof serve>>((resolveStart) => {
         const server = serve({ fetch: app.fetch, port }, (info) => {
           console.log(`fabrikka server on http://localhost:${info.port}`);

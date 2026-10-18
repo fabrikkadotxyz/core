@@ -122,22 +122,17 @@ export async function listUsers(db: Database) {
       ownerSlug: users.ownerSlug,
       isInstanceOwner: users.isInstanceOwner,
       createdAt: users.createdAt,
+      // M58: the CLI says who left.
+      deactivatedAt: users.deactivatedAt,
+      deletionRequestedAt: users.deletionRequestedAt,
+      deletedAt: users.deletedAt,
     })
     .from(users)
     .orderBy(asc(users.createdAt));
 }
 
-export async function deleteUser(
-  db: Database,
-  email: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const deleted = await db
-    .delete(users)
-    .where(eq(users.email, email.trim().toLowerCase()))
-    .returning({ id: users.id });
-
-  return deleted.length > 0 ? { ok: true } : { ok: false, error: 'no such user' };
-}
+// M58 (ADR 0057): there is no deleteUser here any more. An account leaves
+// through leaving.ts, which never deletes a `users` row.
 
 export async function countUsers(db: Database): Promise<number> {
   const rows = await db.select({ id: users.id }).from(users);

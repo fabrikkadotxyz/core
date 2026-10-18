@@ -14,18 +14,22 @@ import { createClient } from '@fabrikka/db';
 import {
   countUsers,
   createUser,
-  deleteUser,
   listUsers,
   resetPassword,
 } from './users.ts';
 import { agentCounts } from './onboarding.ts';
+import { deactivateUser, deleteUserNow, findUserForLeaving, GRACE_DAYS, previewDeletion, reactivateUser, scheduleDeletion } from './leaving.ts';
 
 const USAGE = `fabrikka admin
 
   create-user   --email <email> [--name <display name>] [--owner] [--password-stdin]
   reset-password --email <email> [--password-stdin]
   list-users
-  delete-user   --email <email>
+  deactivate-user --email <email>       cannot sign in; nothing else changes (M58)
+  reactivate-user --email <email>       undo that, or cancel a pending deletion
+  delete-user   --email <email> [--erase-name] [--now] [--yes]
+                                personal data goes, what they wrote stays (ADR 0057);
+                                scheduled after ${GRACE_DAYS} days unless --now
   agents                        how many people use, and wish for, each agent tool (counts only)
 
 Passwords are read from a TTY prompt, or from stdin with --password-stdin so
@@ -141,10 +145,29 @@ try {
       }
       for (const u of rows) {
         const owner = u.isInstanceOwner ? ' [instance owner]' : '';
+        // M58: a deleted account has no address; a deactivated one says so.
+        const state = u.deletedAt ? ' [deleted]' : u.deletionRequestedAt ? ' [deletion pending]' : u.deactivatedAt ? ' [deactivated]' : '';
+        const address = u.deletedAt ? '(deleted)' : u.email;
         console.log(
-          `${u.email}  (${u.displayName}, slug ${u.ownerSlug})  ${u.createdAt.toISOString().slice(0, 10)}${owner}`,
+          `${address}  (${u.displayName}, slug ${u.ownerSlug})  ${u.createdAt.toISOString().slice(0, 10)}${owner}${state}`,
         );
       }
+      break;
+    }
+
+    case 'deactivate-user': {
+      const email = flag(argv, 'email') ?? die('--email is required');
+      const user = (await findUserForLeaving(db, email)) ?? die('no such user');
+      if (!(await deactivateUser(db, user.id))) die('that account is deleted');
+      console.log(`deactivated ${email}: cannot sign in; nothing else changed. Undo with reactivate-user.`);
+      break;
+    }
+
+    case 'reactivate-user': {
+      const email = flag(argv, 'email') ?? die('--email is required');
+      const user = (await findUserForLeaving(db, email)) ?? die('no such user');
+      if (!(await reactivateUser(db, user.id))) die('that account is deleted and cannot come back');
+      console.log(`reactivated ${email}${user.deletionRequestedAt ? ' and cancelled its deletion' : ''}`);
       break;
     }
 
@@ -164,10 +187,42 @@ try {
     }
 
     case 'delete-user': {
+      // M58 (ADR 0057): never a row delete. Says what will happen, then does it.
       const email = flag(argv, 'email') ?? die('--email is required');
-      const result = await deleteUser(db, email);
-      if (!result.ok) die(result.error);
-      console.log(`deleted ${email} and all of their memberships`);
+      const eraseName = has(argv, 'erase-name');
+      const user = (await findUserForLeaving(db, email)) ?? die('no such user');
+      if (user.deletedAt) die('that account is already deleted');
+      const plan = (await previewDeletion(db, user.id)) ?? die('no such user');
+      const list = (title: string, rows: string[]) => {
+        if (rows.length === 0) return;
+        console.log(`${title}`);
+        for (const r of rows) console.log(`  ${r}`);
+      };
+      list('Rooms nobody else is in, deleted with their content:', plan.soloSessions.map((s) => `"${s.title}"`));
+      list('Rooms passed to their oldest remaining member:', plan.passedSessions.map((s) => `"${s.title}" → ${s.toName}`));
+      list('Organizations passed to their oldest remaining member:', plan.passedTeams.map((t) => `"${t.name}" → ${t.toName}`));
+      list('Organizations kept without an owner (a room in them has another person):', plan.ownerlessTeams.map((t) => `"${t.name}"`));
+      list('Organizations nobody else is in, deleted:', plan.deletedTeams.map((t) => `"${t.name}"`));
+      console.log(
+        eraseName
+          ? 'What they wrote in rooms other people are in stays, under the name "former-member".'
+          : `What they wrote in rooms other people are in stays, under "${user.displayName}", marked as deactivated.`,
+      );
+      if (!has(argv, 'now')) {
+        const r = await scheduleDeletion(db, user.id, { eraseName });
+        if (!r.ok) die(r.error);
+        console.log(`${email} is deactivated now and will be deleted on ${r.effectiveAt.toISOString().slice(0, 10)}. A sign-in before then cancels it.`);
+        break;
+      }
+      if (!has(argv, 'yes')) {
+        const rl = createInterface({ input: stdin, output: stdout });
+        const typed = await rl.question(`This cannot be undone. Type the address to confirm: `);
+        rl.close();
+        if (typed.trim().toLowerCase() !== email.trim().toLowerCase()) die('addresses differ; nothing done');
+      }
+      if (eraseName) await scheduleDeletion(db, user.id, { eraseName });
+      const report = (await deleteUserNow(db, user.id)) ?? die('nothing to delete');
+      console.log(`deleted ${email}: ${report.soloSessions.length} room(s) removed, ${report.passedSessions.length} passed on, ${report.participantsRenamed} name(s) replaced.`);
       break;
     }
 

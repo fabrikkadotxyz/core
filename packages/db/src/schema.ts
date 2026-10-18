@@ -63,6 +63,17 @@ export const users = pgTable('users', {
   wantedAgents: jsonb('wanted_agents').$type<string[]>(),
   /** M47: the person dismissed Get started. Its steps are derived, never stored. */
   gettingStartedDismissedAt: timestamp('getting_started_dismissed_at', { withTimezone: true }),
+  /**
+   * M58 (ADR 0057): leaving. Deactivated: cannot sign in, reversible.
+   * Deletion requested: deactivated, and the daily job deletes after the grace
+   * period unless a sign-in cancels. Deleted: the tombstone. Personal columns
+   * are null, email is a sentinel, and the row stays for what the person wrote.
+   */
+  deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+  deletionRequestedAt: timestamp('deletion_requested_at', { withTimezone: true }),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  /** Their choice at deletion: true replaced their name on content with "Former member". */
+  eraseName: boolean('erase_name').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -77,9 +88,11 @@ export const teams = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull(),
+    // M58 (ADR 0057): a user row is never deleted by the application, and a
+    // stray delete must not take a team and its rooms with it.
     createdByUserId: uuid('created_by_user_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'restrict' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     /**
      * M43: how long team_mcp_calls rows are kept. A fixed list, so the privacy
@@ -90,7 +103,7 @@ export const teams = pgTable(
      * M53 (ADR 0051): the account whose own organization this is. Created with
      * the account, named after the person; they cannot be removed from it.
      */
-    ownOfUserId: uuid('own_of_user_id').unique().references(() => users.id, { onDelete: 'cascade' }),
+    ownOfUserId: uuid('own_of_user_id').unique().references(() => users.id, { onDelete: 'restrict' }),
   },
   (t) => [check('teams_call_record_days', sql`${t.callRecordDays} in (30, 60, 90, 180, 365)`)],
 );
@@ -115,9 +128,10 @@ export const sessions = pgTable('sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
   /** Public id. Appears in the MCP endpoint path. Never sessions.id. */
   publicId: text('public_id').notNull().unique(),
+  // M58 (ADR 0057): ownership passes when someone leaves; it never cascades.
   ownerId: uuid('owner_id')
     .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .references(() => users.id, { onDelete: 'restrict' }),
   title: text('title').notNull(),
   /**
    * The organization it is in (M21). Decides who can be added from the roster,
@@ -167,8 +181,8 @@ export const participants = pgTable(
       .references(() => sessions.id, { onDelete: 'cascade' }),
     /** human | agent */
     kind: text('kind').notNull(),
-    /** Set when kind = 'human'. */
-    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /** Set when kind = 'human'. M58: what they wrote outlives the account, so never cascade. */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
     /**
      * Set when kind = 'agent'. The FK to session_agents arrives at M3, when
      * that table does; kept as a bare column now so the shape is stable.

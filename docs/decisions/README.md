@@ -88,3 +88,4 @@ What we rejected and why.
 | [0054](0054-agents-report-and-fabrikka-supervises-nothing.md) | Agents report; Fabrikka supervises nothing: a reporting contract | Proposed |
 | [0055](0055-antigravity-on-the-host-plan-is-read-accept-edits-is-edit.md) | Antigravity on the local host: plan is Read only, accept-edits is Edit in folder, the session's tools come with Full | Proposed |
 | [0056](0056-apps-for-every-desktop-built-per-platform-in-ci-served-per-instance.md) | Apps for every desktop: built per platform in CI, served per instance | Proposed |
+| [0057](0057-leaving-an-account-is-deactivated-then-deleted-the-record-stays.md) | Leaving: an account is deactivated, then deleted; the record stays | Proposed |

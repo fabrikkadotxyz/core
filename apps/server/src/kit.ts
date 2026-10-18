@@ -22,6 +22,7 @@ import { clientIp } from './client-ip.ts';
 import { membersChanged, register, teamInfo, teamRoleOf, type AccountCheck, type MembersListener, type NoticeProvider, type WriteCheck } from './gates.ts';
 import { rateLimit } from './rate-limit.ts';
 import { createUser } from './users.ts';
+import { deactivateUser, deleteUserNow, onUserDeleted, reactivateUser, scheduleDeletion } from './leaving.ts';
 
 const MAX_TEAM_NAME = 80;
 
@@ -77,6 +78,15 @@ export interface Kit {
   accountCount(): Promise<number>;
   /** The teams someone is on, with their role. */
   teamsOf(userId: string): Promise<{ teamId: string; role: 'owner' | 'member' }[]>;
+  /* M58 (ADR 0057): leaving. The verbs, never the policy. */
+  /** The account cannot sign in and its login sessions end. Nothing else changes; reversible. */
+  deactivateUser(userId: string): Promise<boolean>;
+  /** Undo a deactivation, or cancel a deletion that has not happened yet. False once deleted. */
+  reactivateUser(userId: string): Promise<boolean>;
+  /** Delete the way Settings → Account does. Without `now`, deactivated at once and deleted after the core's grace period. */
+  deleteUser(userId: string, opts?: { eraseName?: boolean; now?: boolean }): Promise<boolean>;
+  /** After a deletion has committed, with the teams the person was on. */
+  onUserDeleted(listener: (ctx: { userId: string; teamIds: string[] }) => void | Promise<void>): void;
 }
 
 /** What extensions advertised, for GET /api/auth/options. */
@@ -167,6 +177,13 @@ export function createKit(opts: {
       const [row] = await db.select({ n: count() }).from(users);
       return Number(row?.n ?? 0);
     },
+    deactivateUser: (userId) => deactivateUser(db, userId),
+    reactivateUser: (userId) => reactivateUser(db, userId),
+    deleteUser: async (userId, opts = {}) => {
+      if (opts.now) return (await deleteUserNow(db, userId)) !== null;
+      return (await scheduleDeletion(db, userId, { eraseName: opts.eraseName === true })).ok;
+    },
+    onUserDeleted,
   };
 }
 

@@ -1099,6 +1099,10 @@ serve its own pages as well as its own `/api/<name>/…` routes.
 | `teamRole(teamId, userId)` | `'owner'`, `'member'` or null. |
 | `teamsOf(userId)` | `[{ teamId, role }]`: the teams someone is on. |
 | `accountCount()` | How many accounts exist, to refuse early (say, before sending a sign-up email). `guardNewAccounts` stays the check that counts. |
+| `deactivateUser(userId)` | *(M58, ADR 0057)* The account cannot sign in and its login sessions end. Nothing else changes; reversible. |
+| `reactivateUser(userId)` | Undo a deactivation, or cancel a deletion that has not happened yet. False if the account is already deleted. |
+| `deleteUser(userId, { eraseName?, now? })` | Delete the account the way *Settings → Account* does: personal data goes, content stays under the person's name, or under `former-member` with `eraseName`. Without `now`, it is deactivated at once and deleted after the core's grace period; a sign-in meanwhile cancels. |
+| `onUserDeleted(listener)` | `listener({ userId, teamIds })` after a deletion has committed, with the teams the person was on, so a deployment can clean up what it keeps about the person. Never before. |
 
 `GET /api/auth/options` returns what the login page should offer:
 `{ passwordReset: boolean, signupUrl: string | null }`.

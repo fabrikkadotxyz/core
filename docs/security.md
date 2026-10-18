@@ -619,6 +619,26 @@ theme is CSS that every person on the instance may load.
   variable, never stored in the database, and never logged. Start-up and
   failure messages name the host, never the URL.
 
+## Leaving (M58, ADR 0057)
+
+An account is deactivated, then deleted; what it wrote stays. The threats are
+about the moment of leaving and what is left behind.
+
+| Threat | Control |
+| --- | --- |
+| A stolen cookie deletes someone's account | Requesting deletion needs the password again, in the same request. |
+| A deactivated or deleted account keeps working through an old cookie, a device or an agent token | Deactivation deletes every `auth_sessions` row and token resolution refuses a deactivated or deleted user. Deletion also removes devices, pairings, the person's agents and their session tokens, and their vendor connections with their sealed tokens. |
+| Someone learns whether an address has an account from the way deletion or deactivation answers | Sign-in answers *invalid email or password* for an absent, deactivated and deleted account alike, in the same time. Only a sign-in that cancels a pending deletion says anything more, and it says it to the person who just proved the password. |
+| A deleted person's name is used to put words in their mouth | Their participant rows stay but their user is a tombstone: nothing can sign in as it, nothing can mention it, and a mention of a deactivated person is plain text that wakes nothing. |
+| Deletion takes other people's record with it | The application never deletes a `users` row, and the cascades that reached shared content are `restrict`. A session is deleted only when no other human is in it. Ownership passes to the oldest remaining owner, else member. |
+| The sentinel address is registered again | `deleted-<id>@deleted.invalid` is in a reserved domain nobody can receive at; a new account at the old real address is a new account with a new id, with no access to anything the old one had. |
+| `former-member` collides with a real name | The replacement name is made unique per session like any participant name (`former-member-2`), and cannot be chosen by a person: the rename endpoint refuses it. |
+| An operator deletes the wrong person | The CLI prints what will happen (teams passed, sessions deleted, rooms kept) and asks for the address again before `--now`. |
+
+What stays after deletion is content other people are entitled to: messages,
+comments, edits, context history and outputs in rooms they are in, under the
+name the person chose to leave. *Delete my account* says so before it asks.
+
 ## Declined capabilities
 
 **Permission relay** (`claude/channel/permission`). Claude Code can forward tool-approval prompts to a channel so they can be answered remotely. We do **not** declare this capability: anyone able to reply through the channel could approve tool use in the owner's session, which in a multi-participant room is a straightforward privilege escalation. Revisit only with per-participant verdict attribution.

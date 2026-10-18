@@ -92,7 +92,14 @@ export function OrganizationPeople({ teamId: id }: { teamId: string }) {
       {team.members.map((m) => (
         <li key={m.userId} className="team-member">
           <span>
-            <strong>{m.displayName}</strong> <span className="muted small">{m.email}</span>
+            <strong>{m.displayName}</strong>{' '}
+            {m.account ? (
+              <span className="badge" title={m.account === 'deleted' ? 'This account was deleted. What they wrote stays.' : 'This account cannot sign in.'}>
+                {m.account}
+              </span>
+            ) : (
+              <span className="muted small">{m.email}</span>
+            )}
           </span>
           <span className="spacer" />
           <span className="muted small">{m.role}</span>

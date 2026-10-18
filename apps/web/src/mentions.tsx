@@ -124,7 +124,8 @@ export function MentionComposer({
     if (!handle) return [];
     const q = handle.query.toLowerCase();
     return participants
-      .filter((p) => p.displayName.toLowerCase().includes(q))
+      // M58: a person who left is not mentionable; their name on content stays.
+      .filter((p) => !p.account && p.displayName.toLowerCase().includes(q))
       .sort((a, b) => {
         // Prefix matches first — typing "ali" should surface "alice" above
         // "not-alice".

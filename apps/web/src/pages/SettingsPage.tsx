@@ -12,6 +12,7 @@ import { OrganizationPeople } from './TeamPage.tsx';
 import { Devices } from './DevicesPage.tsx';
 import { Appearance } from './AppearancePage.tsx';
 import { Organizations } from './OrganizationsPage.tsx';
+import { Account } from './AccountPage.tsx';
 
 const TABS = [
   { key: 'people', label: 'People', org: true, self: false },
@@ -19,6 +20,8 @@ const TABS = [
   { key: 'organizations', label: 'Organizations', org: true, self: true },
   { key: 'devices', label: 'Your devices', org: false, self: false },
   { key: 'appearance', label: 'Appearance', org: false, self: false },
+  // M58 (ADR 0057): who you are, and the door out.
+  { key: 'account', label: 'Account', org: false, self: false },
 ] as const;
 
 export function SettingsPage() {
@@ -43,6 +46,7 @@ export function SettingsPage() {
         {current.key === 'organizations' && <Organizations />}
         {current.key === 'devices' && <Devices />}
         {current.key === 'appearance' && <Appearance />}
+        {current.key === 'account' && <Account />}
       </main>
     </div>
   );

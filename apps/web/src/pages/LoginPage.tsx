@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import type { AuthUser } from '@fabrikka/types';
 import { auth } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { AuthStage, Eyebrow } from '../components/AuthStage.tsx';
@@ -13,6 +14,9 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [offers, setOffers] = useState<{ passwordReset: boolean; signupUrl: string | null } | null>(null);
+  // M58 (ADR 0057): a sign-in that cancelled a pending deletion says so before going on.
+  const [kept, setKept] = useState<{ user: AuthUser; notice: string } | null>(null);
+  const arrivalNotice = (location.state as { notice?: string } | null)?.notice;
 
   // A fresh instance has nobody to sign in as: send whoever just deployed it to setup (ADR 0035).
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -33,7 +37,11 @@ export function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      const { user: signedIn } = await auth.login({ email, password });
+      const { user: signedIn, notice } = await auth.login({ email, password });
+      if (notice) {
+        setKept({ user: signedIn, notice });
+        return;
+      }
       setUser(signedIn);
       navigate((location.state as { from?: string } | null)?.from ?? '/', {
         replace: true,
@@ -45,12 +53,33 @@ export function LoginPage() {
     }
   };
 
+  if (kept) {
+    return (
+      <AuthStage>
+        <div className="card">
+          <Eyebrow>Welcome back</Eyebrow>
+          <h1>Your account stays</h1>
+          <p>{kept.notice}</p>
+          <button
+            onClick={() => {
+              setUser(kept.user);
+              navigate('/', { replace: true });
+            }}
+          >
+            Continue
+          </button>
+        </div>
+      </AuthStage>
+    );
+  }
+
   return (
     <AuthStage>
       <form className="card" onSubmit={submit}>
         <Eyebrow>Sign in</Eyebrow>
         <h1>Welcome back</h1>
         <p className="muted">Sign in to your sessions.</p>
+        {arrivalNotice && <p className="hint">{arrivalNotice}</p>}
 
         <label>
           Email

@@ -373,9 +373,13 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
         <section className="side-section" aria-label="Settings">
           <h2>Settings</h2>
           {team && <PageLink to="/settings/people" label="People" onNavigate={onNavigate} />}
+          {/* M60 (ADR 0058): who did what, per organization. */}
+          {team && <PageLink to="/settings/activity" label="Activity" onNavigate={onNavigate} />}
           {team?.own && <PageLink to="/settings/organizations" label="Organizations" onNavigate={onNavigate} />}
           <PageLink to="/settings/devices" label="Your devices" onNavigate={onNavigate} />
           <PageLink to="/settings/appearance" label="Appearance" onNavigate={onNavigate} />
+          {/* M58 (ADR 0057): who you are, and the door out. */}
+          <PageLink to="/settings/account" label="Account" onNavigate={onNavigate} />
         </section>
       )}
 

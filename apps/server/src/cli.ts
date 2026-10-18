@@ -20,6 +20,8 @@ import {
 import { agentCounts } from './onboarding.ts';
 import { deactivateUser, deleteUserNow, findUserForLeaving, GRACE_DAYS, previewDeletion, reactivateUser, scheduleDeletion } from './leaving.ts';
 import { audit, auditForInstance, type AuditAction } from './audit.ts';
+import { BackupError, createBackup, listBackups, readManifest, restoreBackup } from './backup.ts';
+import { STORAGE_DIR } from './artifacts.ts';
 /** M60 (ADR 0058): every command leaves one event, as the operator. */
 const record = (action: AuditAction, e: { subjectUserId?: string | null; detail?: Record<string, string | number | boolean | null> } = {}) =>
   audit(db, { action, actorKind: 'operator', ...e });
@@ -37,6 +39,10 @@ const USAGE = `fabrikka admin
   agents                        how many people use, and wish for, each agent tool (counts only)
   audit         [--team <id>] [--since <YYYY-MM-DD>] [--action <prefix>] [--limit <n>]
                                 the trail: who did what (M60, ADR 0058), newest first
+  backup        [--to <dir>]    one encrypted archive: database + files (M61); FABRIKKA_BACKUP_KEY
+  backups       [--dir <dir>]   the archives in a directory, newest first
+  restore       --file <archive> [--force]
+                                into an empty instance (DATABASE_URL, ARTIFACT_DIR); --force replaces
 
 Passwords are read from a TTY prompt, or from stdin with --password-stdin so
 they never appear in shell history or ps output:
@@ -238,6 +244,64 @@ try {
         detail: { eraseName, now: true, roomsDeleted: report.soloSessions.length, roomsPassed: report.passedSessions.length, teamsPassed: report.passedTeams.length, teamsDeleted: report.deletedTeams.length },
       });
       console.log(`deleted ${email}: ${report.soloSessions.length} room(s) removed, ${report.passedSessions.length} passed on, ${report.participantsRenamed} name(s) replaced.`);
+      break;
+    }
+
+    case 'backup': {
+      // M61: dump, bundle, encrypt. The passphrase never lands in the archive.
+      const dir = flag(argv, 'to') ?? process.env.FABRIKKA_BACKUP_DIR ?? die('--to <dir> or FABRIKKA_BACKUP_DIR is required');
+      const passphrase = process.env.FABRIKKA_BACKUP_KEY ?? die('FABRIKKA_BACKUP_KEY is required: the passphrase the archive is sealed with');
+      try {
+        const r = await createBackup({
+          databaseUrl: process.env.DATABASE_URL!,
+          artifactDir: STORAGE_DIR,
+          passphrase,
+          dir,
+          publicUrl: process.env.PUBLIC_URL ?? null,
+        });
+        await record('admin.backup', { detail: { bytes: r.bytes, artifacts: r.manifest.artifacts.count, databaseBytes: r.manifest.database.bytes } });
+        console.log(`wrote ${r.file}`);
+        console.log(`  ${(r.bytes / 1024 / 1024).toFixed(1)} MB: database ${(r.manifest.database.bytes / 1024 / 1024).toFixed(1)} MB, ${r.manifest.artifacts.count} file(s)`);
+        console.log(`manifest ${JSON.stringify(r.manifest)}`);
+      } catch (err) {
+        if (err instanceof BackupError) die(err.message);
+        throw err;
+      }
+      break;
+    }
+
+    case 'backups': {
+      const dir = flag(argv, 'dir') ?? process.env.FABRIKKA_BACKUP_DIR ?? die('--dir <dir> or FABRIKKA_BACKUP_DIR is required');
+      const all = await listBackups(dir);
+      if (all.length === 0) console.log(`no archives in ${dir}`);
+      for (const b of all) console.log(`${b.modifiedAt.toISOString()}  ${(b.bytes / 1024 / 1024).toFixed(1).padStart(8)} MB  ${b.file}`);
+      break;
+    }
+
+    case 'restore': {
+      // M61: into an empty instance. The database this CLI is pointed at (DATABASE_URL) is the target.
+      const file = flag(argv, 'file') ?? die('--file <archive> is required');
+      const passphrase = process.env.FABRIKKA_BACKUP_KEY ?? die('FABRIKKA_BACKUP_KEY is required: the passphrase the archive was sealed with');
+      try {
+        const peek = await readManifest(file, passphrase);
+        console.log(`archive from ${peek.createdAt}${peek.publicUrl ? ` (${peek.publicUrl})` : ''}: database ${(peek.database.bytes / 1024 / 1024).toFixed(1)} MB, ${peek.artifacts.count} file(s)`);
+        const manifest = await restoreBackup({
+          file,
+          databaseUrl: process.env.DATABASE_URL!,
+          artifactDir: STORAGE_DIR,
+          passphrase,
+          force: has(argv, 'force'),
+          hasTables: async () => {
+            const [row] = await sql<{ n: string }[]>`select count(*)::text as n from information_schema.tables where table_schema = 'public'`;
+            return Number(row?.n ?? 0) > 0;
+          },
+        });
+        await record('admin.restore', { detail: { from: manifest.createdAt, artifacts: manifest.artifacts.count, force: has(argv, 'force') } });
+        console.log(`restored: ${manifest.artifacts.count} file(s) into ${STORAGE_DIR}, the database from ${manifest.createdAt}. Start the server; it applies any newer migrations.`);
+      } catch (err) {
+        if (err instanceof BackupError) die(err.message);
+        throw err;
+      }
       break;
     }
 

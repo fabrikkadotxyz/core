@@ -2882,6 +2882,51 @@ subject and room, that no event carries message content or tool arguments,
 that a member is refused the organization's trail and sees their own, that
 the CSV has the rows, and that shortening retention prunes at once.
 
+## M61 — Backups that restore
+
+> **Built 2026-10-18.** The scripted check passes against a scratch database;
+> the owner's manual test, and the first weekly CI run, are pending. The last
+> of the four milestones toward an instance a privacy policy and an
+> auditor can be shown. Until it, a backup was one `pg_dump` line in the docs,
+> run by hand, with the artifact files left out and no restore ever tried.
+
+- **One archive.** `backup.ts`: `pg_dump --format=custom`, the artifact tree
+  and a manifest with the dump's SHA-256, tarred, gzipped and sealed with
+  AES-256-GCM under a key derived from `FABRIKKA_BACKUP_KEY`
+  (`fabrikka-<instant>.fbk`). The passphrase is in no archive.
+- **Daily, by the server**, into `FABRIKKA_BACKUP_DIR`, pruned past
+  `FABRIKKA_BACKUP_KEEP_DAYS` (30), never the newest; each run in the trail.
+  The image turns it on: `/data/backups`, a passphrase generated into
+  `/data/backup.key`, `pg_dump` and `pg_restore` 17 installed from PostgreSQL's
+  repository.
+- **`admin backup`, `admin backups`, `admin restore --file <archive>
+  [--force]`.** A restore checks the checksum, refuses a wrong passphrase and a
+  database that already has tables, runs `pg_restore`, copies the files, and
+  leaves `admin.restore` in the trail. The server then applies newer migrations.
+- **Documented** (`docs/operations.md`, *Backups*): recovery point 24 hours,
+  recovery time under an hour, copy the archives and the two keys off the
+  volume, and a quarterly restore drill. Shipping to an S3-compatible bucket
+  from the server is named as the next step, not built.
+
+**Test** (the owner, on a self-hosted or local instance):
+1. `FABRIKKA_BACKUP_KEY=secret pnpm admin backup --to /tmp/fbk`: one `.fbk`
+   file, and the size line. **0 clicks; one command.**
+2. `createdb fabrikka_drill`, then `DATABASE_URL=…/fabrikka_drill
+   ARTIFACT_DIR=/tmp/fbk-files FABRIKKA_BACKUP_KEY=secret pnpm admin restore
+   --file /tmp/fbk/fabrikka-….fbk`: the manifest line, then *restored*.
+3. Start a server on that database and open a room: messages and files are
+   there. Settings → Activity shows `admin.restore`.
+4. The same restore with `FABRIKKA_BACKUP_KEY=wrong`: refused, nothing written.
+
+**Scripted** (`scripts/acceptance/m61.mjs`, behind `FABRIKKA_TEST_BACKUP=1`):
+backs up the development database and files, checks the archive's header and
+listing, asserts a wrong passphrase is refused, restores into a scratch
+database it creates, compares row counts for users, teams, sessions,
+participants, messages and audit events and the restored file count against
+the manifest, asserts a second restore without `--force` is refused, and drops
+the scratch database. `.github/workflows/backup-restore.yml` runs it weekly
+against a fresh Postgres 17.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

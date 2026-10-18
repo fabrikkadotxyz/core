@@ -52,6 +52,8 @@ export const AUDIT_ACTIONS = [
   'admin.deactivate_user',
   'admin.reactivate_user',
   'admin.delete_user',
+  'admin.backup',
+  'admin.restore',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number] | `deployment.${string}`;
 

@@ -597,14 +597,74 @@ The trail is a table, not a log pipeline. Alerting on it, or shipping it to
 a log system, is a deployment's job; the SQL is one `select` on
 `audit_events`.
 
-## Backups
+## Backups (M61)
 
-All durable state is in Postgres. Artifacts (M7) add object storage.
+Everything an instance keeps is the database and the artifact files, plus two
+secrets that are in neither: `FABRIKKA_ENCRYPTION_KEY` (seals vendor tokens)
+and `FABRIKKA_BACKUP_KEY` (seals the archives). A backup is **one encrypted
+archive** of the first two; the secrets you keep yourself.
+
+**What a backup is.** `fabrikka-<instant>.fbk`: a gzipped tar holding
+`db.dump` (`pg_dump --format=custom`), `artifacts/` (the whole file tree) and
+`manifest.json` (when, the instance, the dump's size and SHA-256, the file
+count), encrypted with AES-256-GCM under a key derived from
+`FABRIKKA_BACKUP_KEY`. A copy that leaks is just bytes; an archive restored
+with the wrong passphrase fails before touching anything.
+
+**Daily, by the server.** With `FABRIKKA_BACKUP_DIR` and `FABRIKKA_BACKUP_KEY`
+set, the server writes an archive a minute after it starts and every 24 hours
+after that, and removes archives older than `FABRIKKA_BACKUP_KEEP_DAYS` (30),
+never the newest. Each run is in the activity trail (`admin.backup`). **The
+image does this by default:** `/data/backups`, with a passphrase it generates
+into `/data/backup.key` the first time. Set `FABRIKKA_BACKUP_DIR=` (empty) to
+turn it off.
+
+**A backup beside its data is not one.** `/data/backups` is on the same
+volume as `/data`. Copy the archives off it: a platform's disk snapshots
+(Render, Fly volumes), an `rclone` or `aws s3 sync` of the directory from a
+cron, or `docker cp`. Copy `backup.key` and `encryption.key` **once, to
+somewhere else**, and never with the archives. Shipping straight to an
+S3-compatible bucket from the server is the next step and is not built.
+
+By hand, from the repo root or `docker compose exec server pnpm admin …`:
 
 ```bash
-docker compose -f docker/docker-compose.yml exec postgres \
-  pg_dump -U fabrikka fabrikka > fabrikka-$(date +%F).sql
+FABRIKKA_BACKUP_KEY=… pnpm admin backup --to /path/to/backups   # one archive now
+pnpm admin backups --dir /path/to/backups                        # what is there
 ```
+
+**Restoring.** Into an **empty** instance: a fresh database (`createdb`, or a
+new managed one) and an empty artifact directory, with the same
+`FABRIKKA_ENCRYPTION_KEY` as before (or every vendor connection must be
+attached again).
+
+```bash
+DATABASE_URL=postgres://…/fabrikka_new ARTIFACT_DIR=/data/artifacts \
+FABRIKKA_BACKUP_KEY=… pnpm admin restore --file /path/to/fabrikka-….fbk
+```
+
+It checks the checksum, refuses a database that already has tables (pass
+`--force` to replace one that was started and is empty), runs `pg_restore`,
+copies the files, and records `admin.restore` in the trail. Then start the
+server: it applies any migration newer than the archive. Point `PUBLIC_URL`
+at the new address if it changed.
+
+**Targets.** Recovery point: 24 hours, the daily archive (make one by hand
+before anything risky). Recovery time: under an hour, dominated by
+provisioning the database and copying the archive back.
+
+**The restore drill.** Once a quarter, restore the newest archive into a
+scratch database and open a room there. The scripted check does the same
+against a copy of the development database:
+
+```bash
+FABRIKKA_TEST_BACKUP=1 node scripts/acceptance/m61.mjs
+```
+
+It needs `pg_dump`, `pg_restore`, `psql` and `tar` on the machine, at least
+the server's major version. `.github/workflows/backup-restore.yml` runs it
+every week against a fresh Postgres, so an archive that stops restoring is
+noticed before it is needed.
 
 ## The hostnames it answers to
 

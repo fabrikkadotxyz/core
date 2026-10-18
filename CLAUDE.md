@@ -89,6 +89,7 @@ FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m6.mjs   # kills a real run mid-fl
 FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m10.mjs  # asserts activity is live, not replayed
 FABRIKKA_TEST_DOCKER=1 node scripts/acceptance/m39.mjs # builds the image, runs the self-hosted stack
 FABRIKKA_TEST_DOCKER=1 node scripts/acceptance/m40.mjs # runs the image the way Render does
+FABRIKKA_TEST_BACKUP=1 node scripts/acceptance/m61.mjs # backs up and restores into a scratch database (needs pg_dump, pg_restore, psql)
 ```
 
 Run **every** existing acceptance check before committing a milestone, not just the current one.

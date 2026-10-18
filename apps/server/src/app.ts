@@ -131,6 +131,8 @@ import { createUser, getUserTheme, setUserTheme } from './users.ts';
 import { GRACE_DAYS, requestDeletion, runDueDeletions } from './leaving.ts';
 import { loginThrottle } from './login-throttle.ts';
 import { AUDIT_DAYS, audit, auditCsv, auditForTeam, auditForUser, getAuditDays, pruneAudit, setAuditDays, userIdFor, type AuditInput } from './audit.ts';
+import { BACKUP_KEEP_DAYS, createBackup, pruneBackups } from './backup.ts';
+import { STORAGE_DIR } from './artifacts.ts';
 import { addStream, refreshRoom, startAttention } from './attention.ts';
 import { DEFAULT_THEME, SYSTEM_THEMES, loadThemes, publicTheme, themeDirs, themeFile } from './themes.ts';
 import {
@@ -3164,6 +3166,24 @@ export function createApp(options: CreateAppOptions = {}) {
           .catch((err) => console.warn(`[trail] prune failed: ${(err as Error).message}`));
       void trim();
       setInterval(trim, 24 * 60 * 60 * 1000).unref();
+      // M61: a backup a day into FABRIKKA_BACKUP_DIR, sealed with FABRIKKA_BACKUP_KEY,
+      // a minute after start and then daily; older archives pruned past BACKUP_KEEP_DAYS.
+      const backupDir = process.env.FABRIKKA_BACKUP_DIR;
+      const backupKey = process.env.FABRIKKA_BACKUP_KEY;
+      if (backupDir && backupKey) {
+        const save = () =>
+          createBackup({ databaseUrl: process.env.DATABASE_URL!, artifactDir: STORAGE_DIR, passphrase: backupKey, dir: backupDir, publicUrl: PUBLIC_URL })
+            .then(async (r) => {
+              const pruned = await pruneBackups(backupDir, BACKUP_KEEP_DAYS);
+              console.log(`[backup] wrote ${r.file} (${(r.bytes / 1024 / 1024).toFixed(1)} MB)${pruned ? `, pruned ${pruned} older` : ''}`);
+              await audit(db, { action: 'admin.backup', actorKind: 'system', detail: { bytes: r.bytes, artifacts: r.manifest.artifacts.count, scheduled: true } });
+            })
+            .catch((err) => console.warn(`[backup] failed: ${(err as Error).message}`));
+        setTimeout(save, 60_000).unref();
+        setInterval(save, 24 * 60 * 60 * 1000).unref();
+      } else if (backupDir) {
+        console.warn('[backup] FABRIKKA_BACKUP_DIR is set but FABRIKKA_BACKUP_KEY is not: no backups will be written (docs/operations.md, "Backups")');
+      }
       return new Promise<ReturnType<typeof serve>>((resolveStart) => {
         const server = serve({ fetch: app.fetch, port }, (info) => {
           console.log(`fabrikka server on http://localhost:${info.port}`);

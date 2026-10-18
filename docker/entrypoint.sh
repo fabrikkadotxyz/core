@@ -70,6 +70,26 @@ fi
 
 # A deployment that extends the core (docs/operations.md) passes its own start
 # command; with none, start the core's own server.
+# M61: a backup a day into the data volume, sealed with a passphrase. Set
+# FABRIKKA_BACKUP_DIR= (empty) to turn it off. Copy the archives, and the two
+# keys, somewhere other than this volume: a backup beside its data is not one.
+if [ -z "${FABRIKKA_BACKUP_DIR+x}" ]; then
+  export FABRIKKA_BACKUP_DIR="$data/backups"
+fi
+if [ -n "${FABRIKKA_BACKUP_DIR:-}" ]; then
+  mkdir -p "$FABRIKKA_BACKUP_DIR"
+  if [ -z "${FABRIKKA_BACKUP_KEY:-}" ]; then
+    bkeyfile="$data/backup.key"
+    if [ ! -s "$bkeyfile" ]; then
+      node -e "process.stdout.write(require('crypto').randomBytes(32).toString('base64'))" > "$bkeyfile"
+      chmod 600 "$bkeyfile"
+      echo "fabrikka: generated a backup passphrase in $bkeyfile (keep a copy elsewhere: a restore needs it)"
+    fi
+    FABRIKKA_BACKUP_KEY="$(cat "$bkeyfile")"
+    export FABRIKKA_BACKUP_KEY
+  fi
+fi
+
 if [ "$#" -gt 0 ]; then
   exec "$@"
 fi

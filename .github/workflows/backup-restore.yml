@@ -1,0 +1,50 @@
+# The restore drill (M61, docs/operations.md "Backups"): every week, back up a
+# migrated and seeded database with the real command, restore the archive into
+# a scratch database, and compare. An archive that stops restoring is found
+# here, not on the day it is needed.
+name: backup and restore
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drill:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fabrikka
+          POSTGRES_PASSWORD: fabrikka
+          POSTGRES_DB: fabrikka
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U fabrikka -d fabrikka"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://fabrikka:fabrikka@localhost:5433/fabrikka
+      FABRIKKA_TEST_BACKUP: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client-17
+          pg_dump --version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - run: pnpm db:seed
+      - name: The drill
+        run: node scripts/acceptance/m61.mjs

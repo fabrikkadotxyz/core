@@ -16,7 +16,8 @@ import { artifacts, participants } from '@fabrikka/db';
 import type { Artifact } from '@fabrikka/types';
 
 /** A self-hoster should not have to configure object storage to attach a CSV. */
-const STORAGE_DIR = process.env.ARTIFACT_DIR ?? join(process.cwd(), '..', '..', '.artifacts');
+/** Where the files live. Exported for the backup (M61), which copies the whole tree. */
+export const STORAGE_DIR = process.env.ARTIFACT_DIR ?? join(process.cwd(), '..', '..', '.artifacts');
 
 export const MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
 

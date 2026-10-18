@@ -24,6 +24,16 @@ ENV NODE_ENV=production \
     PORT=8080 \
     ARTIFACT_DIR=/data/artifacts \
     FABRIKKA_DATA_DIR=/data
+# M61: pg_dump and pg_restore for the daily backup, from PostgreSQL's own
+# repository so the client is at least the server's version (17). Nothing else.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+ && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+ && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends postgresql-client-17 \
+ && apt-get purge -y curl gnupg && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/*
 # Only what runs: the server with its production dependencies (tsx included,
 # since the server runs its TypeScript directly), the built web app and the
 # built client, in the layout the server's paths expect. No build tools.

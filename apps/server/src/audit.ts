@@ -27,6 +27,7 @@ export const AUDIT_ACTIONS = [
   'account.deletion_requested',
   'account.deletion_cancelled',
   'account.deleted',
+  'account.exported',
   'team.created',
   'team.member_removed',
   'team.audit_days_changed',

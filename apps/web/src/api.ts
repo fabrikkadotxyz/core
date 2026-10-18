@@ -143,6 +143,21 @@ export const auth = {
     call<{ ok: true; effectiveAt: string; graceDays: number }>('/me/deletion', { method: 'POST', body }),
   /** M60 (ADR 0058): what you did, and what was done to you. */
   myAudit: (limit = 50) => call<{ events: AuditEventView[] }>(`/me/audit?limit=${limit}`),
+  /** M62: everything held about you, as one zip, behind the password. Resolves to the file. */
+  exportMyData: async (password: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await fetch('/api/me/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+      credentials: 'same-origin',
+    });
+    if (!res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new ApiError(res.status, json.error ?? `request failed (${res.status})`);
+    }
+    const filename = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'fabrikka-data.zip';
+    return { blob: await res.blob(), filename };
+  },
   logout: () => call<{ ok: true }>('/auth/logout', { method: 'POST' }),
   /** M39, ADR 0035: whether this instance still needs its owner, and creating them. */
   setupNeeded: () => call<{ needed: boolean }>('/setup'),

@@ -657,6 +657,15 @@ What stays after deletion is content other people are entitled to: messages,
 comments, edits, context history and outputs in rooms they are in, under the
 name the person chose to leave. *Delete my account* says so before it asks.
 
+### Download my data (M62)
+
+| Threat | Control |
+| --- | --- |
+| A stolen cookie downloads everything about the person | The export needs the password again, in the same request, like deletion. A refused attempt is in the trail. |
+| The export leaks other people's content | It holds what the person wrote and what is about them: their messages, not the room's; line counts of their edits, not the document; comments they made. A room's record is its owner's export (M27). |
+| The export leaks a credential | Connections are listed by slug, label, URL and status. Sealed tokens, refresh tokens and headers are never read by it. No password hash. |
+| The export is used to profile a person's colleagues | Call records name the tool and the room, not the other members; the trail's events are only those where the person is actor or subject. |
+
 ## The trail (M60, ADR 0058)
 
 `audit_events` records who did what to a room, an organization or an
@@ -717,3 +726,4 @@ These must pass before a session is ever shared with another human:
 | Deleting an account removes nothing another person is in, and a deleted or deactivated account cannot sign in or act | M58 |
 | Ten failed sign-ins refuse the eleventh with the same answer, the right password included | M59 |
 | Removing a member, changing a grant and exporting a room each leave one event, with no content in it; a member cannot read the organization's trail | M60 |
+| A person's data export holds their own messages and no one else's, and no token | M62 |

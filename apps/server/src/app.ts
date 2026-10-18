@@ -133,6 +133,7 @@ import { loginThrottle } from './login-throttle.ts';
 import { AUDIT_DAYS, audit, auditCsv, auditForTeam, auditForUser, getAuditDays, pruneAudit, setAuditDays, userIdFor, type AuditInput } from './audit.ts';
 import { BACKUP_KEEP_DAYS, createBackup, pruneBackups } from './backup.ts';
 import { STORAGE_DIR } from './artifacts.ts';
+import { exportAccount } from './account-export.ts';
 import { addStream, refreshRoom, startAttention } from './attention.ts';
 import { DEFAULT_THEME, SYSTEM_THEMES, loadThemes, publicTheme, themeDirs, themeFile } from './themes.ts';
 import {
@@ -463,6 +464,27 @@ export function createApp(options: CreateAppOptions = {}) {
       ? 'You had asked for this account to be deleted. Signing in cancelled that: your account and everything in it are as you left them.'
       : undefined;
     return c.json(notice ? { user, notice } : { user });
+  });
+
+  /* ---- M62: Settings → Account → Download my data. Behind the password, like deletion. ---- */
+
+  app.post('/api/me/export', requireUser(db), async (c) => {
+    const body = await c.req.json<{ password?: unknown }>().catch(() => ({}) as { password?: unknown });
+    if (typeof body.password !== 'string' || !body.password) return c.json({ error: 'your password is required' }, 400);
+    const me = c.get('user');
+    const out = await exportAccount(db, me.id, body.password);
+    if (!out.ok) {
+      if (out.status === 401) trail(c, { action: 'account.exported', subjectUserId: me.id, outcome: 'refused', detail: { reason: 'password' } });
+      return c.json({ error: out.error }, out.status);
+    }
+    trail(c, { action: 'account.exported', subjectUserId: me.id, detail: { bytes: out.data.length } });
+    return new Response(new Uint8Array(out.data), {
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${out.filename}"`,
+        'Cache-Control': 'no-store',
+      },
+    });
   });
 
   /* ---- M58 (ADR 0057): Settings → Account → Delete my account ---- */

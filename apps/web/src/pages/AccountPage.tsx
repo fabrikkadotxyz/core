@@ -44,6 +44,58 @@ function MyActivity() {
   );
 }
 
+/** M62: the right of access and portability, self-served, behind the password. */
+function DownloadMyData() {
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setDone(null);
+    setBusy(true);
+    try {
+      const { blob, filename } = await auth.exportMyData(password);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setDone(filename);
+      setPassword('');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section aria-label="Download my data">
+      <h2>Download my data</h2>
+      <p className="muted small">
+        One zip of everything this instance holds about you: your profile, where you are, every message you wrote, your
+        connections by name, your computers, agents and activity. Never other people's messages, a room's documents, tool
+        output or a credential. A room's full record is exported by its owner, from the room.
+      </p>
+      <form className="stack" onSubmit={submit}>
+        <label>
+          Your password, to confirm it is you
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+        </label>
+        {error && <p className="error">{error}</p>}
+        {done && <p className="hint">Saved as {done}.</p>}
+        <p>
+          <button type="submit" disabled={busy || !password}>
+            {busy ? 'Preparing…' : 'Download my data'}
+          </button>
+        </p>
+      </form>
+    </section>
+  );
+}
+
 export function Account() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -86,6 +138,8 @@ export function Account() {
       </section>
 
       <MyActivity />
+
+      <DownloadMyData />
 
       <section aria-label="Delete my account">
         <h2>Delete my account</h2>

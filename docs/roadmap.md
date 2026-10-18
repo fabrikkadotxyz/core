@@ -2927,6 +2927,40 @@ the manifest, asserts a second restore without `--force` is refused, and drops
 the scratch database. `.github/workflows/backup-restore.yml` runs it weekly
 against a fresh Postgres 17.
 
+## M62 — Download my data
+
+> **Built 2026-10-18.** The scripted check passes, the owner's manual test is
+> pending. The first of the milestones that let a privacy policy promise a
+> person's rights: access and portability, self-served. Room export (M27)
+> was the owner's; a person had no way to get what was held about them.
+
+- **One zip, behind the password.** `POST /api/me/export` with the password
+  returns `fabrikka-<slug>-<date>.zip`: `README.md`, `profile.json`,
+  `organizations.json`, `rooms.json`, `guest-of.json`, `messages.json` (every
+  message they wrote, with the room and the name they wrote it under),
+  `edits.json` (documents edited, as line counts), `comments.json`,
+  `connections.json` (by name, never a token), `computers.json`,
+  `agents.json`, `call-records.json` and `activity.json` (the trail's events
+  about them). `account-export.ts`; the same `zip()` as room export.
+- **What is not in it:** other people's messages, a room's documents and
+  files, tool output, any credential. A room's record is the owner's export.
+- **Settings → Account → Download my data.** Password, one button, the file
+  saves. Each export, and each refused attempt, is in the trail
+  (`account.exported`).
+
+**Test** (any account with messages in two rooms):
+1. Settings → Account → **Download my data**, password, **Download**. A zip
+   saves. **2 clicks** from Settings plus the password.
+2. Open `messages.json`: messages from both rooms, none from a room you are
+   not in. Open `connections.json`: names and URLs, no token anywhere.
+3. Settings → Activity, as the organization's owner: *exported their data*.
+
+**Scripted** (`scripts/acceptance/m62.mjs`): a fresh account in two rooms,
+with a third it is not in; refuses without and with the wrong password; the
+archive lists the thirteen files; `messages.json` has the account's messages
+from both rooms and nothing from the third or by anyone else;
+`connections.json` carries no sealed field; the trail has the event.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

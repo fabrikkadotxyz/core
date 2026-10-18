@@ -28,6 +28,7 @@ import type {
   HomeView,
   OutputComment,
   TeamDetail,
+  AuditEventView,
   TeamMember,
   TeamSummary,
   PauseState,
@@ -140,6 +141,8 @@ export const auth = {
   /** M58 (ADR 0057): Settings → Account → Delete my account. Signs this browser out. */
   requestDeletion: (body: { password: string; eraseName: boolean }) =>
     call<{ ok: true; effectiveAt: string; graceDays: number }>('/me/deletion', { method: 'POST', body }),
+  /** M60 (ADR 0058): what you did, and what was done to you. */
+  myAudit: (limit = 50) => call<{ events: AuditEventView[] }>(`/me/audit?limit=${limit}`),
   logout: () => call<{ ok: true }>('/auth/logout', { method: 'POST' }),
   /** M39, ADR 0035: whether this instance still needs its owner, and creating them. */
   setupNeeded: () => call<{ needed: boolean }>('/setup'),
@@ -305,6 +308,10 @@ export const teams = {
   create: (name: string) => call<TeamSummary>('/teams', { method: 'POST', body: { name } }),
   get: (id: string) => call<TeamDetail>(`/teams/${id}`),
   createInvite: (id: string) => call<CreatedInviteView>(`/teams/${id}/invites`, { method: 'POST', body: {} }),
+  /** M60 (ADR 0058): the organization's trail, for its owners; 404 for anyone else. */
+  audit: (id: string, action?: string) =>
+    call<{ events: AuditEventView[]; auditDays: number; choices: readonly number[] }>(`/teams/${id}/audit${action ? `?action=${encodeURIComponent(action)}` : ''}`),
+  setAuditDays: (id: string, days: number) => call<{ auditDays: number }>(`/teams/${id}/audit-days`, { method: 'PUT', body: { days } }),
   removeMember: (id: string, userId: string) =>
     call<{ ok: true }>(`/teams/${id}/members/${userId}`, { method: 'DELETE' }),
 };

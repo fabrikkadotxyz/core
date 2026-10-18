@@ -6,10 +6,43 @@
  * "former-member". The account is deactivated at once; signing in within the
  * grace period cancels the deletion. docs/security.md, "Leaving".
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { AuditEventView } from '@fabrikka/types';
 import { auth } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
+import { describe } from './ActivityPage.tsx';
+
+/** M60 (ADR 0058): what you did, and what was done to you, anywhere. */
+function MyActivity() {
+  const [events, setEvents] = useState<AuditEventView[] | null>(null);
+  useEffect(() => {
+    auth.myAudit(30).then((r) => setEvents(r.events)).catch(() => setEvents([]));
+  }, []);
+  return (
+    <section aria-label="Recent activity on your account">
+      <h2>Recent activity on your account</h2>
+      <p className="muted small">Sign-ins, invites, rooms you were added to or removed from, and anything done to your account. Never what you wrote.</p>
+      {events === null && <p className="muted small">Loading…</p>}
+      {events && events.length === 0 && <p className="muted small">Nothing yet.</p>}
+      {events && events.length > 0 && (
+        <ul className="team-members">
+          {events.map((e) => (
+            <li key={e.id} className="team-member small">
+              <span>
+                {describe(e)}
+                {e.team?.name && <span className="muted"> · {e.team.name}</span>}
+                {e.outcome !== 'ok' && <span className="error"> · {e.outcome}</span>}
+              </span>
+              <span className="spacer" />
+              <span className="muted">{new Date(e.at).toLocaleString()}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 export function Account() {
   const { user, signOut } = useAuth();
@@ -51,6 +84,8 @@ export function Account() {
         </p>
         <p className="muted small">Your name in a room can differ: rename yourself there, in People.</p>
       </section>
+
+      <MyActivity />
 
       <section aria-label="Delete my account">
         <h2>Delete my account</h2>

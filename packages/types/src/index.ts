@@ -525,6 +525,22 @@ export interface LoginBody {
   password: string;
 }
 
+/** M60 (ADR 0058): one event of the trail, names resolved at read time. */
+export interface AuditEventView {
+  id: string;
+  at: string;
+  /** A dotted name: `login.failed`, `member.removed`, `deployment.<its own>`. */
+  action: string;
+  actor: { kind: 'user' | 'operator' | 'system' | 'deployment'; userId: string | null; name: string | null };
+  subject: { userId: string; name: string | null } | null;
+  team: { id: string; name: string | null } | null;
+  session: { publicId: string; title: string | null } | null;
+  /** Small identifiers and names. Never content. */
+  detail: Record<string, string | number | boolean | null>;
+  ip: string | null;
+  outcome: 'ok' | 'refused' | 'failed';
+}
+
 /** M58 (ADR 0057): Settings → Account → Delete my account. */
 export interface DeletionRequestBody {
   /** Proven again, so a stolen cookie cannot delete an account. */

@@ -657,6 +657,26 @@ What stays after deletion is content other people are entitled to: messages,
 comments, edits, context history and outputs in rooms they are in, under the
 name the person chose to leave. *Delete my account* says so before it asks.
 
+## The trail (M60, ADR 0058)
+
+`audit_events` records who did what to a room, an organization or an
+account: ids, names and outcomes, never what anyone said. The list of
+actions is fixed, in `audit.ts`; adding to it starts here.
+
+| Threat | Control |
+| --- | --- |
+| The trail becomes a second copy of the content | An event's `detail` holds names and identifiers only: a slug, a tool's name, a role, a title. The writer takes no message, no tool arguments and no credential, and the routes that have them pass none. |
+| A member learns from the trail who was removed or who failed to sign in | Only an organization's owners read its trail. A person reads the events they did or that were done to them, nothing else. A member of an organization has no *Activity* tab, and the API answers 404. |
+| A failed sign-in names the account it was aimed at | `login.failed` and `login.locked` carry the subject only when the address has an account, and nothing in the response changes either way. The event is the owners' and the operator's to see, never the client's. |
+| The trail fails and takes the action with it | `audit()` never throws: a failure is one warning line, and the sign-in, removal or export it describes stands. |
+| Someone edits the trail | There is no API that writes an event except the actions themselves and the kit's `audit()`, and none that changes or deletes one. The daily prune is the only delete. |
+| The trail outlives its purpose | Per-organization retention, a fixed list of 90, 180, 365 or 730 days, pruned daily; shortening prunes at once. Events in no organization follow the instance's `FABRIKKA_AUDIT_DAYS`. |
+| A person who left is still named | Names resolve at read time from `users`, so after ADR 0057's `former-member` the trail says `former-member` too. |
+
+What the trail is not: alerting, shipping to a log system, or a tamper-evident
+chain. A SOC 2 report wants the first two; they are deployment concerns on top
+of this table.
+
 ## Declined capabilities
 
 **Permission relay** (`claude/channel/permission`). Claude Code can forward tool-approval prompts to a channel so they can be answered remotely. We do **not** declare this capability: anyone able to reply through the channel could approve tool use in the owner's session, which in a multi-participant room is a straightforward privilege escalation. Revisit only with per-participant verdict attribution.
@@ -691,3 +711,4 @@ These must pass before a session is ever shared with another human:
 | Connecting Google without an encryption key is refused | M14 |
 | Deleting an account removes nothing another person is in, and a deleted or deactivated account cannot sign in or act | M58 |
 | Ten failed sign-ins refuse the eleventh with the same answer, the right password included | M59 |
+| Removing a member, changing a grant and exporting a room each leave one event, with no content in it; a member cannot read the organization's trail | M60 |

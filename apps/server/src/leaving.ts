@@ -38,6 +38,8 @@ import {
   verifyPassword,
 } from '@fabrikka/db';
 
+import { audit } from './audit.ts';
+
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 /** The name content keeps when the person asked for theirs to go. A handle, so mention matching stays whole (sessions.ts). */
@@ -352,7 +354,15 @@ export async function runDueDeletions(db: Database): Promise<number> {
     .where(and(isNull(users.deletedAt), lt(users.deletionRequestedAt, cutoff)));
   let n = 0;
   for (const u of due) {
-    if (await deleteUserNow(db, u.id)) n++;
+    const report = await deleteUserNow(db, u.id);
+    if (!report) continue;
+    n++;
+    await audit(db, {
+      action: 'account.deleted',
+      actorKind: 'system',
+      subjectUserId: u.id,
+      detail: { eraseName: report.eraseName, roomsDeleted: report.soloSessions.length, roomsPassed: report.passedSessions.length, teamsPassed: report.passedTeams.length, teamsDeleted: report.deletedTeams.length },
+    });
   }
   return n;
 }

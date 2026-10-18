@@ -2835,6 +2835,53 @@ the throttle counts failures only and that signup and redeem carry their
 brakes. The unit test (`login-throttle.test.mts`) moves the clock past the
 window.
 
+## M60 — The trail: who did what
+
+> **Built 2026-10-18** ([ADR 0058](decisions/0058-the-trail-who-did-what-kept-per-organization-never-what-they-said.md));
+> the scripted check passes, the owner's manual test is pending. The third of
+> the milestones toward an instance a privacy policy and an auditor can
+> be shown. Before it, eight `console.log` lines were the whole record of who
+> let someone in, widened a grant, exported a room or failed to sign in.
+
+- **One table, one writer.** `audit_events`: when, the action from a fixed
+  list, who (a person, the operator, the system, a deployment), to whom, in
+  which organization and room, the client address, the outcome, and a small
+  `detail` of names and identifiers. Never message content, tool arguments or
+  a credential. `audit()` never throws into the action it describes.
+- **What is recorded.** Sign-in, its failure and its lock; sign-out; password
+  reset asked and done; an account deactivated, reactivated, asked to be
+  deleted, kept, deleted; an organization created, a member removed, invites
+  created, revoked, redeemed; a room deleted or exported; members and guests
+  added or removed; agents added, trust changed, paused, resumed; tokens
+  issued and revoked; connections attached and removed, personal or shared;
+  grants changed; every operator command.
+- **Who reads it.** Owners: *Settings → Activity*, their organization's
+  events, filtered by kind, with a CSV download and the retention setting
+  (90, 180, 365 or 730 days; 365 by default; shortening prunes at once). A
+  person: *Settings → Account*, what they did and what was done to them. The
+  operator: `admin audit [--team <id>] [--since <date>] [--action <prefix>]
+  [--limit n]`. Nobody else. Events in no organization follow
+  `FABRIKKA_AUDIT_DAYS` (365).
+- **Names resolve at read time**, so a person who left under `former-member`
+  stops being named without a rewrite. A deleted room keeps its title in
+  `detail`.
+- **The kit:** `audit(event)` for a deployment's own events, as
+  `deployment.<name>`, and `auditEvents(teamId, filter)` to show them.
+
+**Test** (an organization with two people, as its owner):
+1. Remove a member, change a tool grant in one of its rooms, export the room.
+2. Settings → **Activity**: the three rows are there, newest first, with you
+   as the actor and the right room. **2 clicks** from Settings.
+3. Filter by *grants*: one row. **Download CSV**: the same rows, in a file.
+4. Sign in as the member: Settings has no Activity tab; Settings → Account
+   shows them their removal, done by you.
+
+**Scripted** (`scripts/acceptance/m60.mjs`): performs a dozen actions as two
+accounts, asserts each produced one event with the expected action, actor,
+subject and room, that no event carries message content or tool arguments,
+that a member is refused the organization's trail and sees their own, that
+the CSV has the rows, and that shortening retention prunes at once.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

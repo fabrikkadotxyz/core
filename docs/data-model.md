@@ -459,6 +459,37 @@ tokens), `session_reads`, `session_guests`, `session_members`,
 deletes `teams` nobody else is in and no session of which has another human;
 renames `participants.display_name` when `erase_name`. `team_mcp_calls` keep
 their participant and lose `user_id`, as before.
+### M60 — the trail (ADR 0058)
+
+```
+audit_events
+  id               uuid pk
+  at               timestamptz not null
+  action           text not null          -- a dotted name from audit.ts's fixed list: login.failed, member.removed, …
+  actor_kind       text not null          -- user | operator | system | deployment
+  actor_user_id    uuid -> users.id on delete set null
+  subject_user_id  uuid -> users.id on delete set null
+  team_id          uuid -> teams.id on delete set null
+  session_id       uuid -> sessions.id on delete set null
+  detail           jsonb                  -- small names and identifiers: a slug, a tool, a role, a title. Never content.
+  ip               text
+  outcome          text not null          -- ok | refused | failed
+  index (team_id, at), index (actor_user_id, at), index (subject_user_id, at)
+
+teams  (additions)
+  audit_days       integer not null default 365
+    check (audit_days in (90, 180, 365, 730))
+```
+
+**Ids, not names.** The reader joins `users`, `teams` and `sessions` at read
+time, so a rename shows and a person who left under `former-member` (ADR
+0057) stops being named with no rewrite. A deleted room's `session_id`
+becomes null; its title survives in `detail`.
+
+**Pruned daily**, like call records: events in an organization by its
+`audit_days`, events in none (a sign-in, a personal connection) by
+`FABRIKKA_AUDIT_DAYS`. Shortening the setting prunes at once.
+
 ### M25 — templates
 
 ```

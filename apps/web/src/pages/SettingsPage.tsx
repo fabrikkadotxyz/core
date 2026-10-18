@@ -13,9 +13,12 @@ import { Devices } from './DevicesPage.tsx';
 import { Appearance } from './AppearancePage.tsx';
 import { Organizations } from './OrganizationsPage.tsx';
 import { Account } from './AccountPage.tsx';
+import { OrganizationActivity } from './ActivityPage.tsx';
 
 const TABS = [
   { key: 'people', label: 'People', org: true, self: false },
+  // M60 (ADR 0058): who did what, for the organization's owners.
+  { key: 'activity', label: 'Activity', org: true, self: false },
   // 2026-10-16: organizations are made here, in Self only; the home is for what needs you.
   { key: 'organizations', label: 'Organizations', org: true, self: true },
   { key: 'devices', label: 'Your devices', org: false, self: false },
@@ -43,6 +46,7 @@ export function SettingsPage() {
       <main className="column">
         <h1>{current.key === 'people' && team ? `People in ${team.name}` : current.label}</h1>
         {current.key === 'people' && team && <OrganizationPeople teamId={team.id} />}
+        {current.key === 'activity' && team && <OrganizationActivity teamId={team.id} />}
         {current.key === 'organizations' && <Organizations />}
         {current.key === 'devices' && <Devices />}
         {current.key === 'appearance' && <Appearance />}

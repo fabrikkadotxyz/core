@@ -19,6 +19,10 @@ import {
 } from './users.ts';
 import { agentCounts } from './onboarding.ts';
 import { deactivateUser, deleteUserNow, findUserForLeaving, GRACE_DAYS, previewDeletion, reactivateUser, scheduleDeletion } from './leaving.ts';
+import { audit, auditForInstance, type AuditAction } from './audit.ts';
+/** M60 (ADR 0058): every command leaves one event, as the operator. */
+const record = (action: AuditAction, e: { subjectUserId?: string | null; detail?: Record<string, string | number | boolean | null> } = {}) =>
+  audit(db, { action, actorKind: 'operator', ...e });
 
 const USAGE = `fabrikka admin
 
@@ -31,6 +35,8 @@ const USAGE = `fabrikka admin
                                 personal data goes, what they wrote stays (ADR 0057);
                                 scheduled after ${GRACE_DAYS} days unless --now
   agents                        how many people use, and wish for, each agent tool (counts only)
+  audit         [--team <id>] [--since <YYYY-MM-DD>] [--action <prefix>] [--limit <n>]
+                                the trail: who did what (M60, ADR 0058), newest first
 
 Passwords are read from a TTY prompt, or from stdin with --password-stdin so
 they never appear in shell history or ps output:
@@ -113,6 +119,7 @@ try {
       });
       if (!result.ok) die(result.error);
 
+      await record('admin.create_user', { subjectUserId: result.user.id, detail: { instanceOwner: isInstanceOwner } });
       console.log(`created ${result.user.email}`);
       console.log(`  display name  ${result.user.displayName}`);
       console.log(`  owner slug    ${result.user.ownerSlug}   (appears in MCP URLs)`);
@@ -132,6 +139,7 @@ try {
       const result = await resetPassword(db, email, password);
       if (!result.ok) die(result.error);
 
+      await record('admin.reset_password', { subjectUserId: (await findUserForLeaving(db, email))?.id ?? null });
       console.log(`password reset for ${email}`);
       console.log('every existing login for this account has been invalidated');
       break;
@@ -159,6 +167,7 @@ try {
       const email = flag(argv, 'email') ?? die('--email is required');
       const user = (await findUserForLeaving(db, email)) ?? die('no such user');
       if (!(await deactivateUser(db, user.id))) die('that account is deleted');
+      await record('admin.deactivate_user', { subjectUserId: user.id });
       console.log(`deactivated ${email}: cannot sign in; nothing else changed. Undo with reactivate-user.`);
       break;
     }
@@ -167,6 +176,7 @@ try {
       const email = flag(argv, 'email') ?? die('--email is required');
       const user = (await findUserForLeaving(db, email)) ?? die('no such user');
       if (!(await reactivateUser(db, user.id))) die('that account is deleted and cannot come back');
+      await record('admin.reactivate_user', { subjectUserId: user.id, detail: { cancelledDeletion: !!user.deletionRequestedAt } });
       console.log(`reactivated ${email}${user.deletionRequestedAt ? ' and cancelled its deletion' : ''}`);
       break;
     }
@@ -211,6 +221,7 @@ try {
       if (!has(argv, 'now')) {
         const r = await scheduleDeletion(db, user.id, { eraseName });
         if (!r.ok) die(r.error);
+        await record('admin.delete_user', { subjectUserId: user.id, detail: { eraseName, now: false, effectiveAt: r.effectiveAt.toISOString() } });
         console.log(`${email} is deactivated now and will be deleted on ${r.effectiveAt.toISOString().slice(0, 10)}. A sign-in before then cancels it.`);
         break;
       }
@@ -222,7 +233,31 @@ try {
       }
       if (eraseName) await scheduleDeletion(db, user.id, { eraseName });
       const report = (await deleteUserNow(db, user.id)) ?? die('nothing to delete');
+      await record('admin.delete_user', {
+        subjectUserId: user.id,
+        detail: { eraseName, now: true, roomsDeleted: report.soloSessions.length, roomsPassed: report.passedSessions.length, teamsPassed: report.passedTeams.length, teamsDeleted: report.deletedTeams.length },
+      });
       console.log(`deleted ${email}: ${report.soloSessions.length} room(s) removed, ${report.passedSessions.length} passed on, ${report.participantsRenamed} name(s) replaced.`);
+      break;
+    }
+
+    case 'audit': {
+      // M60 (ADR 0058): the operator reads everything.
+      const since = flag(argv, 'since');
+      const events = await auditForInstance(db, {
+        teamId: flag(argv, 'team'),
+        since: since ? new Date(since) : undefined,
+        action: flag(argv, 'action'),
+        limit: Number(flag(argv, 'limit') ?? 100),
+      });
+      if (events.length === 0) console.log('no events');
+      for (const e of events) {
+        const who = e.actor.userId ? (e.actor.name ?? e.actor.userId) : e.actor.kind;
+        const whom = e.subject ? ` → ${e.subject.name ?? e.subject.userId}` : '';
+        const where = [e.team?.name, e.session?.title].filter(Boolean).join(' / ');
+        const detail = Object.keys(e.detail).length ? `  ${JSON.stringify(e.detail)}` : '';
+        console.log(`${e.at}  ${e.action.padEnd(28)} ${e.outcome.padEnd(7)} ${who}${whom}${where ? `  [${where}]` : ''}${e.ip ? `  ${e.ip}` : ''}${detail}`);
+      }
       break;
     }
 

@@ -1103,6 +1103,8 @@ serve its own pages as well as its own `/api/<name>/…` routes.
 | `reactivateUser(userId)` | Undo a deactivation, or cancel a deletion that has not happened yet. False if the account is already deleted. |
 | `deleteUser(userId, { eraseName?, now? })` | Delete the account the way *Settings → Account* does: personal data goes, content stays under the person's name, or under `former-member` with `eraseName`. Without `now`, it is deactivated at once and deleted after the core's grace period; a sign-in meanwhile cancels. |
 | `onUserDeleted(listener)` | `listener({ userId, teamIds })` after a deletion has committed, with the teams the person was on, so a deployment can clean up what it keeps about the person. Never before. |
+| `audit(event)` | *(M60, ADR 0058)* One event in the trail, as `deployment`: `{ action: 'deployment.<name>', actorUserId?, subjectUserId?, teamId?, sessionId?, detail?, outcome? }`. Names and identifiers in `detail`, never content or a credential. Never throws. |
+| `auditEvents(teamId, { limit?, before?, since?, action? })` | An organization's trail, newest first, names resolved: what *Settings → Activity* shows its owners. The deployment checks who is asking. |
 
 `GET /api/auth/options` returns what the login page should offer:
 `{ passwordReset: boolean, signupUrl: string | null }`.

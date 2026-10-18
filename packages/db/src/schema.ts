@@ -99,13 +99,18 @@ export const teams = pgTable(
      * policy can name every possible answer.
      */
     callRecordDays: integer('call_record_days').notNull().default(90),
+    /** M60 (ADR 0058): how long this organization's audit_events are kept. A fixed list, like call records. */
+    auditDays: integer('audit_days').notNull().default(365),
     /**
      * M53 (ADR 0051): the account whose own organization this is. Created with
      * the account, named after the person; they cannot be removed from it.
      */
     ownOfUserId: uuid('own_of_user_id').unique().references(() => users.id, { onDelete: 'restrict' }),
   },
-  (t) => [check('teams_call_record_days', sql`${t.callRecordDays} in (30, 60, 90, 180, 365)`)],
+  (t) => [
+    check('teams_call_record_days', sql`${t.callRecordDays} in (30, 60, 90, 180, 365)`),
+    check('teams_audit_days', sql`${t.auditDays} in (90, 180, 365, 730)`),
+  ],
 );
 
 export const teamMembers = pgTable(
@@ -742,6 +747,43 @@ export const teamMcpCalls = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('team_mcp_calls_server_idx').on(t.teamMcpServerId, t.createdAt)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* M60 — the trail (ADR 0058)                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Who did what: sign-ins and their failures, membership, invites, grants,
+ * connections, exports, deletions, the operator's commands. Ids, names and
+ * outcomes only: never message content, tool arguments or a credential. Names
+ * resolve at read time. Pruned daily by teams.audit_days (events in an
+ * organization) or FABRIKKA_AUDIT_DAYS (events in none).
+ */
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    /** A dotted name from audit.ts's fixed list, e.g. `login.failed`, `member.removed`. */
+    action: text('action').notNull(),
+    /** user | operator | system | deployment */
+    actorKind: text('actor_kind').notNull().default('user'),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    subjectUserId: uuid('subject_user_id').references(() => users.id, { onDelete: 'set null' }),
+    teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
+    sessionId: uuid('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+    /** Small identifiers and names: a slug, a tool, a role, a room's title. Never content. */
+    detail: jsonb('detail').$type<Record<string, string | number | boolean | null>>(),
+    ip: text('ip'),
+    /** ok | refused | failed */
+    outcome: text('outcome').notNull().default('ok'),
+  },
+  (t) => [
+    index('audit_events_team_idx').on(t.teamId, t.at),
+    index('audit_events_actor_idx').on(t.actorUserId, t.at),
+    index('audit_events_subject_idx').on(t.subjectUserId, t.at),
+  ],
 );
 
 /* -------------------------------------------------------------------------- */

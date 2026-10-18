@@ -23,6 +23,8 @@ import { membersChanged, register, teamInfo, teamRoleOf, type AccountCheck, type
 import { rateLimit } from './rate-limit.ts';
 import { createUser } from './users.ts';
 import { deactivateUser, deleteUserNow, onUserDeleted, reactivateUser, scheduleDeletion } from './leaving.ts';
+import { audit, auditForTeam } from './audit.ts';
+import type { AuditEventView } from '@fabrikka/types';
 
 const MAX_TEAM_NAME = 80;
 
@@ -87,6 +89,19 @@ export interface Kit {
   deleteUser(userId: string, opts?: { eraseName?: boolean; now?: boolean }): Promise<boolean>;
   /** After a deletion has committed, with the teams the person was on. */
   onUserDeleted(listener: (ctx: { userId: string; teamIds: string[] }) => void | Promise<void>): void;
+  /* M60 (ADR 0058): the trail. */
+  /** One event, as `deployment`. Names and identifiers in `detail`, never content or a credential. Never throws. */
+  audit(event: {
+    action: `deployment.${string}`;
+    actorUserId?: string | null;
+    subjectUserId?: string | null;
+    teamId?: string | null;
+    sessionId?: string | null;
+    detail?: Record<string, string | number | boolean | null | undefined>;
+    outcome?: 'ok' | 'refused' | 'failed';
+  }): Promise<void>;
+  /** An organization's trail, newest first, names resolved. The deployment checks who is asking. */
+  auditEvents(teamId: string, filter?: { limit?: number; before?: Date; since?: Date; action?: string }): Promise<AuditEventView[]>;
 }
 
 /** What extensions advertised, for GET /api/auth/options. */
@@ -177,13 +192,37 @@ export function createKit(opts: {
       const [row] = await db.select({ n: count() }).from(users);
       return Number(row?.n ?? 0);
     },
-    deactivateUser: (userId) => deactivateUser(db, userId),
-    reactivateUser: (userId) => reactivateUser(db, userId),
+    deactivateUser: async (userId) => {
+      const ok = await deactivateUser(db, userId);
+      if (ok) await audit(db, { action: 'account.deactivated', actorKind: 'deployment', subjectUserId: userId });
+      return ok;
+    },
+    reactivateUser: async (userId) => {
+      const ok = await reactivateUser(db, userId);
+      if (ok) await audit(db, { action: 'account.reactivated', actorKind: 'deployment', subjectUserId: userId });
+      return ok;
+    },
     deleteUser: async (userId, opts = {}) => {
-      if (opts.now) return (await deleteUserNow(db, userId)) !== null;
-      return (await scheduleDeletion(db, userId, { eraseName: opts.eraseName === true })).ok;
+      if (opts.now) {
+        if (opts.eraseName) await scheduleDeletion(db, userId, { eraseName: true });
+        const report = await deleteUserNow(db, userId);
+        if (report) {
+          await audit(db, {
+            action: 'account.deleted',
+            actorKind: 'deployment',
+            subjectUserId: userId,
+            detail: { eraseName: report.eraseName, roomsDeleted: report.soloSessions.length, roomsPassed: report.passedSessions.length },
+          });
+        }
+        return report !== null;
+      }
+      const r = await scheduleDeletion(db, userId, { eraseName: opts.eraseName === true });
+      if (r.ok) await audit(db, { action: 'account.deletion_requested', actorKind: 'deployment', subjectUserId: userId, detail: { eraseName: opts.eraseName === true } });
+      return r.ok;
     },
     onUserDeleted,
+    audit: (event) => audit(db, { ...event, actorKind: 'deployment' }),
+    auditEvents: (teamId, filter) => auditForTeam(db, teamId, filter),
   };
 }
 

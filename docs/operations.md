@@ -572,6 +572,31 @@ Windows and Linux are built on their own runners (above); there is no
 cross-compilation, and nothing is code-signed yet (ADR 0031): a copy
 installed by the script runs; a copy downloaded with a browser warns.
 
+## The activity trail (M60)
+
+Every privileged action leaves one event in `audit_events`
+([ADR 0058](decisions/0058-the-trail-who-did-what-kept-per-organization-never-what-they-said.md)):
+sign-ins and their failures, membership, invites, grants, connections,
+exports, deletions, and every command below. Ids, names and outcomes; never
+message content, tool arguments or a credential.
+
+- **Owners** read their organization's trail in *Settings → Activity*, filter
+  it by kind, download it as CSV, and choose how long it is kept: 90, 180,
+  365 or 730 days (365 by default). Shortening deletes the older events at
+  once.
+- **A person** sees what they did, and what was done to them, in *Settings →
+  Account*.
+- **You** read everything: `admin audit [--team <id>] [--since <YYYY-MM-DD>]
+  [--action <prefix>] [--limit <n>]`. Prefixes are the first word of an
+  action: `login`, `account`, `member`, `invite`, `grant`, `connection`,
+  `admin`, `deployment`.
+- **Events in no organization** (a sign-in, a personal connection) are kept
+  for `FABRIKKA_AUDIT_DAYS` (365). The daily job prunes both kinds.
+
+The trail is a table, not a log pipeline. Alerting on it, or shipping it to
+a log system, is a deployment's job; the SQL is one `select` on
+`audit_events`.
+
 ## Backups
 
 All durable state is in Postgres. Artifacts (M7) add object storage.

@@ -130,6 +130,7 @@ import {
 import { createUser, getUserTheme, setUserTheme } from './users.ts';
 import { GRACE_DAYS, requestDeletion, runDueDeletions } from './leaving.ts';
 import { loginThrottle } from './login-throttle.ts';
+import { AUDIT_DAYS, audit, auditCsv, auditForTeam, auditForUser, getAuditDays, pruneAudit, setAuditDays, userIdFor, type AuditInput } from './audit.ts';
 import { addStream, refreshRoom, startAttention } from './attention.ts';
 import { DEFAULT_THEME, SYSTEM_THEMES, loadThemes, publicTheme, themeDirs, themeFile } from './themes.ts';
 import {
@@ -234,6 +235,16 @@ export interface CreateAppOptions {
 export function createApp(options: CreateAppOptions = {}) {
   const PORT = Number(process.env.PORT ?? 9090);
   const PUBLIC_URL = process.env.PUBLIC_URL ?? `http://localhost:${PORT}`;
+
+  /**
+   * M60 (ADR 0058): one event per privileged action. The signed-in user is the
+   * actor unless the event says otherwise; the client address comes along.
+   * Fire-and-forget: the trail never delays or fails the response.
+   */
+  const trail = (c: Context<AuthEnv>, e: Omit<AuditInput, 'ip'>) => {
+    const me = (c.get('user') as { id: string } | undefined)?.id ?? null;
+    void audit(db, { ...e, actorUserId: e.actorUserId === undefined ? me : e.actorUserId, ip: clientIp(c) });
+  };
   const SECURE_COOKIES = PUBLIC_URL.startsWith('https://');
 
   /**
@@ -427,6 +438,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const ip = clientIp(c);
     if (!loginThrottle.allowed(email, ip)) {
       console.warn(`[login] refused: too many failed sign-ins (${loginThrottle.failuresFor(email)} for the address) from ${ip}`);
+      trail(c, { action: 'login.locked', actorUserId: null, subjectUserId: await userIdFor(db, email), outcome: 'refused' });
       return c.json({ error: 'invalid email or password' }, 401);
     }
     const signedIn = await login(db, email, password);
@@ -434,6 +446,7 @@ export function createApp(options: CreateAppOptions = {}) {
     // or deleted account, so the endpoint is not an account enumeration oracle.
     if (!signedIn) {
       loginThrottle.failed(email, ip);
+      trail(c, { action: 'login.failed', actorUserId: null, subjectUserId: await userIdFor(db, email), outcome: 'failed' });
       return c.json({ error: 'invalid email or password' }, 401);
     }
 
@@ -441,6 +454,8 @@ export function createApp(options: CreateAppOptions = {}) {
     void pruneExpiredSessions(db);
 
     const user = await resolveToken(db, signedIn.token);
+    trail(c, { action: 'login.ok', actorUserId: user?.id ?? null });
+    if (signedIn.reactivated) trail(c, { action: 'account.deletion_cancelled', actorUserId: user?.id ?? null, subjectUserId: user?.id ?? null });
     // M58 (ADR 0057): signing in during the grace period cancels the deletion.
     const notice = signedIn.reactivated
       ? 'You had asked for this account to be deleted. Signing in cancelled that: your account and everything in it are as you left them.'
@@ -455,7 +470,11 @@ export function createApp(options: CreateAppOptions = {}) {
     if (typeof body.password !== 'string' || !body.password) return c.json({ error: 'your password is required' }, 400);
     const me = c.get('user');
     const result = await requestDeletion(db, me.id, { password: body.password, eraseName: body.eraseName === true });
-    if (!result.ok) return c.json({ error: result.error }, result.status);
+    if (!result.ok) {
+      if (result.status === 401) trail(c, { action: 'account.deletion_requested', subjectUserId: me.id, outcome: 'refused', detail: { reason: 'password' } });
+      return c.json({ error: result.error }, result.status);
+    }
+    trail(c, { action: 'account.deletion_requested', subjectUserId: me.id, detail: { eraseName: body.eraseName === true, effectiveAt: result.effectiveAt.toISOString() } });
     // Signed out everywhere, this tab included.
     clearCookie(c, SECURE_COOKIES);
     const effective = result.effectiveAt.toISOString().slice(0, 10);
@@ -478,8 +497,10 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.post('/api/auth/logout', async (c) => {
     const token = readCookie(c);
+    const who = token ? await resolveToken(db, token) : null;
     if (token) await logout(db, token);
     clearCookie(c, SECURE_COOKIES);
+    if (who) trail(c, { action: 'logout', actorUserId: who.id });
     return c.json({ ok: true });
   });
 
@@ -594,6 +615,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const underIp = rateLimit(`reset:ip:${ip}`, { max: 20, windowMs: window });
     if (!underEmail || !underIp) return c.json({ error: 'too many requests — try again in a few minutes' }, 429);
     await requestPasswordReset(db, mailer, { email, publicUrl: PUBLIC_URL });
+    trail(c, { action: 'password.reset_requested', actorUserId: null, subjectUserId: await userIdFor(db, email) });
     return c.json({ ok: true });
   });
 
@@ -602,6 +624,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const { token, password } = await c.req.json<{ token?: string; password?: string }>().catch(() => ({}) as { token?: string; password?: string });
     if (!token || !password) return c.json({ error: 'token and password are required' }, 400);
     const done = await completePasswordReset(db, token, password);
+    trail(c, { action: 'password.reset_completed', actorUserId: null, outcome: done.ok ? 'ok' : 'failed' });
     return done.ok ? c.json({ ok: true }) : c.json({ error: done.error }, 400);
   });
 
@@ -646,6 +669,14 @@ export function createApp(options: CreateAppOptions = {}) {
     const redeemed = await redeemInvite(db, body.token, created.user);
     if (!redeemed.ok) return c.json({ error: `invite ${redeemed.reason}` }, 400);
     if (redeemed.team) membersChanged(db, redeemed.team.id);
+    // M60: a sign-up through a link is a redemption too; the new account is the actor.
+    trail(c, {
+      action: 'invite.redeemed',
+      actorUserId: created.user.id,
+      subjectUserId: created.user.id,
+      teamId: redeemed.team?.id ?? null,
+      detail: { sessionPublicId: redeemed.session?.publicId ?? null, team: redeemed.team?.name ?? null, signup: true },
+    });
 
     const signedIn = await login(db, body.email, body.password);
     if (signedIn) issueCookie(c, signedIn.token, SECURE_COOKIES);
@@ -676,6 +707,12 @@ export function createApp(options: CreateAppOptions = {}) {
     if (result.team) membersChanged(db, result.team.id);
     // ADR 0043: their computers learn the new organization, for the Folders window's "For".
     if (result.team) void refreshHostsOf(db, c.get('user').id).catch(() => {});
+    trail(c, {
+      action: 'invite.redeemed',
+      subjectUserId: c.get('user').id,
+      teamId: result.team?.id ?? null,
+      detail: { sessionPublicId: result.session?.publicId ?? null, team: result.team?.name ?? null },
+    });
     return c.json({ session: result.session, team: result.team });
   });
 
@@ -747,6 +784,7 @@ export function createApp(options: CreateAppOptions = {}) {
       const team = await createTeam(db, c.get('user').id, name ?? '');
       membersChanged(db, team.id);
       void refreshHostsOf(db, c.get('user').id).catch(() => {});
+      trail(c, { action: 'team.created', teamId: team.id, detail: { name: team.name } });
       return c.json(team, 201);
     } catch (err) {
       if (err instanceof TeamError) return c.json({ error: err.message }, 400);
@@ -777,12 +815,14 @@ export function createApp(options: CreateAppOptions = {}) {
       role: body.role === 'owner' ? 'owner' : 'member',
       invitedEmail: body.invitedEmail ?? null,
     });
+    trail(c, { action: 'invite.created', teamId, detail: { inviteId: summary.id, role: summary.role } });
     return c.json({ invite: summary, token, url: `${PUBLIC_URL}/invite/${token}` }, 201);
   });
 
   app.post('/api/teams/:id/invites/:inviteId/revoke', requireUser(db), async (c) => {
     if ((await teamRole(db, c.req.param('id'), c.get('user').id)) !== 'owner') return c.notFound();
     const revoked = await revokeInvite(db, { teamId: c.req.param('id') }, c.req.param('inviteId'));
+    if (revoked) trail(c, { action: 'invite.revoked', teamId: c.req.param('id'), detail: { inviteId: c.req.param('inviteId') } });
     return revoked ? c.json({ ok: true }) : c.notFound();
   });
 
@@ -801,6 +841,7 @@ export function createApp(options: CreateAppOptions = {}) {
       throw err;
     }
     membersChanged(db, teamId);
+    trail(c, { action: 'team.member_removed', teamId, subjectUserId: target, detail: { left: target === me } });
     // ADR 0043: their computers stop offering, and running, that organization's folders.
     void refreshHostsOf(db, target, true).catch(() => {});
     return c.json({ ok: true });
@@ -855,6 +896,7 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!body.slug || !body.url) return c.json({ error: 'slug and url are required' }, 400);
     const scope = await scopeOf(c, body.teamId);
     if (!scope.ok) return c.json({ error: 'no such organization' }, 404);
+    trail(c, { action: 'connection.attached', teamId: body.teamId ?? null, detail: { slug: body.slug, shared: false } });
     const saved = await saveConnection(db, { userId: c.get('user').id, slug: body.slug, label: body.label, url: body.url, credential: body.credential, username: body.username, teamId: scope.scope });
     return saved.ok ? c.json(saved.server, 201) : c.json({ error: saved.error }, 400);
   });
@@ -863,7 +905,9 @@ export function createApp(options: CreateAppOptions = {}) {
   app.delete('/api/me/connections/:slug', requireUser(db), async (c) => {
     const scope = await scopeOf(c, c.req.query('team'), true);
     if (!scope.ok) return c.notFound();
-    return (await removeConnection(db, c.get('user').id, c.req.param('slug'), scope.scope)) ? c.json({ ok: true }) : c.notFound();
+    const removed = await removeConnection(db, c.get('user').id, c.req.param('slug'), scope.scope);
+    if (removed) trail(c, { action: 'connection.removed', teamId: c.req.query('team') ?? null, detail: { slug: c.req.param('slug'), shared: false } });
+    return removed ? c.json({ ok: true }) : c.notFound();
   });
 
   /* ---- M52 (ADR 0049): the grants you usually allow, per integration ---- */
@@ -1034,6 +1078,49 @@ export function createApp(options: CreateAppOptions = {}) {
   });
 
   /** M43: team owners choose how long call records are kept. */
+  /* ---- M60 (ADR 0058): the trail. Owners read their organization's; a person their own. ---- */
+
+  app.get('/api/teams/:id/audit', requireUser(db), async (c) => {
+    const teamId = c.req.param('id');
+    if ((await teamRole(db, teamId, c.get('user').id)) !== 'owner') return c.notFound();
+    const q = c.req.query();
+    const filter = {
+      limit: q.limit ? Number(q.limit) : undefined,
+      before: q.before ? new Date(q.before) : undefined,
+      since: q.since ? new Date(q.since) : undefined,
+      action: q.action || undefined,
+    };
+    const events = await auditForTeam(db, teamId, filter);
+    if (q.format === 'csv') {
+      return new Response(auditCsv(events), {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="activity-${new Date().toISOString().slice(0, 10)}.csv"`,
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
+    return c.json({ events, auditDays: await getAuditDays(db, teamId), choices: AUDIT_DAYS });
+  });
+
+  app.put('/api/teams/:id/audit-days', requireUser(db), async (c) => {
+    const teamId = c.req.param('id');
+    const role = await teamRole(db, teamId, c.get('user').id);
+    if (!role) return c.notFound();
+    if (role !== 'owner') return c.json({ error: 'only organization owners choose how long the trail is kept' }, 403);
+    const body = await c.req.json<{ days?: unknown }>().catch(() => ({}) as { days?: unknown });
+    const days = Number(body.days);
+    if (!(AUDIT_DAYS as readonly number[]).includes(days)) return c.json({ error: `choose one of ${AUDIT_DAYS.join(', ')} days` }, 400);
+    await setAuditDays(db, teamId, days);
+    trail(c, { action: 'team.audit_days_changed', teamId, detail: { days } });
+    return c.json({ auditDays: days });
+  });
+
+  app.get('/api/me/audit', requireUser(db), async (c) => {
+    const limit = c.req.query('limit') ? Number(c.req.query('limit')) : 50;
+    return c.json({ events: await auditForUser(db, c.get('user').id, { limit }) });
+  });
+
   app.put('/api/teams/:id/call-records', requireUser(db), async (c) => {
     const teamId = c.req.param('id');
     const role = await teamRole(db, teamId, c.get('user').id);
@@ -1058,6 +1145,7 @@ export function createApp(options: CreateAppOptions = {}) {
     if (gated) return gated;
     const body = await c.req.json<{ slug?: string; label?: string; url?: string; credential?: string }>();
     if (!body.slug || !body.url) return c.json({ error: 'slug and url are required' }, 400);
+    trail(c, { action: 'connection.attached', teamId, detail: { slug: body.slug, shared: true } });
     const saved = await saveTeamConnection(db, { teamId, userId: c.get('user').id, slug: body.slug, label: body.label, url: body.url, credential: body.credential });
     return saved.ok ? c.json(saved.connection, 201) : c.json({ error: saved.error }, 400);
   });
@@ -1067,7 +1155,9 @@ export function createApp(options: CreateAppOptions = {}) {
     const role = await teamRole(db, teamId, c.get('user').id);
     if (!role) return c.notFound();
     if (role !== 'owner') return c.json({ error: 'only organization owners can remove organization integrations' }, 403);
-    return (await removeTeamConnection(db, teamId, c.req.param('slug'))) ? c.json({ ok: true }) : c.notFound();
+    const removed = await removeTeamConnection(db, teamId, c.req.param('slug'));
+    if (removed) trail(c, { action: 'connection.removed', teamId, detail: { slug: c.req.param('slug'), shared: true } });
+    return removed ? c.json({ ok: true }) : c.notFound();
   });
 
   /* ---- chats (M29, ADR 0026): team chats and direct chats, light sessions ---- */
@@ -1259,7 +1349,10 @@ export function createApp(options: CreateAppOptions = {}) {
   sessionRoutes.delete('/', async (c) => {
     const s = await resolve(c);
     if (!s || s.role !== 'owner') return c.notFound();
+    const teamId = (await roomScope(db, s.id))?.teamId ?? null;
     await deleteSession(db, s.id);
+    // The row is gone, so the event names the room by title and public id.
+    trail(c, { action: 'session.deleted', teamId, detail: { title: s.view.title, publicId: s.view.publicId } });
     return c.json({ ok: true });
   });
 
@@ -1365,6 +1458,7 @@ export function createApp(options: CreateAppOptions = {}) {
     }
 
     await removeMember(db, s.id, userId);
+    trail(c, { action: 'member.removed', sessionId: s.id, subjectUserId: userId, detail: { role: target.role } });
     return c.json({ ok: true });
   });
 
@@ -1436,6 +1530,7 @@ export function createApp(options: CreateAppOptions = {}) {
       session: { title: s.view.title, publicId: s.view.publicId, ownerSlug: s.view.ownerSlug, createdAt: s.view.createdAt },
       exportedBy: c.get('user').displayName,
     });
+    trail(c, { action: 'session.exported', sessionId: s.id, detail: { title: s.view.title } });
     // An ASCII fallback, and the real name per RFC 5987 for anything that reads it.
     const ascii = filename.replace(/[^\x20-\x7e]/g, '-').replace(/"/g, '');
     return new Response(new Uint8Array(data), {
@@ -1520,7 +1615,9 @@ export function createApp(options: CreateAppOptions = {}) {
   sessionRoutes.delete('/guests/:userId', async (c) => {
     const s = await resolve(c);
     if (!s || s.role !== 'owner') return c.notFound();
-    return (await removeGuest(db, s.id, c.req.param('userId'))) ? c.json({ ok: true }) : c.notFound();
+    const removed = await removeGuest(db, s.id, c.req.param('userId'));
+    if (removed) trail(c, { action: 'guest.removed', sessionId: s.id, subjectUserId: c.req.param('userId') });
+    return removed ? c.json({ ok: true }) : c.notFound();
   });
 
   /* ---- the session's team (M21) ---- */
@@ -1554,6 +1651,7 @@ export function createApp(options: CreateAppOptions = {}) {
       if (err instanceof TeamError) return c.json({ error: err.message }, 400);
       throw err;
     }
+    trail(c, { action: 'member.added', sessionId: s.id, subjectUserId: userId ?? null, detail: { from: 'roster' } });
     return c.json({ ok: true }, 201);
   });
 
@@ -1607,6 +1705,7 @@ export function createApp(options: CreateAppOptions = {}) {
         displayName: agent.displayName,
       },
     });
+    trail(c, { action: 'agent.added', sessionId: s.id, detail: { agent: agent.displayName, provider: agent.provider } });
 
     return c.json({ ...agentSetup(mcpUrl, token, agent.provider), agent }, 201);
   });
@@ -1630,6 +1729,7 @@ export function createApp(options: CreateAppOptions = {}) {
 
     const done = await setAgentTrustTier(db, s.id, c.req.param('sessionAgentId'), trustTier);
     if (!done) return c.notFound();
+    trail(c, { action: 'agent.trust_changed', sessionId: s.id, detail: { agent: target.displayName, trustTier } });
     return c.json({ ok: true });
   });
 
@@ -1689,6 +1789,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const agents = await listSessionAgents(db, s.id);
     const provider =
       agents.find((a) => a.participantId === body.participantId)?.provider ?? 'other';
+    trail(c, { action: 'token.issued', sessionId: s.id, detail: { participantId: body.participantId, label: body.label ?? null } });
     return c.json(agentSetup(mcpUrl, token, provider), 201);
   });
 
@@ -1697,6 +1798,7 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!s || s.role !== 'owner') return c.notFound();
     const done = await revokeToken(db, s.id, c.req.param('id'));
     if (!done) return c.notFound();
+    trail(c, { action: 'token.revoked', sessionId: s.id, detail: { tokenId: c.req.param('id') } });
     return c.json({ ok: true });
   });
 
@@ -1721,6 +1823,7 @@ export function createApp(options: CreateAppOptions = {}) {
 
     await setPaused(db, s.id, true, 'manual');
     const asked = broadcastAbort(s.id);
+    trail(c, { action: 'agents.paused', sessionId: s.id, detail: { connectionsAskedToAbort: asked } });
 
     return c.json({ ...(await pauseState(db, s.id)), connectionsAskedToAbort: asked });
   });
@@ -1729,6 +1832,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const s = await resolve(c);
     if (!s) return c.notFound();
     await setPaused(db, s.id, false);
+    trail(c, { action: 'agents.resumed', sessionId: s.id });
     return c.json(await pauseState(db, s.id));
   });
 
@@ -1825,6 +1929,7 @@ export function createApp(options: CreateAppOptions = {}) {
     if (s.role === 'owner' && !(await hasGrants(db, s.id, result.server.slug))) {
       defaultApplied = await applyGrantDefault(db, s.id, c.get('user').id, result.server.slug);
     }
+    trail(c, { action: 'connection.attached', sessionId: s.id, detail: { slug: result.server.slug, shared: false, defaultApplied } });
     return c.json({ ...result.server, defaultApplied }, 201);
   });
 
@@ -1834,6 +1939,7 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!s || s.role !== 'owner') return c.notFound();
     const applied = await applyGrantDefault(db, s.id, c.get('user').id, c.req.param('slug'));
     if (applied === null) return c.json({ error: 'no default saved for that connection' }, 404);
+    trail(c, { action: 'grant.changed', sessionId: s.id, detail: { slug: c.req.param('slug'), preset: 'default', allowed: applied } });
     return c.json({ ok: true, allowed: applied });
   });
 
@@ -1842,6 +1948,7 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!s) return c.notFound();
     const done = await detachServer(db, s.id, c.get('user').id, c.req.param('slug'));
     if (!done) return c.notFound();
+    trail(c, { action: 'connection.removed', sessionId: s.id, detail: { slug: c.req.param('slug'), shared: false } });
     return c.json({ ok: true });
   });
 
@@ -1870,6 +1977,7 @@ export function createApp(options: CreateAppOptions = {}) {
 
     const { allowed } = await c.req.json<{ allowed?: boolean }>();
     await setGrant(db, s.id, c.req.param('slug'), c.req.param('tool'), allowed === true);
+    trail(c, { action: 'grant.changed', sessionId: s.id, detail: { slug: c.req.param('slug'), tool: c.req.param('tool'), allowed: allowed === true } });
     return c.json({ ok: true });
   });
 
@@ -1891,6 +1999,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const write = new Set(entries.flatMap((e) => e.presets!.write));
     for (const tool of read) await setGrant(db, s.id, slug, tool, preset !== 'none');
     for (const tool of write) await setGrant(db, s.id, slug, tool, preset === 'write');
+    trail(c, { action: 'grant.changed', sessionId: s.id, detail: { slug, preset: String(preset) } });
     return c.json({ ok: true, read: read.size, write: preset === 'write' ? write.size : 0 });
   });
 
@@ -2221,6 +2330,7 @@ export function createApp(options: CreateAppOptions = {}) {
       ttlDays: body.ttlDays,
       reusable: body.reusable === true && body.role !== 'guest' && body.role !== 'owner' && !body.invitedEmail,
     });
+    trail(c, { action: 'invite.created', sessionId: s.id, detail: { inviteId: summary.id, role: summary.role, reusable: summary.maxUses === null } });
 
     return c.json(
       { invite: summary, token, url: `${PUBLIC_URL}/invite/${token}` },
@@ -2234,6 +2344,7 @@ export function createApp(options: CreateAppOptions = {}) {
 
     const revoked = await revokeInvite(db, { sessionId: s.id }, c.req.param('id'));
     if (!revoked) return c.notFound();
+    trail(c, { action: 'invite.revoked', sessionId: s.id, detail: { inviteId: c.req.param('id') } });
     return c.json({ ok: true });
   });
 
@@ -3046,6 +3157,13 @@ export function createApp(options: CreateAppOptions = {}) {
           .catch((err) => console.warn(`[leaving] due deletions failed: ${(err as Error).message}`));
       void leave();
       setInterval(leave, 24 * 60 * 60 * 1000).unref();
+      // M60 (ADR 0058): the trail past its retention. Once now, then daily.
+      const trim = () =>
+        pruneAudit(db)
+          .then((n) => n && console.log(`[trail] deleted ${n} event${n === 1 ? '' : 's'} past retention`))
+          .catch((err) => console.warn(`[trail] prune failed: ${(err as Error).message}`));
+      void trim();
+      setInterval(trim, 24 * 60 * 60 * 1000).unref();
       return new Promise<ReturnType<typeof serve>>((resolveStart) => {
         const server = serve({ fetch: app.fetch, port }, (info) => {
           console.log(`fabrikka server on http://localhost:${info.port}`);

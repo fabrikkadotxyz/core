@@ -26,6 +26,8 @@ export interface AuthUser {
   displayName: string;
   ownerSlug: string;
   isInstanceOwner: boolean;
+  /** M64: the address was proven by a link, or vouched for by the deployment or the operator. */
+  emailVerified: boolean;
 }
 
 /** Hono env so `c.get('user')` is typed on guarded routes. */
@@ -111,6 +113,7 @@ export async function resolveToken(
       displayName: users.displayName,
       ownerSlug: users.ownerSlug,
       isInstanceOwner: users.isInstanceOwner,
+      emailVerifiedAt: users.emailVerifiedAt,
     })
     .from(authSessions)
     .innerJoin(users, eq(users.id, authSessions.userId))
@@ -142,6 +145,7 @@ export async function resolveToken(
     displayName: row.displayName,
     ownerSlug: row.ownerSlug,
     isInstanceOwner: row.isInstanceOwner,
+    emailVerified: row.emailVerifiedAt !== null,
   };
 }
 

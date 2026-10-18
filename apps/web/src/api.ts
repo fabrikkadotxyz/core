@@ -166,8 +166,12 @@ export const auth = {
   /** A session invite returns `session`; a team invite (M21) returns `team`. */
   signup: (body: SignupBody) =>
     call<{ user: AuthUser } & InviteDestination>('/auth/signup', { method: 'POST', body }),
-  /** M32: what to offer — reset by email (a transport is configured), and a sign-up page if a deployment has one. */
-  options: () => call<{ passwordReset: boolean; signupUrl: string | null }>('/auth/options'),
+  /** M32: what to offer — reset by email (a transport is configured), and a sign-up page if a deployment has one. M64: whether addresses are verified. */
+  options: () => call<{ passwordReset: boolean; signupUrl: string | null; verifiesEmail: boolean }>('/auth/options'),
+  /** M64: use a link from an email; no sign-in needed. */
+  verify: (token: string) => call<{ ok: true; email: string; changed: boolean }>('/auth/verify', { method: 'POST', body: { token } }),
+  resendVerification: () => call<{ ok: true; alreadyVerified?: boolean }>('/me/verification', { method: 'POST' }),
+  changeEmail: (email: string, password: string) => call<{ ok: true; to: string }>('/me/email', { method: 'POST', body: { email, password } }),
   requestReset: (email: string) => call<{ ok: true }>('/auth/password-reset', { method: 'POST', body: { email } }),
   confirmReset: (token: string, password: string) =>
     call<{ ok: true }>('/auth/password-reset/confirm', { method: 'POST', body: { token, password } }),

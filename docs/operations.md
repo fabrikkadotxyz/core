@@ -164,6 +164,14 @@ Configuring one adds email-shaped affordances on top of the same flows. It is no
 a different code path and there is no deployment-mode flag. Since M32
 ([ADR 0029](decisions/0029-the-core-is-a-library-a-deployment-extends-it.md)):
 
+**With a transport, addresses are proven (M64).** An account that joined
+through a link gets a confirmation link (`/verify/<token>`, 24 hours, once).
+Until it is used, the person can use Fabrikka but not download or delete
+their account, or change its address; *Settings → Account* shows the state
+and resends. Accounts you create with `admin create-user`, and a deployment's
+sign-ups that verified first, are vouched for. Without a transport nothing is
+required: every account came from an invite someone sent.
+
 | `FABRIKKA_MAIL` | Effect |
 | --- | --- |
 | unset or `none` | No email. The default. |

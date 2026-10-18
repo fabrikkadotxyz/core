@@ -5,6 +5,7 @@ import { InvitePage } from './pages/InvitePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { SetupPage } from './pages/SetupPage.tsx';
 import { ForgotPasswordPage, ResetPasswordPage } from './pages/ResetPage.tsx';
+import { VerifyPage } from './pages/VerifyPage.tsx';
 import { AllSessionsPage } from './pages/AllSessionsPage.tsx';
 import { HomePage } from './pages/HomePage.tsx';
 import { PairPage } from './pages/PairPage.tsx';
@@ -28,6 +29,7 @@ export default function App() {
         {/* M32: password reset by email, offered only with an email transport. */}
         <Route path="/reset" element={<ForgotPasswordPage />} />
         <Route path="/reset/:token" element={<ResetPasswordPage />} />
+        <Route path="/verify/:token" element={<VerifyPage />} />
         {/* M47: once per account, before anything else. Outside the shell: no sidebar yet. */}
         <Route path="/welcome" element={<RequireAuth><WelcomePage /></RequireAuth>} />
         {/* M49 (ADR 0045): a room's output alone, in its own tab or window. No shell: no sidebar. */}

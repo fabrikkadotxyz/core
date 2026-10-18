@@ -255,6 +255,24 @@ export const passwordResets = pgTable('password_resets', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * M64: a link that proves an address. For the address on the account (after a
+ * sign-up through an invite, when the instance can send email) or for a new
+ * one (an email change: the account's address moves only when the link is
+ * used). Like a reset link: only the hash stored, single use, 24 hours.
+ */
+export const emailVerifications = pgTable('email_verifications', {
+  tokenHash: text('token_hash').primaryKey(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** The address the link proves. Equal to users.email, or the new one being moved to. */
+  email: text('email').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const authSessions = pgTable(
   'auth_sessions',
   {

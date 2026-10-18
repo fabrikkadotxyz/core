@@ -96,6 +96,103 @@ function DownloadMyData() {
   );
 }
 
+/** M64: the address on the account, whether it is proven, and the door to a new one. */
+function YourEmail() {
+  const { user, setUser } = useAuth();
+  const [verifies, setVerifies] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    auth.options().then((o) => setVerifies(o.verifiesEmail)).catch(() => {});
+    // The flag may have changed since sign-in: a link used in another tab.
+    auth.me().then((r) => setUser(r.user)).catch(() => {});
+  }, [setUser]);
+  if (!user) return null;
+  const unverified = verifies && !user.emailVerified;
+  return (
+    <section aria-label="Your email">
+      <h2>Your email</h2>
+      <p>
+        <strong>{user.email}</strong>{' '}
+        {verifies && (
+          <span className={user.emailVerified ? 'badge badge-ok' : 'badge'}>{user.emailVerified ? 'confirmed' : 'not confirmed'}</span>
+        )}
+      </p>
+      {unverified && (
+        <p className="muted small">
+          Confirm it with the link we sent, or{' '}
+          <button
+            className="link small"
+            onClick={async () => {
+              setError(null);
+              try {
+                await auth.resendVerification();
+                setSent('A new link is on its way.');
+              } catch (err) {
+                setError((err as Error).message);
+              }
+            }}
+          >
+            send a new link
+          </button>
+          . Until then you can use Fabrikka, but not download or delete your account, or change its address.
+        </p>
+      )}
+      {sent && <p className="hint">{sent}</p>}
+      {!open ? (
+        <p>
+          <button className="link small" onClick={() => setOpen(true)} disabled={unverified}>
+            Change my email…
+          </button>
+        </p>
+      ) : (
+        <form
+          className="stack"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setError(null);
+            setBusy(true);
+            try {
+              const r = await auth.changeEmail(email, password);
+              setSent(`A confirmation link went to ${r.to}. Your account moves there when you use it; until then nothing changes.`);
+              setOpen(false);
+              setEmail('');
+              setPassword('');
+            } catch (err) {
+              setError((err as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <label>
+            New email
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+          </label>
+          <label>
+            Your password, to confirm it is you
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+          </label>
+          <p className="muted small">We send a link to the new address and a notice to the current one. The change happens when the link is used.</p>
+          <p>
+            <button type="submit" disabled={busy || !email || !password}>
+              {busy ? 'Sending…' : 'Send the link'}
+            </button>{' '}
+            <button type="button" className="link" onClick={() => setOpen(false)} disabled={busy}>
+              Cancel
+            </button>
+          </p>
+        </form>
+      )}
+      {error && <p className="error">{error}</p>}
+    </section>
+  );
+}
+
 export function Account() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -132,10 +229,12 @@ export function Account() {
       <section aria-label="Who you are">
         <h2>Who you are</h2>
         <p>
-          <strong>{user.displayName}</strong> <span className="muted small">{user.email}</span>
+          <strong>{user.displayName}</strong>
         </p>
         <p className="muted small">Your name in a room can differ: rename yourself there, in People.</p>
       </section>
+
+      <YourEmail />
 
       <MyActivity />
 

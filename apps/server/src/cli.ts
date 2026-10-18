@@ -122,6 +122,8 @@ try {
         password,
         displayName: name,
         isInstanceOwner,
+        // M64: the operator knows who they are creating an account for.
+        emailVerified: true,
         // The operator's own command: a deployment's account cap doesn't apply (ADR 0041).
         guarded: false,
       });

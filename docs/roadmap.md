@@ -2998,6 +2998,50 @@ through the CLI, asserts the old message and file are gone and the new ones
 and the context stay, that the trail has the event with counts, that a
 member is refused the setting, and that the choices are the five listed.
 
+## M64 — A verified address
+
+> **Built 2026-10-18.** The scripted check passes, the owner's manual test is
+> pending. The last of the milestones that let a privacy policy promise a
+> person's rights: a right exercised by email has to reach the right person.
+> `email_verified_at` existed since M32 and nothing read it.
+
+- **Where the instance can send email, an address is proven by a link.** A
+  sign-up through an invite gets one (`/verify/<token>`: 32 random bytes,
+  hash stored, single use, 24 hours). The operator's `create-user` and a
+  deployment's sign-up that verified first (the kit's `emailVerified`) are
+  vouched for. **Without a transport, nothing is required**: the account came
+  from an invite someone sent.
+- **What an unverified account cannot do**, where it matters: download its
+  data, ask for deletion, change its address. Everything else works. The
+  refusal says why and where the link is; *Settings → Account* shows the
+  state and resends.
+- **Changing the address** (`POST /api/me/email`): the password again, a link
+  to the new address, a notice to the old one; the account moves when the
+  link is used, and the old address is told. `email_verifications`
+  (migration 0044); `verification.ts`; `email.*` events in the trail.
+- **Consent records** (which terms and privacy versions a person accepted,
+  when, from where) belong to a deployment and its own schema, written at its
+  sign-up and re-asked through the kit's `teamNotice` when a version changes.
+  Not the core's.
+
+**Test** (an instance with `FABRIKKA_MAIL=log`, as a person who joined by link):
+1. Settings → Account: *not confirmed*. Try **Download my data**: refused,
+   with why. **1 click.**
+2. Open the link from the server log: *Address confirmed*. Download again:
+   the zip saves.
+3. **Change my email…**, a new address, the password. Two emails in the log:
+   a link to the new address, a notice to the old. Settings → Account still
+   shows the old address. Open the link: the account is on the new one, and
+   the old address got a third email.
+
+**Scripted** (`scripts/acceptance/m64.mjs`): spawns a core on a spare port
+with `FABRIKKA_MAIL=file:<dir>`; a sign-up through a link gets a verification
+email; export and deletion are refused with `verify: true` until the link is
+used, then export works; a change of address sends two emails, changes
+nothing until the link is used, then changes the address and notifies the
+old one; a used link is refused; the trail has the events; on the core with
+no transport, nothing is required.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

@@ -490,6 +490,23 @@ becomes null; its title survives in `detail`.
 `audit_days`, events in none (a sign-in, a personal connection) by
 `FABRIKKA_AUDIT_DAYS`. Shortening the setting prunes at once.
 
+### M64 — a verified address
+
+```
+email_verifications
+  token_hash    text pk                 -- SHA-256 of the link's token; the token is only in the email
+  user_id       uuid -> users.id on delete cascade
+  email         text not null           -- the address the link proves: users.email, or the new one being moved to
+  expires_at    timestamptz not null    -- 24 hours
+  used_at       timestamptz
+  created_at    timestamptz not null
+```
+
+Using a link sets `users.email_verified_at`, and `users.email` too when the
+link was for a new address. `email_verified_at` is read where the instance
+can send email (M64): an account without it cannot export, ask for deletion
+or change its address. Without a transport, it is not read.
+
 ### M63 — retention (ADR 0058 amended)
 
 ```

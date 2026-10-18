@@ -657,6 +657,20 @@ What stays after deletion is content other people are entitled to: messages,
 comments, edits, context history and outputs in rooms they are in, under the
 name the person chose to leave. *Delete my account* says so before it asks.
 
+### A verified address (M64)
+
+Where the instance can send email, a right exercised by email has to reach
+the right person. An account that joined through a link proves its address
+with a second link; the operator's `create-user` and a deployment's sign-up
+that verified first are vouched for. Without a transport, nothing is required.
+
+| Threat | Control |
+| --- | --- |
+| A typo'd or someone else's address receives a person's export or deletion confirmation | Until the address is proven, export, deletion and an address change are refused (`403`, `verify: true`), with why. The product otherwise works. |
+| A stolen cookie moves the account to the attacker's address | Changing the address needs the password again, the link goes to the new address, and the old address is told at once; the account moves only when the link is used, and the old address is told again. |
+| The verification link is guessed or replayed | 32 random bytes, only the hash stored, single use, 24 hours; `/api/auth/verify` is rate-limited per client. A used or expired link answers the same way. |
+| Resend becomes a way to spam an address | Five sends per account per hour, and only for the account's own address or one its owner asked to move to with the password. |
+
 ### Download my data (M62)
 
 | Threat | Control |
@@ -734,3 +748,4 @@ These must pass before a session is ever shared with another human:
 | Ten failed sign-ins refuse the eleventh with the same answer, the right password included | M59 |
 | Removing a member, changing a grant and exporting a room each leave one event, with no content in it; a member cannot read the organization's trail | M60 |
 | A person's data export holds their own messages and no one else's, and no token | M62 |
+| With a mail transport, an unproven address can neither export nor delete nor move the account; a used link is refused | M64 |

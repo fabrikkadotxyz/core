@@ -437,6 +437,8 @@ export interface AuthUser {
   displayName: string;
   ownerSlug: string;
   isInstanceOwner: boolean;
+  /** M64: the address was proven by a link, or vouched for by the deployment or the operator. */
+  emailVerified: boolean;
 }
 
 export interface Member {

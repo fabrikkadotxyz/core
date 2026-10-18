@@ -1108,7 +1108,8 @@ serve its own pages as well as its own `/api/<name>/…` routes.
 | `setRetention(teamId, { messageDays?, outputDays?, fileDays? })` | *(M63)* How long the organization's rooms keep messages, documents (by last edit) and files: each 30, 90, 180, 365 or 730 days, or `null` for forever; an absent key keeps its value. Prunes at once; recorded as `team.retention_changed` by the deployment. |
 | `retention(teamId)` | The three windows, or null for no such organization. |
 
-`GET /api/auth/options` returns what the login page should offer:
+`GET /api/auth/options` returns what the login page should offer, plus (M64)
+`verifiesEmail`, whether this instance asks for a proven address:
 `{ passwordReset: boolean, signupUrl: string | null }`.
 
 **Refused writes.** When a deployment's write check refuses, the API answers

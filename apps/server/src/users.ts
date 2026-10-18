@@ -78,6 +78,7 @@ export async function createUser(
       displayName: row!.displayName,
       ownerSlug: row!.ownerSlug,
       isInstanceOwner: row!.isInstanceOwner,
+      emailVerified: row!.emailVerifiedAt !== null,
     },
   };
 }

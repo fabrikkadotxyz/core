@@ -135,6 +135,9 @@ import { BACKUP_KEEP_DAYS, createBackup, pruneBackups } from './backup.ts';
 import { STORAGE_DIR } from './artifacts.ts';
 import { exportAccount } from './account-export.ts';
 import { getRetention, pruneRetention, RETENTION_DAYS, setRetention, summarize as summarizeRetention } from './retention.ts';
+import { completeVerification, requestVerification, verificationRequired } from './verification.ts';
+import { users, verifyPassword } from '@fabrikka/db';
+import { eq } from 'drizzle-orm';
 import { addStream, refreshRoom, startAttention } from './attention.ts';
 import { DEFAULT_THEME, SYSTEM_THEMES, loadThemes, publicTheme, themeDirs, themeFile } from './themes.ts';
 import {
@@ -473,6 +476,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const body = await c.req.json<{ password?: unknown }>().catch(() => ({}) as { password?: unknown });
     if (typeof body.password !== 'string' || !body.password) return c.json({ error: 'your password is required' }, 400);
     const me = c.get('user');
+    if (verificationRequired(mailer) && !me.emailVerified) return c.json({ error: 'confirm your email address first: the link is in your inbox, or ask for a new one in Settings → Account', verify: true }, 403);
     const out = await exportAccount(db, me.id, body.password);
     if (!out.ok) {
       if (out.status === 401) trail(c, { action: 'account.exported', subjectUserId: me.id, outcome: 'refused', detail: { reason: 'password' } });
@@ -494,6 +498,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const body = await c.req.json<Partial<DeletionRequestBody>>().catch(() => ({}) as Partial<DeletionRequestBody>);
     if (typeof body.password !== 'string' || !body.password) return c.json({ error: 'your password is required' }, 400);
     const me = c.get('user');
+    if (verificationRequired(mailer) && !me.emailVerified) return c.json({ error: 'confirm your email address first: the link is in your inbox, or ask for a new one in Settings → Account', verify: true }, 403);
     const result = await requestDeletion(db, me.id, { password: body.password, eraseName: body.eraseName === true });
     if (!result.ok) {
       if (result.status === 401) trail(c, { action: 'account.deletion_requested', subjectUserId: me.id, outcome: 'refused', detail: { reason: 'password' } });
@@ -621,8 +626,51 @@ export function createApp(options: CreateAppOptions = {}) {
 
   /** What the login page should offer (M32): reset by email, and a sign-up page an extension advertised. */
   app.get('/api/auth/options', (c) =>
-    c.json({ passwordReset: mailer.configured, signupUrl: advertised.signupUrl }),
+    // M64: `verifiesEmail` says whether this instance asks for a proven address.
+    c.json({ passwordReset: mailer.configured, signupUrl: advertised.signupUrl, verifiesEmail: verificationRequired(mailer) }),
   );
+
+  /* ---- M64: a verified address ---- */
+
+  /** Use a link from an email. No sign-in needed: the link is the proof. */
+  app.post('/api/auth/verify', async (c) => {
+    const { token } = await c.req.json<{ token?: string }>().catch(() => ({}) as { token?: string });
+    if (!token) return c.json({ error: 'a token is required' }, 400);
+    if (!rateLimit(`verify:ip:${clientIp(c)}`, { max: 30, windowMs: 15 * 60_000 })) return c.json({ error: 'too many attempts; try again later' }, 429);
+    const done = await completeVerification(db, token);
+    if (!done.ok) return c.json({ error: done.error }, 400);
+    trail(c, { action: done.changedFrom ? 'email.changed' : 'email.verified', actorUserId: done.userId, subjectUserId: done.userId });
+    if (done.changedFrom && mailer.configured) {
+      void mailer.send({ to: done.changedFrom, subject: 'Your Fabrikka address has changed', text: `Your Fabrikka account now uses a different email address. If this wasn't you, contact the person who runs this instance.\n` });
+    }
+    return c.json({ ok: true, email: done.email, changed: done.changedFrom !== null });
+  });
+
+  /** Send the link again, for the address on the account. */
+  app.post('/api/me/verification', requireUser(db), async (c) => {
+    const me = c.get('user');
+    if (me.emailVerified) return c.json({ ok: true, alreadyVerified: true });
+    if (!rateLimit(`verification:user:${me.id}`, { max: 5, windowMs: 60 * 60_000 })) return c.json({ error: 'a link was sent recently; check your inbox, and try again in an hour' }, 429);
+    const sent = await requestVerification(db, mailer, { userId: me.id, publicUrl: PUBLIC_URL });
+    if (!sent.ok) return c.json({ error: sent.error }, sent.status);
+    trail(c, { action: 'email.verification_sent', subjectUserId: me.id });
+    return c.json({ ok: true });
+  });
+
+  /** Move the account to a new address: the password again, a link to the new one, a notice to the old. */
+  app.post('/api/me/email', requireUser(db), async (c) => {
+    const body = await c.req.json<{ email?: unknown; password?: unknown }>().catch(() => ({}) as { email?: unknown; password?: unknown });
+    if (typeof body.email !== 'string' || typeof body.password !== 'string' || !body.password) return c.json({ error: 'the new address and your password are required' }, 400);
+    const me = c.get('user');
+    if (verificationRequired(mailer) && !me.emailVerified) return c.json({ error: 'confirm your current address first', verify: true }, 403);
+    const [row] = await db.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, me.id)).limit(1);
+    if (!row || !(await verifyPassword(body.password, row.passwordHash))) return c.json({ error: 'wrong password' }, 401);
+    if (!rateLimit(`email-change:user:${me.id}`, { max: 5, windowMs: 60 * 60_000 })) return c.json({ error: 'too many attempts; try again in an hour' }, 429);
+    const sent = await requestVerification(db, mailer, { userId: me.id, publicUrl: PUBLIC_URL, newEmail: body.email });
+    if (!sent.ok) return c.json({ error: sent.error }, sent.status);
+    trail(c, { action: 'email.change_requested', subjectUserId: me.id });
+    return c.json({ ok: true, to: sent.to });
+  });
 
   /**
    * Ask for a reset link (M32, ADR 0029). Only with an email transport; the
@@ -705,6 +753,14 @@ export function createApp(options: CreateAppOptions = {}) {
 
     const signedIn = await login(db, body.email, body.password);
     if (signedIn) issueCookie(c, signedIn.token, SECURE_COOKIES);
+    // M64: where the instance can send email, a sign-up through a link proves its address by a second link.
+    if (verificationRequired(mailer)) {
+      void requestVerification(db, mailer, { userId: created.user.id, publicUrl: PUBLIC_URL })
+        .then(async (r) => {
+          if (r.ok) await audit(db, { action: 'email.verification_sent', actorKind: 'system', subjectUserId: created.user.id });
+        })
+        .catch((err) => console.warn(`[verify] could not send: ${(err as Error).message}`));
+    }
 
     // A session invite lands you in the session; a team invite on the team (M21).
     return c.json({ user: created.user, session: redeemed.session, team: redeemed.team }, 201);

@@ -11,7 +11,7 @@ import type { Output, OutputEditSummary, SessionView } from '@fabrikka/types';
 import { ApiError, openStream, sessions, type SessionRef } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { OutputsPanel, type OutputTab } from '../outputs/Outputs.tsx';
-import { ArtifactsPanel, ContextPanel, LinksPanel } from './SessionPage.tsx';
+import { ArtifactsPanel, LinksPanel, NotesPanel } from './SessionPage.tsx';
 
 const OutputView = lazy(() => import('../outputs/OutputView.tsx'));
 
@@ -116,7 +116,7 @@ export function OutputPage() {
       openStream(
         ref,
         (event) => {
-          if (event.type === 'context.updated' || event.type === 'artifact.created' || event.type === 'links.changed') {
+          if (event.type === 'notes.updated' || event.type === 'artifact.created' || event.type === 'links.changed') {
             setPanelsVersion((v) => v + 1);
           }
           if (event.type === 'output.changed' || event.type === 'output.edited') setOutputsVersion((v) => v + 1);
@@ -230,7 +230,7 @@ export function OutputPage() {
               <OutputsPanel ref_={ref} outputs={list} onOpen={(id, o) => openDocument(id, o)} canCreate={!isViewer} />
               <LinksPanel ref_={ref} version={panelsVersion} readOnly={isViewer} />
               <fieldset className="plain" disabled={isViewer}>
-                <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
+                <NotesPanel key={`notes-${panelsVersion}`} ref_={ref} />
               </fieldset>
               <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} readOnly={isViewer} />
             </>

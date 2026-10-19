@@ -14,7 +14,7 @@ import type {
   InviteSummary,
   Run,
   ServerEvent,
-  SessionContext,
+  SessionNote,
   SetupLane,
   Message,
   Output,
@@ -460,7 +460,7 @@ export function SessionPage() {
           // Patch the participant list rather than refetching messages: chips
           // resolve names from this list, so a rename updates every message on
           // screen at once. That is the point of storing ids, not names.
-          if (event.type === 'context.updated' || event.type === 'artifact.created' || event.type === 'links.changed') {
+          if (event.type === 'notes.updated' || event.type === 'artifact.created' || event.type === 'links.changed') {
             // Panels own their own state; a bump is enough to make them refetch.
             setPanelsVersion((v) => v + 1);
           }
@@ -868,7 +868,7 @@ export function SessionPage() {
                 <OutputsPanel ref_={ref} outputs={outputs} onOpen={(id, o) => openOutput(id, o)} canCreate={!isViewer} />
                 <LinksPanel ref_={ref} version={panelsVersion} readOnly={isViewer} />
                 <fieldset className="plain" disabled={isViewer}>
-                  <ContextPanel key={`ctx-${panelsVersion}`} ref_={ref} />
+                  <NotesPanel key={`notes-${panelsVersion}`} ref_={ref} />
                 </fieldset>
                 <ArtifactsPanel key={`art-${panelsVersion}`} ref_={ref} readOnly={isViewer} />
               </>
@@ -1844,100 +1844,96 @@ function AgentSetup({
 }
 
 /**
- * Session context.
- *
- * Adds are appends, so typing here cannot delete what an agent recorded while you
- * were typing — and vice versa. See ADR 0013.
+ * Notes (M65, ADR 0059): what people and agents wrote down outside the
+ * conversation. Free text, an optional one-word tag, append-first: adding never
+ * touches another note, removing is explicit and kept in the history. Collapsed
+ * by default: the room shows nothing about them until someone asks.
  */
-export function ContextPanel({ ref_ }: { ref_: SessionRef }) {
-  const [context, setContext] = useState<SessionContext | null>(null);
-  const [objective, setObjective] = useState('');
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+export function NotesPanel({ ref_ }: { ref_: SessionRef }) {
+  const [notes, setNotes] = useState<SessionNote[] | null>(null);
+  const [draft, setDraft] = useState('');
+  const [tag, setTag] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     sessions
-      .context(ref_)
-      .then((c) => {
-        setContext(c);
-        setObjective(c.objective ?? '');
-      })
+      .notes(ref_)
+      .then(setNotes)
       .catch(() => {});
   }, [ref_]);
 
   useEffect(load, [load]);
 
-  const lists = [
-    ['facts', 'Facts'],
-    ['decisions', 'Decisions'],
-    ['questions', 'Open questions'],
-    ['constraints', 'Constraints'],
-  ] as const;
+  if (!notes) return null;
 
-  const apply = async (update: Parameters<typeof sessions.updateContext>[1]) => {
+  const add = async () => {
+    const text = draft.trim();
+    if (!text) return;
     setError(null);
     try {
-      setContext(await sessions.updateContext(ref_, update));
-    } catch (err) {
-      // A 409 means someone else wrote first. Reload rather than insist.
-      setError((err as Error).message);
+      await sessions.addNote(ref_, { text, tag: tag.trim() || null });
+      setDraft('');
+      setTag('');
       load();
+    } catch (err) {
+      setError((err as Error).message);
     }
   };
 
-  if (!context) return null;
-
   return (
-    <Panel title="Context">
-      <label className="ctx-objective">
-        Objective
-        <textarea
-          value={objective}
-          rows={2}
-          placeholder="What is this session for?"
-          {...typingAttrs()}
-          onChange={(e) => setObjective(e.target.value)}
-          onBlur={() => {
-            if (objective !== (context.objective ?? '')) void apply({ objective });
-          }}
-        />
-      </label>
-
-      {lists.map(([key, label]) => (
-        <div key={key} className="ctx-list">
-          <h3 className="subhead">{label}</h3>
-          {context[key].length > 0 && (
-            <ul>
-              {context[key].map((item) => (
-                <li key={item}>
-                  <span>{item}</span>
-                  <button
-                    className="link small"
-                    title="Remove"
-                    onClick={() => void apply({ remove: { [key]: [item] } })}
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+    <Panel title={notes.length ? `Notes (${notes.length})` : 'Notes'}>
+      <details className="notes">
+        <summary className="muted small">{notes.length ? 'Show' : 'Nothing written down yet'}</summary>
+        {notes.length > 0 && (
+          <ul className="ctx-list notes-list">
+            {notes.map((n) => (
+              <li key={n.id} title={`@${n.by ?? 'template'}, ${new Date(n.at).toLocaleString()}`}>
+                <span>
+                  {n.tag && <span className="badge">{n.tag}</span>} {n.text}
+                </span>
+                <button
+                  className="link small"
+                  title="Remove (kept in the history)"
+                  onClick={async () => {
+                    setError(null);
+                    try {
+                      await sessions.removeNote(ref_, n.id);
+                      load();
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="ctx-list notes-add">
           <input
-            value={drafts[key] ?? ''}
-            placeholder={`Add a ${label.toLowerCase().replace(/s$/, '')}…`}
-            onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
+            value={draft}
+            placeholder="Write something down…"
+            {...typingAttrs()}
+            onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key !== 'Enter') return;
-              const value = (drafts[key] ?? '').trim();
-              if (!value) return;
-              setDrafts((d) => ({ ...d, [key]: '' }));
-              void apply({ add: { [key]: [value] } });
+              if (e.key === 'Enter') void add();
+            }}
+          />
+          <input
+            className="notes-tag"
+            value={tag}
+            placeholder="tag"
+            title="One word, your choice. Optional."
+            size={8}
+            onChange={(e) => setTag(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void add();
             }}
           />
         </div>
-      ))}
-
-      {error && <p className="error small">{error}</p>}
+        {error && <p className="error small">{error}</p>}
+      </details>
     </Panel>
   );
 }

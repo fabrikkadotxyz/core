@@ -6,9 +6,11 @@ export const onboarding: BuiltinTemplate = {
   name: 'Onboarding',
   description: "A new hire's first week: real tickets, the architecture, and an agent to ask anything.",
   body: {
-    objective: 'Ship a first real change this week, and understand why the code is shaped the way it is.',
-    constraints: ['Ask the session, not a person, first — every answer stays here for the next hire'],
-    questions: ['Which three tickets are small enough for week one?'],
+    notes: [
+      { text: 'Ship a first real change this week, and understand why the code is shaped the way it is.', tag: 'goal' },
+      { text: 'Ask the session, not a person, first — every answer stays here for the next hire', tag: 'constraint' },
+      { text: 'Which three tickets are small enough for week one?', tag: 'question' },
+    ],
     outputs: [
       {
         kind: 'doc',

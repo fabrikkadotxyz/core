@@ -9,14 +9,14 @@
  *    isn't there. Callers render `null` as 404, never 403 — a 403 would leak the
  *    existence and id of private sessions (docs/security.md).
  */
-import { and, asc, desc, eq, inArray, lt, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { Database } from '@fabrikka/db';
 import {
   messageMentions,
   messages,
   participants,
-  contextEvents,
-  sessionContext,
+  sessionNotes,
   sessionGuests,
   sessionMembers,
   sessionReads,
@@ -31,7 +31,7 @@ import type {
   Message,
   Participant,
   Session,
-  SessionContext,
+  SessionNote,
   SessionVisibility,
   SessionKind,
   SessionSummary,
@@ -642,199 +642,143 @@ export async function listParticipantsWithUsers(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Session context                                                            */
+/* Notes (M65, ADR 0059)                                                      */
 /* -------------------------------------------------------------------------- */
 
-const EMPTY_CONTEXT: SessionContext = {
-  objective: null,
-  facts: [],
-  decisions: [],
-  questions: [],
-  constraints: [],
-  version: 0,
-  updatedAt: null,
-};
+const MAX_NOTE_CHARS = 4000;
+const TAG_SHAPE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
-/** Absent context reads as empty, so callers never special-case a missing row. */
-export async function getSessionContext(
-  db: Database,
-  sessionId: string,
-): Promise<SessionContext> {
-  const [row] = await db
-    .select()
-    .from(sessionContext)
-    .where(eq(sessionContext.sessionId, sessionId))
-    .limit(1);
+/**
+ * A tag is one lowercase word the writer chose, or nothing. Returns null for
+ * "no tag", the normalised word, or undefined when it cannot be one word.
+ */
+export function normalizeTag(tag: unknown): string | null | undefined {
+  if (tag === undefined || tag === null || tag === '') return null;
+  if (typeof tag !== 'string') return undefined;
+  const word = tag.trim().toLowerCase().replace(/\s+/g, '-');
+  return TAG_SHAPE.test(word) ? word : undefined;
+}
 
-  if (!row) return EMPTY_CONTEXT;
+const noteBy = alias(participants, 'note_by');
+const noteRemovedBy = alias(participants, 'note_removed_by');
 
+function noteRow(r: {
+  id: string;
+  text: string;
+  tag: string | null;
+  participantId: string | null;
+  by: string | null;
+  at: Date;
+  seq: number;
+  removedAt: Date | null;
+  removedBy: string | null;
+}): SessionNote {
   return {
-    objective: row.objective,
-    facts: row.facts ?? [],
-    decisions: row.decisions ?? [],
-    questions: row.questions ?? [],
-    constraints: row.constraints ?? [],
-    version: row.version,
-    updatedAt: row.updatedAt.toISOString(),
+    id: r.id,
+    text: r.text,
+    tag: r.tag,
+    by: r.by,
+    participantId: r.participantId,
+    at: r.at.toISOString(),
+    seq: Number(r.seq),
+    ...(r.removedAt ? { removedAt: r.removedAt.toISOString(), removedBy: r.removedBy } : {}),
   };
 }
 
-/** The four list-valued context fields. */
-const LIST_FIELDS = ['facts', 'decisions', 'questions', 'constraints'] as const;
-type ListField = (typeof LIST_FIELDS)[number];
+const noteSelect = {
+  id: sessionNotes.id,
+  text: sessionNotes.text,
+  tag: sessionNotes.tag,
+  participantId: sessionNotes.participantId,
+  by: noteBy.displayName,
+  at: sessionNotes.createdAt,
+  seq: sessionNotes.seq,
+  removedAt: sessionNotes.removedAt,
+  removedBy: noteRemovedBy.displayName,
+};
 
-export interface ContextUpdate {
-  objective?: string;
-  /** Append, skipping exact duplicates. The path agents should take. */
-  add?: Partial<Record<ListField, string[]>>;
-  /** Remove by exact value — never by index, which means nothing after an append. */
-  remove?: Partial<Record<ListField, string[]>>;
-  /** Wholesale replacement. Requires `ifVersion`. */
-  replace?: Partial<Record<ListField, string[]>>;
-  ifVersion?: number;
-}
-
-export type ContextUpdateResult =
-  | { ok: true; context: SessionContext }
-  | { ok: false; error: string; conflict?: boolean; currentVersion?: number };
-
-/**
- * Update session context without destroying concurrent edits.
- *
- * Append-first: `add` merges, so the common case — an agent recording something
- * it learned — cannot delete what a human typed a minute ago. Wholesale
- * replacement is still available but must carry the version the caller read, so
- * a stale writer is rejected rather than silently winning.
- *
- * See docs/decisions/0013-context-is-append-only-with-explicit-removal.md.
- */
-export async function updateSessionContext(
+/** The room's notes, oldest first. Live ones by default; with removed ones, the whole history. */
+export async function listNotes(
   db: Database,
   sessionId: string,
-  update: ContextUpdate,
-  /** Who is writing (M27), for the context history. Null: a template at creation. */
+  opts: { includeRemoved?: boolean } = {},
+): Promise<SessionNote[]> {
+  const rows = await db
+    .select(noteSelect)
+    .from(sessionNotes)
+    .leftJoin(noteBy, eq(noteBy.id, sessionNotes.participantId))
+    .leftJoin(noteRemovedBy, eq(noteRemovedBy.id, sessionNotes.removedByParticipantId))
+    .where(and(eq(sessionNotes.sessionId, sessionId), opts.includeRemoved ? undefined : isNull(sessionNotes.removedAt)))
+    .orderBy(asc(sessionNotes.seq));
+  return rows.map(noteRow);
+}
+
+async function noteById(db: Database, id: string): Promise<SessionNote | null> {
+  const [row] = await db
+    .select(noteSelect)
+    .from(sessionNotes)
+    .leftJoin(noteBy, eq(noteBy.id, sessionNotes.participantId))
+    .leftJoin(noteRemovedBy, eq(noteRemovedBy.id, sessionNotes.removedByParticipantId))
+    .where(eq(sessionNotes.id, id))
+    .limit(1);
+  return row ? noteRow(row) : null;
+}
+
+export type AddNoteResult = { ok: true; note: SessionNote } | { ok: false; error: string };
+
+/**
+ * Write something down. Appending never touches another note, so an agent and
+ * a person writing at once lose nothing (the point ADR 0013 made, kept). An
+ * identical live note is returned rather than duplicated: an agent that
+ * re-reads and re-adds what it knows must not make the list grow.
+ */
+export async function addNote(
+  db: Database,
+  sessionId: string,
+  input: { text: string; tag?: unknown },
   actor: { participantId: string | null } = { participantId: null },
-): Promise<ContextUpdateResult> {
-  // Object.keys counts keys whose VALUE is undefined, and callers build this
-  // object with every field present-but-undefined. Checking values means a pure
-  // `add` is not mistaken for a replace and then rejected for lacking ifVersion.
-  const replacing =
-    !!update.replace && Object.values(update.replace).some((v) => v !== undefined);
-  if (replacing && update.ifVersion === undefined) {
-    return {
-      ok: false,
-      error:
-        'replacing a list requires ifVersion — send the version you read, or use add/remove',
-    };
-  }
+): Promise<AddNoteResult> {
+  const text = (input.text ?? '').trim();
+  if (!text) return { ok: false, error: 'a note needs text' };
+  if (text.length > MAX_NOTE_CHARS) return { ok: false, error: `a note is at most ${MAX_NOTE_CHARS} characters` };
+  const tag = normalizeTag(input.tag);
+  if (tag === undefined) return { ok: false, error: 'a tag is one word: letters, digits and hyphens, up to 32' };
+  const [dup] = await db
+    .select({ id: sessionNotes.id })
+    .from(sessionNotes)
+    .where(and(eq(sessionNotes.sessionId, sessionId), eq(sessionNotes.text, text), isNull(sessionNotes.removedAt)))
+    .limit(1);
+  if (dup) return { ok: true, note: (await noteById(db, dup.id))! };
+  const [made] = await db
+    .insert(sessionNotes)
+    .values({ sessionId, participantId: actor.participantId, text, tag })
+    .returning({ id: sessionNotes.id });
+  return { ok: true, note: (await noteById(db, made!.id))! };
+}
 
-  return db.transaction(async (tx) => {
-    // Lock the row so two concurrent appends cannot both read the same list and
-    // write back a merge missing the other's addition.
-    const existing = await tx
-      .select()
-      .from(sessionContext)
-      .where(eq(sessionContext.sessionId, sessionId))
-      .limit(1)
-      .for('update');
+/** Remove a note by id. Soft: it stays in the history, marked by whom and when. */
+export async function removeNote(
+  db: Database,
+  sessionId: string,
+  noteId: string,
+  actor: { participantId: string | null } = { participantId: null },
+): Promise<boolean> {
+  if (!/^[0-9a-f-]{36}$/i.test(noteId)) return false;
+  const done = await db
+    .update(sessionNotes)
+    .set({ removedAt: new Date(), removedByParticipantId: actor.participantId })
+    .where(and(eq(sessionNotes.id, noteId), eq(sessionNotes.sessionId, sessionId), isNull(sessionNotes.removedAt)))
+    .returning({ id: sessionNotes.id });
+  return done.length > 0;
+}
 
-    const current = existing[0];
-    const version = current?.version ?? 0;
-
-    if (replacing && update.ifVersion !== version) {
-      return {
-        ok: false as const,
-        error: 'context changed since you read it',
-        conflict: true,
-        currentVersion: version,
-      };
-    }
-
-    // Copies, not the row's own arrays: `next` is mutated below, and the history
-    // (M27) compares it with what was there before. Sharing them made every
-    // "before" look like "after", so no change was ever recorded.
-    const before: Record<ListField, string[]> = {
-      facts: [...(current?.facts ?? [])],
-      decisions: [...(current?.decisions ?? [])],
-      questions: [...(current?.questions ?? [])],
-      constraints: [...(current?.constraints ?? [])],
-    };
-    const next: Record<ListField, string[]> = {
-      facts: [...before.facts],
-      decisions: [...before.decisions],
-      questions: [...before.questions],
-      constraints: [...before.constraints],
-    };
-
-    for (const field of LIST_FIELDS) {
-      if (update.replace?.[field]) next[field] = [...update.replace[field]!];
-
-      const added = update.add?.[field];
-      if (added) {
-        // Deduplicate: an agent that re-reads and re-adds the same fact should
-        // not make the list grow every time.
-        const seen = new Set(next[field]);
-        for (const value of added) {
-          const trimmed = value.trim();
-          if (trimmed && !seen.has(trimmed)) {
-            next[field].push(trimmed);
-            seen.add(trimmed);
-          }
-        }
-      }
-
-      const removed = update.remove?.[field];
-      if (removed) {
-        const drop = new Set(removed.map((v) => v.trim()));
-        next[field] = next[field].filter((v) => !drop.has(v));
-      }
-    }
-
-    const fields = {
-      ...(update.objective !== undefined ? { objective: update.objective } : {}),
-      facts: next.facts,
-      decisions: next.decisions,
-      questions: next.questions,
-      constraints: next.constraints,
-      version: version + 1,
-      updatedAt: new Date(),
-    };
-
-    await tx
-      .insert(sessionContext)
-      .values({ sessionId, ...fields })
-      .onConflictDoUpdate({ target: sessionContext.sessionId, set: fields });
-
-    // M27: record the difference this write made — who decided what, and when.
-    const events: (typeof contextEvents.$inferInsert)[] = [];
-    for (const field of LIST_FIELDS) {
-      for (const v of next[field]) if (!before[field].includes(v)) events.push({ sessionId, participantId: actor.participantId, field, op: 'add', value: v });
-      for (const v of before[field]) if (!next[field].includes(v)) events.push({ sessionId, participantId: actor.participantId, field, op: 'remove', value: v });
-    }
-    if (update.objective !== undefined && update.objective !== (current?.objective ?? null)) {
-      events.push({ sessionId, participantId: actor.participantId, field: 'objective', op: 'set', value: update.objective });
-    }
-    if (events.length) await tx.insert(contextEvents).values(events);
-
-    const [row] = await tx
-      .select()
-      .from(sessionContext)
-      .where(eq(sessionContext.sessionId, sessionId))
-      .limit(1);
-
-    return {
-      ok: true as const,
-      context: {
-        objective: row!.objective,
-        facts: row!.facts ?? [],
-        decisions: row!.decisions ?? [],
-        questions: row!.questions ?? [],
-        constraints: row!.constraints ?? [],
-        version: row!.version,
-        updatedAt: row!.updatedAt.toISOString(),
-      },
-    };
-  });
+/** The newest note's sequence number, for the catch-up's "since you were here". */
+export async function latestNoteSeq(db: Database, sessionId: string): Promise<number> {
+  const [row] = await db
+    .select({ seq: sql<number>`coalesce(max(${sessionNotes.seq}), 0)` })
+    .from(sessionNotes)
+    .where(eq(sessionNotes.sessionId, sessionId));
+  return Number(row?.seq ?? 0);
 }
 
 /**
@@ -1162,14 +1106,13 @@ export async function setNotify(db: Database, sessionId: string, userId: string,
     .where(and(eq(sessionReads.sessionId, sessionId), eq(sessionReads.userId, userId)))
     .returning({ sessionId: sessionReads.sessionId });
   if (updated.length) return;
-  const ctx = await getSessionContext(db, sessionId);
   await db
     .insert(sessionReads)
     .values({
       sessionId,
       userId,
       lastSeenAt: new Date(),
-      contextSeen: { facts: ctx.facts, decisions: ctx.decisions, questions: ctx.questions, constraints: ctx.constraints },
+      notesSeenSeq: await latestNoteSeq(db, sessionId),
       notify,
     })
     .onConflictDoUpdate({ target: [sessionReads.sessionId, sessionReads.userId], set: { notify } });

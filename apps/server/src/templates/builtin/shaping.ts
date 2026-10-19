@@ -6,9 +6,12 @@ export const shaping: BuiltinTemplate = {
   name: 'Shaping',
   description: 'Shape a pitch before anyone builds: problem, appetite, solution, rabbit holes, no-gos.',
   body: {
-    objective: 'Shape a pitch the team can bet on — or decide not to.',
-    constraints: ['Appetite: fill in how much time this is worth (e.g. 6 weeks)'],
-    questions: ['What exactly is the problem, in one sentence?', 'What would make this not worth doing?'],
+    notes: [
+      { text: 'Shape a pitch the team can bet on — or decide not to.', tag: 'goal' },
+      { text: 'Appetite: fill in how much time this is worth (e.g. 6 weeks)', tag: 'constraint' },
+      { text: 'What exactly is the problem, in one sentence?', tag: 'question' },
+      { text: 'What would make this not worth doing?', tag: 'question' },
+    ],
     outputs: [
       {
         kind: 'doc',

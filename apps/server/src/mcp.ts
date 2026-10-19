@@ -44,10 +44,11 @@ import { assertResolvable, listComments, resolveByEdit } from './outputs/comment
 import { extractPdfText, isPdf, MAX_PAGES_PER_CALL, MAX_PDF_BYTES } from './pdf-text.ts';
 import {
   createMessage,
-  getSessionContext,
+  listNotes,
+  addNote,
+  removeNote,
   listMessages,
   listParticipantsWithUsers,
-  updateSessionContext,
 } from './sessions.ts';
 
 const MAX_READ_LIMIT = 200;
@@ -183,7 +184,7 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
    * refusal is a tool error with the reason, so the agent can tell its human
    * why it stopped. Reading tools are never gated.
    */
-  const WRITES = new Set(['update_session_context', 'create_artifact', 'link', 'edit_output', 'create_output', 'post_message']);
+  const WRITES = new Set(['add_note', 'remove_note', 'create_artifact', 'link', 'edit_output', 'create_output', 'post_message']);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const registerTool = ((name: string, config: any, cb: (...args: any[]) => any) =>
     server.registerTool(
@@ -232,81 +233,54 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
   );
 
   registerTool(
-    'get_session_context',
+    'get_notes',
     {
-      title: 'Get session context',
+      title: 'Get notes',
       description:
-        'The objective, established facts, decisions, open questions and ' +
-        'constraints for this session. Read this before contributing.',
+        'What people and agents in this room wrote down outside the conversation: ' +
+        'free-text notes, oldest first, each with who wrote it, when, and an optional ' +
+        'one-word tag the writer chose. Read them before contributing; add to them with add_note.',
       inputSchema: z.object({}),
     },
-    async () => text(await getSessionContext(db, actor.sessionId)),
+    async () => text(await listNotes(db, actor.sessionId)),
   );
 
   registerTool(
-    'update_session_context',
+    'add_note',
     {
-      title: 'Update session context',
+      title: 'Add a note',
       description:
-        'Record something in the session context so it survives outside the ' +
-        'conversation. PREFER the add_* fields: they append, so you cannot delete ' +
-        'what someone else wrote. Replacing a whole list requires if_version.',
+        'Write something down so it survives outside the conversation: a decision, a finding, ' +
+        'a risk, an open question, anything worth keeping. Free text, up to 4000 characters, ' +
+        'with an optional tag: one lowercase word of your choosing. Adding never touches another ' +
+        'note, so you cannot lose anyone else\'s; an identical live note is returned rather than duplicated.',
       inputSchema: z.object({
-        objective: z.string().optional().describe('Replaces the objective outright.'),
-        add_facts: z.array(z.string()).optional().describe('Append facts.'),
-        add_decisions: z.array(z.string()).optional(),
-        add_questions: z.array(z.string()).optional(),
-        add_constraints: z.array(z.string()).optional(),
-        remove_facts: z
-          .array(z.string())
-          .optional()
-          .describe('Remove by exact text, not by position.'),
-        remove_decisions: z.array(z.string()).optional(),
-        remove_questions: z.array(z.string()).optional(),
-        remove_constraints: z.array(z.string()).optional(),
-        facts: z
-          .array(z.string())
-          .optional()
-          .describe('Replace the whole list. Requires if_version.'),
-        decisions: z.array(z.string()).optional(),
-        questions: z.array(z.string()).optional(),
-        constraints: z.array(z.string()).optional(),
-        if_version: z
-          .number()
-          .optional()
-          .describe('The version from get_session_context. Required to replace.'),
+        text: z.string().describe('The note, as prose.'),
+        tag: z.string().optional().describe('One word, your choice: decision, risk, todo, … Optional.'),
       }),
     },
     async (args) => {
-      const result = await updateSessionContext(db, actor.sessionId, {
-        objective: args.objective,
-        add: {
-          facts: args.add_facts,
-          decisions: args.add_decisions,
-          questions: args.add_questions,
-          constraints: args.add_constraints,
-        },
-        remove: {
-          facts: args.remove_facts,
-          decisions: args.remove_decisions,
-          questions: args.remove_questions,
-          constraints: args.remove_constraints,
-        },
-        replace: {
-          facts: args.facts,
-          decisions: args.decisions,
-          questions: args.questions,
-          constraints: args.constraints,
-        },
-        ifVersion: args.if_version,
-      }, { participantId: actor.participantId });
-
-      // A conflict is reported, never silently resolved: the caller re-reads and
-      // decides, rather than one of two edits vanishing (ADR 0013).
+      const result = await addNote(db, actor.sessionId, args, { participantId: actor.participantId });
       if (!result.ok) throw new Error(result.error);
+      publish(actor.sessionId, { type: 'notes.updated' });
+      return text(result.note);
+    },
+  );
 
-      publish(actor.sessionId, { type: 'context.updated', context: result.context });
-      return text(result.context);
+  registerTool(
+    'remove_note',
+    {
+      title: 'Remove a note',
+      description:
+        'Remove a note by its id (from get_notes). It stays in the room\'s history as removed, ' +
+        'with who removed it and when. Prefer adding a correcting note over removing someone else\'s.',
+      inputSchema: z.object({ id: z.string() }),
+    },
+    async (args) => {
+      const done = await removeNote(db, actor.sessionId, args.id, { participantId: actor.participantId });
+      if (!done) throw new Error('no such note in this session');
+      publish(actor.sessionId, { type: 'notes.updated' });
+      return text({ ok: true });
     },
   );
 

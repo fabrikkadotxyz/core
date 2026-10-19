@@ -440,7 +440,7 @@ session could also post in it, and every route assumed that.
 
 - **Fail closed.** The member resolver is unchanged, so every existing route
   stays members-only. Viewers reach only routes that explicitly use the viewer
-  resolver: the session view, messages, participants, context, links, artifacts,
+  resolver: the session view, messages, participants, notes, links, artifacts,
   outputs and their changes, the session stream, an output's sync socket, and a
   kind's own read routes. A route nobody converted answers a viewer with 404.
 - **No identity to act with.** A viewer has no participant row and no token. They
@@ -698,7 +698,7 @@ actions is fixed, in `audit.ts`; adding to it starts here.
 
 **Retention beyond the trail (M63).** An organization's owners may choose how
 long its rooms keep messages, documents and files (off by default; one of
-five windows). What that never touches: the context, links, the trail and the
+five windows). What that never touches: the notes, links, the trail and the
 roster, so the record of *what was decided and by whom* outlives the chat the
 policy chose to drop. Only owners set it; a change is itself in the trail with
 what it deleted, and the daily run is too.

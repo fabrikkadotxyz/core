@@ -2974,7 +2974,7 @@ from both rooms and nothing from the third or by anyone else;
   (`teams.message_days`, `output_days`, `file_days`). `retention.ts`.
 - **Deleted daily, and at once when shortened**, across the organization's
   rooms. Each run that removed something is one `retention.pruned` event with
-  counts; an owner's change is `team.retention_changed`. The context, links,
+  counts; an owner's change is `team.retention_changed`. The notes, links,
   trail and roster are never touched.
 - **Settings → Activity → What the rooms keep**, for owners: three selects,
   the count of what a change deleted. `GET`/`PUT /api/teams/:id/retention`.
@@ -3041,6 +3041,51 @@ used, then export works; a change of address sends two emails, changes
 nothing until the link is used, then changes the address and notifies the
 old one; a used link is refused; the trail has the events; on the core with
 no transport, nothing is required.
+
+## M65 — Notes, not a form
+
+> **Built 2026-10-18** ([ADR 0059](decisions/0059-a-room-keeps-notes-not-a-form.md),
+> superseding the context half of ADR 0013). The scripted checks pass, the
+> owner's manual test is pending. The owner's decision: the record agents and
+> people keep outside the conversation stays; the structure goes.
+
+- **A note** is free text, by a participant, at a time, with an **optional
+  one-word tag** the writer chose. No objective field, no fixed lists.
+  `session_notes` replaces `session_context` and `context_events`
+  (migrations 0045, 0046); everything that was in the form migrates as a
+  tagged note (`goal`, `fact`, `decision`, `question`, `constraint`), with
+  its author and time where the history had them.
+- **Append-first, removal explicit and kept.** Adding never touches another
+  note; an identical live note is returned, not duplicated. Removal is by id,
+  soft, with who and when. No versions.
+- **Three MCP tools replace two:** `get_notes`, `add_note({ text, tag? })`,
+  `remove_note({ id })`. `get_session_context` and `update_session_context`
+  are gone. `GET`/`POST /notes`, `DELETE /notes/:id` for the web.
+- **Hidden by default.** The room's *Notes (n)* panel is collapsed until
+  opened. The export lists notes as an appendix after the timeline, removed
+  ones after that (`fabrikka-export/2`: `notes`, `removedNotes`). The
+  catch-up card shows *Noted* and *Removed* since the last visit.
+- **Templates seed notes and copy none** of a room's own; the built-in three
+  carry their old objective, constraints and questions as tagged notes.
+
+**Test** (a room with an agent attached):
+1. Open the room: the right pane shows *Notes* collapsed, nothing else about
+   it. **0 clicks** to see nothing.
+2. Ask the agent to write down what it found: it calls `add_note`. Open
+   *Notes*: the note is there with the agent's name and whatever tag it chose,
+   or none. **1 click.**
+3. Type a note yourself with a tag, press Enter; remove the agent's with ×.
+   Ask the agent for `get_notes`: yours is there, its own is not.
+4. Export the room: the notes are at the end of `README.md`, the removed one
+   under *Removed notes*, with who removed it.
+5. Come back as another member after a note was added: the catch-up says
+   *Noted*.
+
+**Scripted** (`scripts/acceptance/m65.mjs`): agent and person add notes at
+once and both survive; a repeat add is not duplicated; a bad tag is refused
+and a spaced one normalised; removal is soft and shows in `?removed=1`; the
+old tools are not offered; the source holds the collapsed panel; M3, M7,
+M24, M25 and M27 are rewritten for notes and pass.
 
 ## Later — Resuming offline agents
 

@@ -203,10 +203,12 @@ check(
     JSON.stringify([
       // Artifact tools joined the surface at M7, output tools at M12, links at M19,
       // comments at M23.
+      // M65 (ADR 0059): notes replaced the context form.
+      'add_note',
       'create_artifact',
       'create_output',
       'edit_output',
-      'get_session_context',
+      'get_notes',
       'link',
       'list_artifacts',
       'list_comments',
@@ -217,8 +219,8 @@ check(
       'read_artifact',
       'read_messages',
       'read_output',
+      'remove_note',
       'unlink',
-      'update_session_context',
       'whoami',
     ]),
   'the documented tool set is exposed',
@@ -411,31 +413,25 @@ try {
 }
 check(rejected, 'an over-large limit is rejected rather than silently clamped');
 
-/* ------------------------------------------ 10. session context */
+/* ------------------------------------------ 10. notes (M65, ADR 0059) */
 
-// add_* rather than a bare list: M7 made replacement require if_version, so an
-// append is both the documented path and the one that cannot lose an edit.
-await call(clientA, 'update_session_context', {
-  objective: `Investigate ${stamp}`,
-  add_decisions: ['Ask for the CSV'],
-});
-const ctx = await call(clientA, 'get_session_context');
-check(ctx.objective === `Investigate ${stamp}`, 'an agent can write session context');
-check(ctx.decisions.length === 1, 'context lists round-trip');
+// add_note appends, so an agent writing something down cannot lose an edit.
+const noted = await call(clientA, 'add_note', { text: `Investigate ${stamp}`, tag: 'goal' });
+check(noted.text === `Investigate ${stamp}` && noted.tag === 'goal' && typeof noted.id === 'string', 'an agent can write a note down, with a tag of its choosing');
+const notes = await call(clientA, 'get_notes');
+check(notes.length === 1 && notes[0].text === `Investigate ${stamp}`, 'notes round-trip');
 
-const ctxWeb = await req(`${baseA}/context`, { jar: fede });
+const notesWeb = await req(`${baseA}/notes`, { jar: fede });
 check(
-  ctxWeb.json.objective === `Investigate ${stamp}`,
-  'context written over MCP is visible to the web API',
+  notesWeb.json.some((n) => n.text === `Investigate ${stamp}`),
+  'a note written over MCP is visible to the web API',
 );
 
-await call(clientA, 'update_session_context', {
-  add_questions: ['Can we share the CSV?'],
-});
-const patched = await call(clientA, 'get_session_context');
+await call(clientA, 'add_note', { text: 'Can we share the CSV?' });
+const again = await call(clientA, 'get_notes');
 check(
-  patched.objective === `Investigate ${stamp}` && patched.questions.length === 1,
-  'context updates are a patch, not a replace',
+  again.length === 2 && again[0].text === `Investigate ${stamp}` && again[1].tag === null,
+  'adding appends: the first note is untouched, the second needs no tag',
 );
 
 /* ---------------------------------------------- 11. revocation */

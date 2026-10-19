@@ -33,7 +33,7 @@ import type {
   TeamSummary,
   PauseState,
   ServerEvent,
-  SessionContext,
+  SessionNote,
   SessionSummary,
   SessionView,
   SignupBody,
@@ -431,22 +431,11 @@ export const sessions = {
   resumeAgents: (ref: SessionRef) =>
     call<PauseState>(`${base(ref)}/pause`, { method: 'DELETE' }),
 
-  context: (ref: SessionRef) => call<SessionContext>(`${base(ref)}/context`),
-  /**
-   * Append-first. `add`/`remove` never need a version; replacing a whole list
-   * requires the one you read, so a stale write is rejected rather than winning
-   * silently (ADR 0013).
-   */
-  updateContext: (
-    ref: SessionRef,
-    update: {
-      objective?: string;
-      add?: Record<string, string[]>;
-      remove?: Record<string, string[]>;
-      replace?: Record<string, string[]>;
-      ifVersion?: number;
-    },
-  ) => call<SessionContext>(`${base(ref)}/context`, { method: 'PATCH', body: update }),
+  /** M65 (ADR 0059): what was written down, live. Append-first; removal is explicit and kept. */
+  notes: (ref: SessionRef) => call<SessionNote[]>(`${base(ref)}/notes`),
+  addNote: (ref: SessionRef, note: { text: string; tag?: string | null }) =>
+    call<SessionNote>(`${base(ref)}/notes`, { method: 'POST', body: note }),
+  removeNote: (ref: SessionRef, id: string) => call<{ ok: true }>(`${base(ref)}/notes/${id}`, { method: 'DELETE' }),
 
   integrations: (ref: SessionRef) =>
     call<{

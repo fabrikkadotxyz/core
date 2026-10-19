@@ -122,15 +122,16 @@ check((await req('/templates/builtin:shaping', { method: 'DELETE', jar: fede }))
 const S = (await req('/sessions', { method: 'POST', body: { title: `Bulk export ${stamp}`, templateRef: 'builtin:shaping' }, jar: fede })).json;
 const base = `/o/${S.ownerSlug}/s/${S.publicId}`;
 const mcpUrl = `${MCP}/o/${S.ownerSlug}/s/${S.publicId}`;
-const ctx = (await req(`${base}/context`, { jar: fede })).json;
-check(ctx.objective?.startsWith('Shape a pitch'), 'S8: the session starts with the Shaping objective');
-check(ctx.constraints.some((c) => c.startsWith('Appetite')), 'S8: …an appetite to fill in');
-check(ctx.questions.includes('What exactly is the problem, in one sentence?'), 'S8: …and the questions shaping starts from');
+// M65 (ADR 0059): a template seeds notes, tagged; nothing else about them is fixed.
+const notes = (await req(`${base}/notes`, { jar: fede })).json;
+check(notes.some((n) => n.tag === 'goal' && n.text.startsWith('Shape a pitch')), 'S8: the session starts with the Shaping goal, as a note');
+check(notes.some((n) => n.tag === 'constraint' && n.text.startsWith('Appetite')), 'S8: …an appetite to fill in');
+check(notes.some((n) => n.tag === 'question' && n.text === 'What exactly is the problem, in one sentence?'), 'S8: …and the questions shaping starts from');
 const outs = (await req(`${base}/outputs`, { jar: fede })).json;
 const pitch = outs.find((o) => o.name === 'Pitch');
 check(!!pitch, 'S8: …and a Pitch document');
 check((await req(`${base}/template`, { jar: fede })).json?.body?.connections?.includes('issue tracker'), 'the session knows its template, and the connections it suggests');
-check(ctx.facts.length === 0 && ctx.decisions.length === 0, 'a template brings structure, not content: no facts, no decisions');
+check(notes.length === 4 && notes.every((n) => n.by === null), 'a template brings structure, not content: its four starter notes, by nobody, and nothing else');
 
 const agent = (await req(`${base}/agents`, { method: 'POST', body: { displayName: `shaper-${stamp}`, provider: 'claude-code' }, jar: fede })).json;
 const read = (await tool(mcpUrl, agent.token, 'read_output', { output_id: pitch.id })).value;
@@ -143,15 +144,15 @@ const drafted = await tool(mcpUrl, agent.token, 'edit_output', {
   ],
 });
 check(!drafted.error, 'S8: the agent drafts the problem and adds a rabbit hole');
-await tool(mcpUrl, agent.token, 'update_session_context', { add_facts: ['Billing exports are rate-limited'] });
+await tool(mcpUrl, agent.token, 'add_note', { text: 'Billing exports are rate-limited', tag: 'fact' });
 
 const reviewer = await signupWith((await req(`${base}/invites`, { method: 'POST', body: { role: 'guest' }, jar: fede })).json.token, 'reviewer');
 check(
   (await req(`${base}/outputs/${pitch.id}/comments`, { method: 'POST', body: { quote: 'Exports over 10k rows touch billing', body: 'Then cap it at 10k for v1.' }, jar: reviewer.jar })).status === 200,
   'S8: a reviewer comments on the pitch',
 );
-await req(`${base}/context`, { method: 'PATCH', body: { add: { decisions: ['Bet 6 weeks on bulk export, capped at 10k rows'] } }, jar: fede });
-check((await req(`${base}/context`, { jar: fede })).json.decisions.includes('Bet 6 weeks on bulk export, capped at 10k rows'), 'S8: the team bets, and the decision is recorded');
+await req(`${base}/notes`, { method: 'POST', body: { text: 'Bet 6 weeks on bulk export, capped at 10k rows', tag: 'decision' }, jar: fede });
+check((await req(`${base}/notes`, { jar: fede })).json.some((n) => n.text === 'Bet 6 weeks on bulk export, capped at 10k rows'), 'S8: the team bets, and the decision is recorded');
 await req(`${base}/messages`, { method: 'POST', body: { content: 'Shaped and bet.' }, jar: fede });
 await tool(mcpUrl, agent.token, 'link', { url: 'https://acme.atlassian.net/browse/EXP-1', type: 'issue', title: 'EXP-1' });
 
@@ -160,7 +161,7 @@ await tool(mcpUrl, agent.token, 'link', { url: 'https://acme.atlassian.net/brows
 const saved = await req(`${base}/template`, { method: 'POST', body: { name: `Our shaping ${stamp}`, description: 'With our appetite rules' }, jar: fede });
 check(saved.status === 201 && saved.json.source === 'mine', 'Fede saves the session as a template');
 const body = saved.json.body;
-check(body.objective.startsWith('Shape a pitch') && body.outputs.some((o) => o.name === 'Pitch' && o.content.includes('touch billing')), 'it keeps the objective and the documents as they stand');
+check(body.notes.some((n) => n.tag === 'goal' && n.text.startsWith('Shape a pitch')) && body.notes.length === 4 && body.outputs.some((o) => o.name === 'Pitch' && o.content.includes('touch billing')), "it keeps the template's own starter notes and the documents as they stand");
 check(body.connections.includes('issue tracker'), 'it keeps the suggested connections');
 check(!JSON.stringify(body).includes('Billing exports are rate-limited'), 'it does not copy facts');
 check(!JSON.stringify(body).includes('Bet 6 weeks'), '…or decisions');

@@ -107,7 +107,8 @@ export type ServerEvent =
     }
   | { type: 'message.created'; message: Message }
   | { type: 'participant.updated'; participant: Participant }
-  | { type: 'context.updated'; context: SessionContext }
+  /** M65: a note was added or removed. Clients re-read /notes. */
+  | { type: 'notes.updated' }
   | { type: 'artifact.created'; artifact: Artifact }
   /** An output was created, renamed or removed. Panels refetch. See ADR 0019. */
   | { type: 'output.changed'; outputId: string }
@@ -259,15 +260,25 @@ export interface PauseState {
   turnLimit: number;
 }
 
-export interface SessionContext {
-  objective: string | null;
-  facts: string[];
-  decisions: string[];
-  questions: string[];
-  constraints: string[];
-  /** Increments on every write. Send it back to replace a list safely. */
-  version: number;
-  updatedAt: string | null;
+/**
+ * A note (M65, ADR 0059): something a person or an agent wrote down outside the
+ * conversation. Free text and an optional one-word tag the writer chose; no
+ * slot, no form. Append-first; removal is soft and kept.
+ */
+export interface SessionNote {
+  id: string;
+  text: string;
+  /** One lowercase word, or null. Nothing in Fabrikka reads it. */
+  tag: string | null;
+  /** Who wrote it, as named now; null for a template. */
+  by: string | null;
+  participantId: string | null;
+  at: string;
+  /** Insertion order. */
+  seq: number;
+  /** Present when removed: when, and by whom as named now. */
+  removedAt?: string | null;
+  removedBy?: string | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -646,11 +657,10 @@ export type CatchUp =
   | {
       firstVisit: false;
       since: string;
-      decisions: string[];
-      facts: string[];
-      newQuestions: string[];
-      /** Open at your last visit, not open now. */
-      answeredQuestions: string[];
+      /** M65: notes written since your last visit, oldest first. */
+      notes: { text: string; tag: string | null; by: string | null }[];
+      /** Notes removed since your last visit. */
+      removedNotes: { text: string; tag: string | null; by: string | null }[];
       messages: number;
       mentions: { from: string; text: string; at: string }[];
       /** `isNew`: created while you were away. */
@@ -688,10 +698,8 @@ export interface HomeView {
 
 /** A session's structure, never its content (M25). */
 export interface TemplateBody {
-  objective: string;
-  constraints: string[];
-  /** Starter open questions. */
-  questions: string[];
+  /** M65 (ADR 0059): starter notes, tagged or not. A template seeds notes and copies none of a room's own. */
+  notes: { text: string; tag?: string | null }[];
   /** Starter outputs: a pitch with empty sections, an incident report's headings. */
   outputs: { kind: string; name: string; content: string }[];
   /** Connection categories worth adding: "issue tracker", "observability"… */

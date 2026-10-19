@@ -1,20 +1,18 @@
 /**
  * Export a session (M27): the record is yours. See docs/data-model.md.
  *
- * One zip: README.md (the session as one readable document), session.json (the
- * same, for programs), each output's files with its changes log and comments,
- * the artifacts, and the timeline. Never agent activity (ADR 0015), never a
- * credential. Nothing in it needs Fabrikka to read.
+ * One zip: README.md (the session as one readable document, notes as an
+ * appendix), session.json (the same, for programs), each output's files with
+ * its changes log and comments, the artifacts, and the timeline. Never agent
+ * activity (ADR 0015), never a credential. Nothing in it needs Fabrikka to read.
  */
-import { asc, eq } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
-import { contextEvents, participants } from '@fabrikka/db';
 import { listArtifacts, readArtifact } from './artifacts.ts';
 import { listLinks } from './links.ts';
 import { renderMentions } from './mentions.ts';
 import { listComments } from './outputs/comments.ts';
 import { listEdits, listOutputs, readOutput } from './outputs/core.ts';
-import { getSessionContext, listMessages, listParticipants } from './sessions.ts';
+import { listMessages, listNotes, listParticipants } from './sessions.ts';
 import { zip } from './zip.ts';
 
 const day = (iso: string | Date) => new Date(iso).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
@@ -28,19 +26,10 @@ export async function exportSession(
   const { sessionId } = opts;
   const exportedAt = new Date().toISOString();
   const people = await listParticipants(db, sessionId);
-  const ctx = await getSessionContext(db, sessionId);
-
-  const history = await db
-    .select({ e: contextEvents, who: participants.displayName })
-    .from(contextEvents)
-    .leftJoin(participants, eq(participants.id, contextEvents.participantId))
-    .where(eq(contextEvents.sessionId, sessionId))
-    .orderBy(asc(contextEvents.createdAt), asc(contextEvents.seq));
-  /** The latest "add" of an item: who put it there, and when. */
-  const provenance = (field: string, value: string) => {
-    const hit = [...history].reverse().find((h) => h.e.field === field && h.e.op === 'add' && h.e.value === value);
-    return hit ? `@${hit.who ?? 'a template'}, ${day(hit.e.createdAt)}` : 'recorded before history was kept';
-  };
+  // M65 (ADR 0059): notes, live and removed, each with its author and time.
+  const allNotes = await listNotes(db, sessionId, { includeRemoved: true });
+  const notes = allNotes.filter((n) => !n.removedAt);
+  const removedNotes = allNotes.filter((n) => n.removedAt);
 
   const files: { path: string; data: Buffer | string }[] = [];
 
@@ -111,18 +100,13 @@ export async function exportSession(
     data: `# Timeline\n\n` + timeline.map((m) => `**@${m.author}** — ${day(m.at)}\n\n${m.text}\n`).join('\n'),
   });
 
-  const list = (field: 'decisions' | 'facts' | 'questions' | 'constraints', title: string) =>
-    ctx[field].length ? `## ${title}\n\n` + ctx[field].map((v) => `- ${v} — *${provenance(field, v)}*`).join('\n') + '\n\n' : '';
+  const noteLine = (n: (typeof allNotes)[number]) =>
+    `- ${n.tag ? `**${n.tag}** · ` : ''}${n.text} — *@${n.by ?? 'a template'}, ${day(n.at)}*`;
 
   const readme =
     `# ${opts.session.title}\n\n` +
     `Exported by @${opts.exportedBy} on ${day(exportedAt)} from Fabrikka. ` +
     `Session started ${day(opts.session.createdAt)}.\n\n` +
-    (ctx.objective ? `## Objective\n\n${ctx.objective}\n\n` : '') +
-    list('decisions', 'Decisions') +
-    list('questions', 'Open questions') +
-    list('facts', 'Facts') +
-    list('constraints', 'Constraints') +
     (links.length
       ? `## Links\n\n` +
         links.map((l) => `- **${l.type}** [${l.title ?? l.url}](${l.url}) — ${l.provider}${l.status ? ` · ${l.status}${l.statusAt ? ` (as of ${day(l.statusAt)})` : ''}` : ''}`).join('\n') +
@@ -137,9 +121,11 @@ export async function exportSession(
       ? `## Artifacts\n\n` + artifacts.map((a) => (a.type === 'link' ? `- [${a.name}](${a.url})` : `- [${a.name}](<${a.path}>)`)).join('\n') + '\n\n'
       : '') +
     `## Timeline\n\n${timeline.length} message${timeline.length === 1 ? '' : 's'} — see [timeline.md](timeline.md).\n\n` +
-    (history.length
-      ? `## Context history\n\nEvery change to the objective, facts, decisions, questions and constraints, oldest first.\n\n` +
-        history.map((h) => `- ${day(h.e.createdAt)} — @${h.who ?? 'a template'} ${h.e.op === 'add' ? 'added' : h.e.op === 'remove' ? 'removed' : 'set'} ${h.e.field === 'objective' ? 'the objective' : `a ${h.e.field.replace(/s$/, '')}`}: ${h.e.value}`).join('\n') +
+    // M65: notes are an appendix, after the record they annotate, oldest first.
+    (notes.length ? `## Notes\n\nWhat people and agents wrote down outside the conversation, oldest first.\n\n` + notes.map(noteLine).join('\n') + '\n\n' : '') +
+    (removedNotes.length
+      ? `## Removed notes\n\n` +
+        removedNotes.map((n) => `${noteLine(n)}; removed by @${n.removedBy ?? 'someone'}, ${day(n.removedAt!)}`).join('\n') +
         '\n'
       : '');
 
@@ -148,12 +134,12 @@ export async function exportSession(
     path: 'session.json',
     data: JSON.stringify(
       {
-        format: 'fabrikka-export/1',
+        format: 'fabrikka-export/2',
         exportedBy: opts.exportedBy,
         exportedAt,
         session: opts.session,
-        context: { objective: ctx.objective, decisions: ctx.decisions, questions: ctx.questions, facts: ctx.facts, constraints: ctx.constraints },
-        contextHistory: history.map((h) => ({ at: h.e.createdAt.toISOString(), by: h.who, field: h.e.field, op: h.e.op, value: h.e.value })),
+        notes,
+        removedNotes,
         links,
         outputs,
         artifacts,

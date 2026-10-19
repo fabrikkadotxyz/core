@@ -2647,3 +2647,13 @@ label.agent-row { display: flex; flex-direction: row; align-items: center; gap: 
 .your-agent { margin: 0 0 18px; max-width: 440px; }
 .os-switch { display: flex; gap: 6px; margin: 0 0 8px; }
 .os-switch .chip { cursor: pointer; font: inherit; }
+
+/* M65 (ADR 0059): notes, collapsed by default. */
+details.notes > summary { cursor: pointer; list-style: none; }
+details.notes > summary::-webkit-details-marker { display: none; }
+details.notes > summary::before { content: '▸ '; }
+details.notes[open] > summary::before { content: '▾ '; }
+.notes-add { display: flex; gap: 6px; align-items: center; }
+.notes-add input:first-child { flex: 1; }
+.notes-add .notes-tag { flex: 0 0 6.5em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8em; }
+.notes-list .badge { margin-left: 0; margin-right: 0.3rem; }

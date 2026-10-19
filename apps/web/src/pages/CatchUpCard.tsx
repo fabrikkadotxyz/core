@@ -1,18 +1,14 @@
 /**
  * "Since you were here" (M24): what changed in this session since your last
  * visit, built from the record. Nothing here is generated — every line is a
- * decision, question, edit or link someone actually made.
+ * note, edit, link or mention someone actually made.
  */
 import type { CatchUp } from '@fabrikka/types';
 import { timeAgo } from '../outputs/Outputs.tsx';
 
 export function hasNews(c: CatchUp): boolean {
   if (c.firstVisit) return false;
-  return (
-    c.decisions.length + c.facts.length + c.newQuestions.length + c.answeredQuestions.length + c.mentions.length +
-      c.outputs.length + c.links.length >
-      0 || c.messages > 0
-  );
+  return c.notes.length + c.removedNotes.length + c.mentions.length + c.outputs.length + c.links.length > 0 || c.messages > 0;
 }
 
 export function CatchUpCard({ c, onDone }: { c: Extract<CatchUp, { firstVisit: false }>; onDone: () => void }) {
@@ -23,6 +19,12 @@ export function CatchUpCard({ c, onDone }: { c: Extract<CatchUp, { firstVisit: f
         <ul>{items}</ul>
       </div>
     );
+  const note = (n: { text: string; tag: string | null; by: string | null }, i: number, muted = false) => (
+    <li key={i} className={muted ? 'muted' : undefined}>
+      {n.tag && <em className="badge">{n.tag}</em>} {n.text}
+      {n.by && <span className="muted small"> — @{n.by}</span>}
+    </li>
+  );
   return (
     <section className="catchup" aria-label="Since you were here">
       <header>
@@ -33,10 +35,8 @@ export function CatchUpCard({ c, onDone }: { c: Extract<CatchUp, { firstVisit: f
         </button>
       </header>
       {section('Waiting for you', c.mentions.map((m, i) => <li key={i}><strong>@{m.from}</strong>: {m.text}</li>))}
-      {section('Decided', c.decisions.map((d) => <li key={d}>{d}</li>))}
-      {section('Open questions', c.newQuestions.map((q) => <li key={q}>{q}</li>))}
-      {section('Answered', c.answeredQuestions.map((q) => <li key={q} className="muted">{q}</li>))}
-      {section('Learned', c.facts.map((f) => <li key={f}>{f}</li>))}
+      {section('Noted', c.notes.map((n, i) => note(n, i)))}
+      {section('Removed', c.removedNotes.map((n, i) => note(n, i, true)))}
       {section(
         'Documents',
         c.outputs.map((o) => (

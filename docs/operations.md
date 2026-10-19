@@ -612,7 +612,7 @@ keep*, how long its rooms keep **messages** (from when they were written),
 **documents** (from their last edit) and **uploaded files** (from when they
 were added): forever, the default, or 30, 90, 180, 365 or 730 days. A daily
 job deletes what is older across the organization's rooms; shortening a
-window deletes at once and says how much went. Context, links, the trail and
+window deletes at once and says how much went. Notes, links, the trail and
 memberships are never touched. Every run that removed something is a
 `retention.pruned` event in the trail, with counts. `pnpm admin
 prune-retention [--team <id>]` runs the job now. A deployment can set a

@@ -6,9 +6,11 @@ export const incident: BuiltinTemplate = {
   name: 'Incident',
   description: 'Work an incident so the next person picks it up from the record, not from scrollback.',
   body: {
-    objective: 'Stop the bleeding, find the cause, write down what we decided.',
-    constraints: ['Customer impact first: mitigate before investigating'],
-    questions: ['What is broken, for whom, since when?'],
+    notes: [
+      { text: 'Stop the bleeding, find the cause, write down what we decided.', tag: 'goal' },
+      { text: 'Customer impact first: mitigate before investigating', tag: 'constraint' },
+      { text: 'What is broken, for whom, since when?', tag: 'question' },
+    ],
     outputs: [
       {
         kind: 'doc',

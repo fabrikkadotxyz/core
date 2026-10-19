@@ -102,8 +102,7 @@ default. The daily job deletes past the windows across the organization's
 rooms, shortening a window deletes at once, and every run that removed
 something is one event (`retention.pruned`, with counts) in the trail.
 
-What retention never touches: the room's context (objective, facts,
-decisions, questions), its links, the trail itself, and who was in the room.
+What retention never touches: the room's notes (ADR 0059), its links, the trail itself, and who was in the room.
 A message's deletion takes its mentions; a document's takes its edits and
 comments; a file's takes its row and leaves the blob, as removing a file by
 hand does. Not built here: a bin for deleted rooms. A deleted room is gone at

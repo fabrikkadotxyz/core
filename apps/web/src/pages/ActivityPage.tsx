@@ -27,7 +27,7 @@ function Retention({ teamId }: { teamId: string }) {
       <h2>What the rooms keep</h2>
       <p className="muted small">
         By default everything stays. Choosing a window deletes what is older, daily, in every room of this organization; choosing a shorter one deletes it now.
-        Decisions, facts and the trail are not affected.
+        Notes, links and the trail are not affected.
       </p>
       {rows.map((r) => (
         <p key={r.key} className="small">

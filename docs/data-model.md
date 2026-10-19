@@ -354,16 +354,14 @@ session_reads                             -- where each person left off, per ses
   session_id      uuid -> sessions.id
   user_id         uuid -> users.id
   last_seen_at    timestamptz not null
-  context_seen    jsonb not null          -- the context lists as they were then
+  notes_seen_seq  bigint not null default 0  -- M65: the newest note's seq at that visit (was context_seen, a snapshot of the old lists)
   primary key (session_id, user_id)
 ```
 
-**Catch-up is a difference, not a feed.** Context items are plain strings with no
-timestamps (ADR 0013), so "what changed" is today's lists compared with
-`context_seen`: new decisions and facts, new open questions, and questions that
-were open then and aren't now, which is how a question gets answered. Messages,
-output edits and link statuses do have times, and are compared with
-`last_seen_at`.
+**Catch-up is a difference, not a feed.** Notes carry a sequence number and a
+removal time (M65), so "what changed" is the notes with `seq` above
+`notes_seen_seq` and the notes removed after `last_seen_at`. Messages, output
+edits and link statuses have times, and are compared with `last_seen_at`.
 
 **Nothing is generated.** Fabrikka has no model; catch-up is built from the
 record, so it can't be wrong in ways the record isn't.
@@ -518,7 +516,7 @@ teams  (additions)
 
 The daily job deletes `messages` (their mentions cascade), `outputs` (edits
 and comments cascade) and `artifacts` rows past their organization's window;
-a file's blob stays on disk, as when a file is removed by hand. Context,
+a file's blob stays on disk, as when a file is removed by hand. Notes,
 links, the trail and memberships are never touched. One `retention.pruned`
 event per organization per run that removed something.
 
@@ -798,15 +796,17 @@ with more than one server process. See
 ### M7 — context and artifacts
 
 ```
-session_context                           -- deliberately denormalized
-  session_id      uuid -> sessions.id pk
-  objective       text
-  facts           jsonb
-  decisions       jsonb
-  questions       jsonb
-  constraints     jsonb
-  version         int not null default 0  -- increments on every write
-  updated_at      timestamptz
+session_notes                             -- M65 (ADR 0059); was session_context, a fixed form, until then
+  id              uuid pk
+  session_id      uuid -> sessions.id not null
+  participant_id  uuid -> participants.id  -- who wrote it; null for a template
+  text            text not null
+  tag             text                    -- one lowercase word the writer chose, or null; nothing reads it
+  seq             bigserial               -- insertion order; what the catch-up compares against
+  created_at      timestamptz not null
+  removed_at      timestamptz             -- soft removal: the note stays, marked
+  removed_by_participant_id uuid -> participants.id
+  index (session_id, seq)
 
 artifacts
   id              uuid pk

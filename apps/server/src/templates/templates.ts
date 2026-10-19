@@ -2,16 +2,17 @@
  * Session templates (M25): a session's structure without its content.
  * See docs/data-model.md.
  *
- * Saving copies exactly the structure — objective, constraints, open questions,
- * outputs as they stand, recommended connections — and never messages, facts,
- * decisions, links, artifacts, members, agents or credentials.
+ * Saving copies exactly the structure — the starter notes of the template the
+ * room came from, outputs as they stand, recommended connections — and never
+ * messages, the room's own notes, links, artifacts, members, agents or
+ * credentials (M65, ADR 0059).
  */
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import { sessions, sessionTemplates, teamMembers, teams } from '@fabrikka/db';
 import type { TemplateBody, TemplateSummary } from '@fabrikka/types';
 import { createOutput, listOutputs, readOutput } from '../outputs/core.ts';
-import { getSessionContext, updateSessionContext } from '../sessions.ts';
+import { addNote } from '../sessions.ts';
 import { BUILTIN_TEMPLATES } from './registry.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -71,10 +72,8 @@ export async function applyTemplate(
 ): Promise<void> {
   const { body } = opts.template;
   await db.update(sessions).set({ templateRef: opts.template.ref }).where(eq(sessions.id, opts.sessionId));
-  await updateSessionContext(db, opts.sessionId, {
-    ...(body.objective ? { objective: body.objective } : {}),
-    add: { constraints: body.constraints, questions: body.questions },
-  });
+  // M65 (ADR 0059): a template seeds notes, tagged or not; a template is the one writer with no participant.
+  for (const n of body.notes ?? []) await addNote(db, opts.sessionId, { text: n.text, tag: n.tag }, { participantId: null });
   for (const o of body.outputs) {
     // An output kind this instance lacks (no TeX here, say) is skipped, not fatal.
     await createOutput(db, {
@@ -103,7 +102,6 @@ export async function saveTemplate(
     if (!onTeam.length) throw new TemplateError('no such team');
   }
 
-  const ctx = await getSessionContext(db, opts.sessionId);
   const outputs: TemplateBody['outputs'] = [];
   for (const o of await listOutputs(db, opts.sessionId)) {
     const read = await readOutput(db, opts.sessionId, o.id, { maxLines: 100_000 }).catch(() => null);
@@ -112,10 +110,9 @@ export async function saveTemplate(
   const [base] = await db.select({ templateRef: sessions.templateRef }).from(sessions).where(eq(sessions.id, opts.sessionId));
   const inherited = base?.templateRef ? await findTemplate(db, opts.userId, base.templateRef) : null;
 
+  // A room's own notes are content, never copied; the starter notes of the template it came from are structure, and are.
   const body: TemplateBody = {
-    objective: ctx.objective ?? '',
-    constraints: ctx.constraints,
-    questions: ctx.questions,
+    notes: inherited?.body.notes ?? [],
     outputs,
     connections: inherited?.body.connections ?? [],
   };

@@ -121,20 +121,20 @@ const agent = (await req(`${base}/agents`, { method: 'POST', body: { displayName
 /* -------------------------------------------- first visit, then leave for the night */
 
 check((await req(`${base}/catch-up`, { jar: alice.jar })).json?.firstVisit === true, 'a first visit has nothing to catch up on');
-await req(`${base}/context`, { method: 'PATCH', body: { add: { questions: ['Is the retry storm limited to EU?'] } }, jar: fede });
+const earlyQuestion = (await req(`${base}/notes`, { method: 'POST', body: { text: 'Is the retry storm limited to EU?', tag: 'question' }, jar: fede })).json;
 await req(`${base}/seen`, { method: 'POST', jar: alice.jar });
 let cu = (await req(`${base}/catch-up`, { jar: alice.jar })).json;
-check(cu.firstVisit === false && cu.messages === 0 && cu.decisions.length === 0, 'right after looking, nothing has changed');
+check(cu.firstVisit === false && cu.messages === 0 && cu.notes.length === 0, 'right after looking, nothing has changed');
 
 /* --------------------------------------------- S6: 2 a.m., Fede and his agent work */
 
 await req(`${base}/messages`, { method: 'POST', body: { content: 'Errors began after the 14:02 deploy.' }, jar: fede });
-await tool(mcpUrl, agent.token, 'update_session_context', {
-  add_facts: ['500s come from the payments webhook handler'],
-  add_decisions: ['Roll back the 14:02 deploy', 'Add an idempotency key to webhook retries'],
-  add_questions: ['Do we need to refund the double charges?'],
-  remove_questions: ['Is the retry storm limited to EU?'],
-});
+// M65 (ADR 0059): notes, tagged as the agent sees fit; the answered question is removed by id.
+await tool(mcpUrl, agent.token, 'add_note', { text: '500s come from the payments webhook handler', tag: 'fact' });
+await tool(mcpUrl, agent.token, 'add_note', { text: 'Roll back the 14:02 deploy', tag: 'decision' });
+await tool(mcpUrl, agent.token, 'add_note', { text: 'Add an idempotency key to webhook retries', tag: 'decision' });
+await tool(mcpUrl, agent.token, 'add_note', { text: 'Do we need to refund the double charges?', tag: 'question' });
+await tool(mcpUrl, agent.token, 'remove_note', { id: earlyQuestion.id });
 const doc = (await tool(mcpUrl, agent.token, 'create_output', { kind: 'doc', name: 'Incident report', content: 'Timeline:' })).value;
 await tool(mcpUrl, agent.token, 'edit_output', { output_id: doc.id, append: '14:02 deploy; 14:20 rollback.' });
 await tool(mcpUrl, agent.token, 'link', { url: 'https://acme.sentry.io/issues/77/', type: 'error', title: 'DuplicateCharge', status: 'resolved' });
@@ -142,10 +142,11 @@ await tool(mcpUrl, agent.token, 'link', { url: 'https://acme.sentry.io/issues/77
 /* ------------------------------------------------- eight hours later: Alice arrives */
 
 cu = (await req(`${base}/catch-up`, { jar: alice.jar })).json;
-check(JSON.stringify(cu.decisions) === JSON.stringify(['Roll back the 14:02 deploy', 'Add an idempotency key to webhook retries']), 'S6: Alice sees the decisions made while she was away');
-check(cu.newQuestions.length === 1 && cu.newQuestions[0] === 'Do we need to refund the double charges?', 'S6: …and the one new open question');
-check(cu.answeredQuestions.includes('Is the retry storm limited to EU?'), 'S6: …and that the question she left open was answered');
-check(cu.facts.includes('500s come from the payments webhook handler'), 'S6: …and the facts established');
+const notedTexts = cu.notes.map((n) => n.text);
+check(JSON.stringify(cu.notes.filter((n) => n.tag === 'decision').map((n) => n.text)) === JSON.stringify(['Roll back the 14:02 deploy', 'Add an idempotency key to webhook retries']), 'S6: Alice sees the decisions noted while she was away, in order');
+check(cu.notes.filter((n) => n.tag === 'question').length === 1 && notedTexts.includes('Do we need to refund the double charges?'), 'S6: …and the one new open question');
+check(cu.removedNotes.some((n) => n.text === 'Is the retry storm limited to EU?'), 'S6: …and that the question she left open was removed, answered');
+check(notedTexts.includes('500s come from the payments webhook handler') && cu.notes.every((n) => n.by === `claude-${stamp}`), 'S6: …and the fact established, each note with who wrote it');
 check(cu.outputs.some((o) => o.name === 'Incident report' && o.editors.includes(`claude-${stamp}`)), 'S6: …which outputs changed, and by whom');
 check(cu.outputs.find((o) => o.name === 'Incident report')?.isNew === true, 'S6: …marking the ones created while she was away as new');
 check(cu.links.some((l) => l.title === 'DuplicateCharge' && l.status === 'resolved'), 'S6: …and which links changed status');
@@ -154,7 +155,7 @@ check(cu.since && new Date(cu.since) < new Date(), 'the catch-up says since when
 
 await req(`${base}/seen`, { method: 'POST', jar: alice.jar });
 cu = (await req(`${base}/catch-up`, { jar: alice.jar })).json;
-check(cu.decisions.length === 0 && cu.newQuestions.length === 0 && cu.outputs.length === 0 && cu.messages === 0, 'once she has caught up, the catch-up is empty');
+check(cu.notes.length === 0 && cu.removedNotes.length === 0 && cu.outputs.length === 0 && cu.messages === 0, 'once she has caught up, the catch-up is empty');
 check((await req(`${base}/catch-up`, { jar: fede })).json.firstVisit === true, 'catch-up is per person: Fede has his own');
 
 /* ---------------------------------------------------- S7: the agent hands off */
@@ -178,8 +179,8 @@ check(!waiting.some((w) => w.session.publicId === S.publicId), 'S7: once she ope
 
 const guest = await signupWith((await req(`${base}/invites`, { method: 'POST', body: { role: 'guest' }, jar: fede })).json.token, 'guest');
 check((await req(`${base}/seen`, { method: 'POST', jar: guest.jar })).status === 200, 'a guest can mark a session seen');
-await tool(mcpUrl, agent.token, 'update_session_context', { add_decisions: ['Refund the double charges'] });
-check((await req(`${base}/catch-up`, { jar: guest.jar })).json.decisions?.includes('Refund the double charges'), 'and gets a catch-up of their own');
+await tool(mcpUrl, agent.token, 'add_note', { text: 'Refund the double charges', tag: 'decision' });
+check((await req(`${base}/catch-up`, { jar: guest.jar })).json.notes?.some((n) => n.text === 'Refund the double charges'), 'and gets a catch-up of their own');
 
 if (failures) {
   console.error(`\n${failures} failure(s)`);

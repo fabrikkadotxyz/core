@@ -184,7 +184,9 @@ import {
   listMembers,
   listMessages,
   listParticipants,
-  getSessionContext,
+  listNotes,
+  addNote,
+  removeNote,
   listSessionsForUser,
   setNotify,
   removeMember,
@@ -197,8 +199,6 @@ import {
   listGuests,
   removeGuest,
   setSessionStatus,
-  updateSessionContext,
-  type ContextUpdate,
 } from './sessions.ts';
 
 import { createKit, type Advertised, type Extension } from './kit.ts';
@@ -1945,31 +1945,32 @@ export function createApp(options: CreateAppOptions = {}) {
 
   /* ---- context ---- */
 
-  sessionRoutes.get('/context', async (c) => {
+  /* ---- notes (M65, ADR 0059): free text, an optional tag, append-first ---- */
+
+  sessionRoutes.get('/notes', async (c) => {
     // Readable by viewers (M22): on the allowlist in docs/security.md, Threat 8.
     const s = await resolveViewer(c);
     if (!s) return c.notFound();
-    return c.json(await getSessionContext(db, s.id));
+    return c.json(await listNotes(db, s.id, { includeRemoved: c.req.query('removed') === '1' }));
   });
 
-  sessionRoutes.patch('/context', async (c) => {
+  sessionRoutes.post('/notes', async (c) => {
     const s = await resolve(c);
     if (!s) return c.notFound();
+    const body = await c.req.json<{ text?: string; tag?: unknown }>().catch(() => ({}) as { text?: string; tag?: unknown });
+    const result = await addNote(db, s.id, { text: body.text ?? '', tag: body.tag }, { participantId: s.participantId });
+    if (!result.ok) return c.json({ error: result.error }, 400);
+    publish(s.id, { type: 'notes.updated' });
+    return c.json(result.note, 201);
+  });
 
-    const body = await c.req.json<ContextUpdate>();
-    const result = await updateSessionContext(db, s.id, body, { participantId: s.participantId });
-
-    // 409 rather than a silent overwrite: the browser reloads and shows what
-    // changed, instead of one of two people's edits disappearing (ADR 0013).
-    if (!result.ok) {
-      return c.json(
-        { error: result.error, currentVersion: result.currentVersion },
-        result.conflict ? 409 : 400,
-      );
-    }
-
-    publish(s.id, { type: 'context.updated', context: result.context });
-    return c.json(result.context);
+  sessionRoutes.delete('/notes/:id', async (c) => {
+    const s = await resolve(c);
+    if (!s) return c.notFound();
+    const done = await removeNote(db, s.id, c.req.param('id'), { participantId: s.participantId });
+    if (!done) return c.notFound();
+    publish(s.id, { type: 'notes.updated' });
+    return c.json({ ok: true });
   });
 
   /* ---- integrations (MCP aggregation) ---- */

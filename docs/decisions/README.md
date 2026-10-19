@@ -45,7 +45,7 @@ What we rejected and why.
 | [0010](0010-bridge-proxies-and-gates-at-source.md) | The bridge proxies upstream, and delivery is gated at the source | Accepted |
 | [0011](0011-spawning-is-local-and-opt-in.md) | Spawning happens on the user's machine, and running the runner is the consent | Accepted |
 | [0012](0012-halt-is-server-side-termination-is-cooperative.md) | Halting is server-side; terminating a run is cooperative | Accepted |
-| [0013](0013-context-is-append-only-with-explicit-removal.md) | Session context is append-first, and artifacts are content-addressed | Accepted |
+| [0013](0013-context-is-append-only-with-explicit-removal.md) | Session context is append-first, and artifacts are content-addressed | Accepted; the context half superseded by 0059 |
 | [0014](0014-aggregation-is-http-only-and-credentials-are-encrypted.md) | Aggregated servers are HTTP-only, and credentials are encrypted or refused | Accepted |
 | [0015](0015-activity-is-a-redacted-summary.md) | Activity is a redacted summary, not a transcript | Accepted |
 | [0016](0016-steering-is-stop-and-resume.md) | Steering is stop-and-resume, not interruption | Proposed |
@@ -90,3 +90,4 @@ What we rejected and why.
 | [0056](0056-apps-for-every-desktop-built-per-platform-in-ci-served-per-instance.md) | Apps for every desktop: built per platform in CI, served per instance | Proposed |
 | [0057](0057-leaving-an-account-is-deactivated-then-deleted-the-record-stays.md) | Leaving: an account is deactivated, then deleted; the record stays | Proposed |
 | [0058](0058-the-trail-who-did-what-kept-per-organization-never-what-they-said.md) | The trail: who did what, kept per organization, never what they said | Proposed |
+| [0059](0059-a-room-keeps-notes-not-a-form.md) | A room keeps notes, not a form | Proposed |

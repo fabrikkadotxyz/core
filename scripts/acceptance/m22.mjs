@@ -212,7 +212,7 @@ check(!view.json.participants.some((p) => p.displayName === `alice-${stamp}`), '
 await req(`${base}/messages`, { method: 'POST', body: { content: `findings so far ${stamp}` }, jar: fede });
 const msgs = await req(`${base}/messages`, { jar: alice.jar });
 check(msgs.status === 200 && msgs.json.some((m) => m.content.includes(`findings so far ${stamp}`)), 'S2: Alice reads the timeline');
-for (const path of ['/context', '/links', '/artifacts', '/outputs', '/participants', '/output-edits']) {
+for (const path of ['/notes', '/links', '/artifacts', '/outputs', '/participants', '/output-edits']) {
   check((await req(`${base}${path}`, { jar: alice.jar })).status === 200, `a viewer reads ${path}`);
 }
 
@@ -220,7 +220,7 @@ for (const path of ['/context', '/links', '/artifacts', '/outputs', '/participan
 
 check((await req(`${base}/messages`, { method: 'POST', body: { content: `@writer-${stamp} do it` }, jar: alice.jar })).status === 404, 'S2: Alice cannot post — so cannot mention, so cannot start an agent');
 const writes = [
-  ['PATCH', '/context', { add: { facts: ['x'] } }],
+  ['POST', '/notes', { text: 'x' }],
   ['PUT', '/links', { url: 'https://x.test/1', type: 'issue' }],
   ['POST', '/outputs', { kind: 'doc', name: 'x' }],
   ['POST', '/agents', { displayName: 'sneaky', provider: 'claude-code' }],

@@ -316,6 +316,20 @@
       "when": 1792298855107,
       "tag": "0044_email-verifications",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792368145059,
+      "tag": "0045_notes-add",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792368145525,
+      "tag": "0046_notes-drop",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@
  * M31 (devices).
  */
 import {
+  bigint,
   bigserial,
   boolean,
   check,
@@ -478,29 +479,32 @@ export const sessionTokens = pgTable(
 );
 
 /**
- * Structured session context, deliberately denormalized.
- *
- * Facts and decisions are lists of text, not an entity graph. If this needs to
- * become relational it will be obvious from use; it is not obvious now.
+ * Notes (M65, ADR 0059): what people and agents wrote down outside the
+ * conversation. Free text, an optional one-word tag the writer chose, who and
+ * when. Append-first; removal is soft, so the history stays. This replaced the
+ * fixed form of objective, facts, decisions, questions and constraints.
  * See docs/data-model.md.
  */
-export const sessionContext = pgTable('session_context', {
-  sessionId: uuid('session_id')
-    .primaryKey()
-    .references(() => sessions.id, { onDelete: 'cascade' }),
-  objective: text('objective'),
-  facts: jsonb('facts').$type<string[]>().notNull().default([]),
-  decisions: jsonb('decisions').$type<string[]>().notNull().default([]),
-  questions: jsonb('questions').$type<string[]>().notNull().default([]),
-  constraints: jsonb('constraints').$type<string[]>().notNull().default([]),
-  /**
-   * Increments on every write, so a wholesale replace can be rejected when the
-   * caller is working from a stale read. Append operations do not need it.
-   * See docs/decisions/0013-context-is-append-only-with-explicit-removal.md.
-   */
-  version: integer('version').notNull().default(0),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const sessionNotes = pgTable(
+  'session_notes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    /** Who wrote it. Null: a template, at creation. */
+    participantId: uuid('participant_id').references(() => participants.id, { onDelete: 'set null' }),
+    text: text('text').notNull(),
+    /** One lowercase word, or null. Not a slot: nothing in Fabrikka reads it. */
+    tag: text('tag'),
+    /** Insertion order, and what the catch-up compares against. */
+    seq: bigserial('seq', { mode: 'number' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
+    removedByParticipantId: uuid('removed_by_participant_id').references(() => participants.id, { onDelete: 'set null' }),
+  },
+  (t) => [index('session_notes_session_seq_idx').on(t.sessionId, t.seq)],
+);
 
 /**
  * Files and links attached to a session.
@@ -1027,7 +1031,8 @@ export const sessionReads = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
-    contextSeen: jsonb('context_seen').notNull(),
+    /** M65: the newest note's seq at the last visit; the catch-up shows what came after. */
+    notesSeenSeq: bigint('notes_seen_seq', { mode: 'number' }).notNull().default(0),
     /**
      * M42 (ADR 0037): everything | needs_you | nothing. Null is the default for
      * the session's kind: everything for a direct chat, needs_you otherwise.
@@ -1055,31 +1060,8 @@ export const sessionTemplates = pgTable('session_templates', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/**
- * Who changed the session context, and when (M27). Append-only. Context items
- * are plain strings (ADR 0013), so their history lives beside them: one row per
- * item added or removed, one per objective set.
- */
-export const contextEvents = pgTable(
-  'context_events',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    sessionId: uuid('session_id')
-      .notNull()
-      .references(() => sessions.id, { onDelete: 'cascade' }),
-    /** Null for a template applied when the session was created. */
-    participantId: uuid('participant_id').references(() => participants.id, { onDelete: 'set null' }),
-    /** objective | facts | decisions | questions | constraints */
-    field: text('field').notNull(),
-    /** add | remove | set */
-    op: text('op').notNull(),
-    value: text('value').notNull(),
-    /** Insertion order: one write can add several items with the same timestamp. */
-    seq: bigserial('seq', { mode: 'number' }).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index('context_events_session_created_idx').on(t.sessionId, t.createdAt)],
-);
+// M65 (ADR 0059): context_events is gone. A note carries its own author, time
+// and removal, so the history that table kept lives in session_notes.
 
 /* ------------------------------------------------------------------------ */
 /* M31 — the local host (ADR 0027). The server holds no paths and no policies. */

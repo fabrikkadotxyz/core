@@ -86,8 +86,8 @@
     <text x="684" y="290" opacity="0.9">people and agents, one list, one id space</text>
     <text x="552" y="330" font-weight="700">Messages</text>
     <text x="684" y="330" opacity="0.9">with @mentions; a mention wakes an agent</text>
-    <text x="552" y="370" font-weight="700">Context</text>
-    <text x="684" y="370" opacity="0.9">objective, facts, decisions, open questions</text>
+    <text x="552" y="370" font-weight="700">Notes</text>
+    <text x="684" y="370" opacity="0.9">what anyone wrote down; free text, an optional tag</text>
     <text x="552" y="410" font-weight="700">Outputs</text>
     <text x="684" y="410" opacity="0.9">documents, papers, files; co-edited live</text>
     <text x="552" y="450" font-weight="700">Tools</text>

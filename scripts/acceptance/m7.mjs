@@ -1,7 +1,7 @@
 /**
- * M7 acceptance: context that survives concurrent editing, and artifacts.
+ * M7 acceptance: notes that survive concurrent editing (M65, ADR 0059), and artifacts.
  *
- * The property that matters is the one ADR 0013 exists for: an agent recording
+ * The property that matters is the one ADR 0013 established and ADR 0059 keeps: an agent recording
  * what it learned must not delete what a human typed a minute earlier. That is
  * tested directly, as the exact interleaving that used to lose data.
  *
@@ -126,117 +126,96 @@ const agent = (
 ).json;
 const token = agent.token;
 
-/* ------------------------------------- 1. context basics */
+/* ------------------------------------- 1. notes basics (M65, ADR 0059) */
 
-const empty = await req(`${base}/context`, { jar: fede });
-check(empty.json.version === 0, 'a fresh session starts at version 0');
+const empty = await req(`${base}/notes`, { jar: fede });
+check(Array.isArray(empty.json) && empty.json.length === 0, 'a fresh session has no notes');
 
-await req(`${base}/context`, {
-  method: 'PATCH',
-  body: { objective: `Fix the webhook ${stamp}` },
+await req(`${base}/notes`, {
+  method: 'POST',
+  body: { text: `Fix the webhook ${stamp}`, tag: 'goal' },
   jar: fede,
 });
-const withObjective = await req(`${base}/context`, { jar: fede });
+const withGoal = await req(`${base}/notes`, { jar: fede });
 check(
-  withObjective.json.objective === `Fix the webhook ${stamp}`,
-  'the objective can be set from the browser',
+  withGoal.json.length === 1 && withGoal.json[0].text === `Fix the webhook ${stamp}` && withGoal.json[0].tag === 'goal',
+  'a note can be written from the browser, with a tag',
 );
-check(withObjective.json.version === 1, 'writing bumps the version');
+check(typeof withGoal.json[0].by === 'string' && typeof withGoal.json[0].at === 'string', 'it says who and when');
 
-const agentRead = await tool(mcpUrl, token, 'get_session_context');
+const agentRead = await tool(mcpUrl, token, 'get_notes');
 check(
-  agentRead.value.objective === `Fix the webhook ${stamp}`,
-  'an agent reads the objective over MCP without being told it exists',
+  agentRead.value[0]?.text === `Fix the webhook ${stamp}`,
+  'an agent reads the note over MCP without being told it exists',
 );
-check(typeof agentRead.value.version === 'number', 'the version is exposed to agents');
 
 /* -------------------- 2. THE lost-update scenario */
 
-// A human records three facts.
-await req(`${base}/context`, {
-  method: 'PATCH',
-  body: { add: { facts: ['fact A', 'fact B', 'fact C'] } },
-  jar: fede,
-});
+// A human writes three things down.
+for (const text of ['fact A', 'fact B', 'fact C']) {
+  await req(`${base}/notes`, { method: 'POST', body: { text, tag: 'fact' }, jar: fede });
+}
 
-// The agent read the context BEFORE the human's next edit — the stale read that
-// used to cause silent loss.
-const staleRead = await tool(mcpUrl, token, 'get_session_context');
-check(staleRead.value.facts.length === 3, 'the agent sees three facts');
+// The agent read the notes BEFORE the human's next edit — the stale read that
+// used to cause silent loss when the record was a replaceable list.
+const staleRead = await tool(mcpUrl, token, 'get_notes');
+check(staleRead.value.filter((n) => n.tag === 'fact').length === 3, 'the agent sees three facts');
 
 // The human adds a fourth while the agent is thinking.
-await req(`${base}/context`, {
-  method: 'PATCH',
-  body: { add: { facts: ['fact D typed while the agent was thinking'] } },
+await req(`${base}/notes`, {
+  method: 'POST',
+  body: { text: 'fact D typed while the agent was thinking', tag: 'fact' },
   jar: fede,
 });
 
-// The agent records what it learned, the way it is told to: append.
-const appended = await tool(mcpUrl, token, 'update_session_context', {
-  add_facts: ['fact E discovered by the agent'],
+// The agent records what it learned, the only way it can: append.
+const appended = await tool(mcpUrl, token, 'add_note', {
+  text: 'fact E discovered by the agent',
+  tag: 'fact',
 });
-check(!appended.error, 'the agent appends a fact');
+check(!appended.error, 'the agent appends a note');
 
-const after = await req(`${base}/context`, { jar: fede });
+const after = await req(`${base}/notes`, { jar: fede });
+const texts = after.json.map((n) => n.text);
 check(
-  after.json.facts.includes('fact D typed while the agent was thinking'),
-  "THE HUMAN'S FACT SURVIVED — appending cannot lose a concurrent edit",
+  texts.includes('fact D typed while the agent was thinking'),
+  "THE HUMAN'S NOTE SURVIVED — appending cannot lose a concurrent edit",
 );
+check(texts.includes('fact E discovered by the agent'), "the agent's note is there too");
+check(after.json.filter((n) => n.tag === 'fact').length === 5, 'both edits are present, nothing displaced');
+
+/* -------------------- 3. there is nothing to overwrite with */
+
+const oldTool = await tool(mcpUrl, token, 'update_session_context', { facts: ['only this one'] });
+check(!!oldTool.error, 'THE OLD REPLACE-A-LIST TOOL IS GONE: there is no blind overwrite to guard');
+const badTag = await tool(mcpUrl, token, 'add_note', { text: 'tagged wrongly', tag: 'not a word!' });
+check(!!badTag.error, 'a tag that is not one word is refused');
+const spaced = await tool(mcpUrl, token, 'add_note', { text: 'tagged loosely', tag: 'Open Question' });
+check(spaced.value?.tag === 'open-question', 'a tag is normalised to one lowercase word');
+
+/* -------------------- 4. dedupe and removal by id */
+
+await tool(mcpUrl, token, 'add_note', { text: 'ask for the CSV', tag: 'decision' });
+await tool(mcpUrl, token, 'add_note', { text: 'ask for the CSV', tag: 'decision' });
+const deduped = await req(`${base}/notes`, { jar: fede });
 check(
-  after.json.facts.includes('fact E discovered by the agent'),
-  "the agent's fact is there too",
-);
-check(after.json.facts.length === 5, 'both edits are present, nothing displaced');
-
-/* -------------------- 3. wholesale replacement is guarded */
-
-const blind = await tool(mcpUrl, token, 'update_session_context', {
-  facts: ['only this one'],
-});
-check(
-  !!blind.error,
-  'REPLACING A LIST WITHOUT if_version IS REFUSED — no blind overwrite',
-);
-
-const stale = await tool(mcpUrl, token, 'update_session_context', {
-  facts: ['only this one'],
-  if_version: staleRead.value.version,
-});
-check(!!stale.error, 'replacing with a STALE version is refused');
-
-const current = await req(`${base}/context`, { jar: fede });
-const fresh = await tool(mcpUrl, token, 'update_session_context', {
-  facts: ['a deliberate replacement'],
-  if_version: current.json.version,
-});
-check(!fresh.error, 'replacing with the CURRENT version is allowed');
-check(
-  fresh.value.facts.length === 1,
-  'a deliberate replacement does replace, when asked for correctly',
+  deduped.json.filter((n) => n.text === 'ask for the CSV').length === 1,
+  'adding the same text twice does not duplicate it',
 );
 
-/* -------------------- 4. dedupe and removal by value */
-
-await tool(mcpUrl, token, 'update_session_context', {
-  add_decisions: ['ask for the CSV', 'ask for the CSV'],
-});
-const deduped = await req(`${base}/context`, { jar: fede });
+await tool(mcpUrl, token, 'add_note', { text: 'keep this one', tag: 'decision' });
+const toRemove = deduped.json.find((n) => n.text === 'ask for the CSV');
+const removal = await tool(mcpUrl, token, 'remove_note', { id: toRemove.id });
+check(!removal.error, 'an agent removes a note by id');
+const removed = await req(`${base}/notes`, { jar: fede });
+const decisions = removed.json.filter((n) => n.tag === 'decision');
 check(
-  deduped.json.decisions.filter((d) => d === 'ask for the CSV').length === 1,
-  'appending the same value twice does not duplicate it',
+  decisions.length === 1 && decisions[0].text === 'keep this one',
+  'removal takes the right note and leaves the other',
 );
-
-await tool(mcpUrl, token, 'update_session_context', {
-  add_decisions: ['keep this one'],
-});
-await tool(mcpUrl, token, 'update_session_context', {
-  remove_decisions: ['ask for the CSV'],
-});
-const removed = await req(`${base}/context`, { jar: fede });
-check(
-  removed.json.decisions.length === 1 && removed.json.decisions[0] === 'keep this one',
-  'removal is by value and takes the right item',
-);
+const history = await req(`${base}/notes?removed=1`, { jar: fede });
+const gone = history.json.find((n) => n.text === 'ask for the CSV');
+check(gone && gone.removedAt && gone.removedBy === 'ctx-agent', 'REMOVAL IS SOFT: the history keeps the note, by whom and when');
 
 /* ------------------------------------------- 5. artifacts */
 

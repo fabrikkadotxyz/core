@@ -124,18 +124,21 @@ const base = `/o/${S.ownerSlug}/s/${S.publicId}`;
 const mcpUrl = `${MCP}/o/${S.ownerSlug}/s/${S.publicId}`;
 const agent = (await req(`${base}/agents`, { method: 'POST', body: { displayName: `planner-${stamp}`, provider: 'claude-code' }, jar: fede })).json;
 
-await req(`${base}/context`, { method: 'PATCH', body: { objective: 'Move off managed cloud onto our own hardware' }, jar: fede });
+// M65 (ADR 0059): what used to be an objective and lists is notes, tagged as their writers chose.
+await req(`${base}/notes`, { method: 'POST', body: { text: 'Move off managed cloud onto our own hardware', tag: 'goal' }, jar: fede });
 await tool(mcpUrl, agent.token, 'link', { url: 'https://github.com/acme/infra', type: 'repo', title: 'infra' });
 const bills = makePdf(['AWS bill, March: RDS 41,200 USD', 'S3 9,800 USD; CloudFront 6,100 USD']);
 const art = await upload(base, fede, 'aws-bills.pdf', 'application/pdf', bills);
 const readBills = await tool(mcpUrl, agent.token, 'read_artifact', { artifact_id: art.id });
 check(readBills.value?.pages?.[0]?.text.includes('RDS 41,200'), 'S10: the agent reads the uploaded bills (M20)');
 
-await tool(mcpUrl, agent.token, 'update_session_context', {
-  add_decisions: ['RDS → Postgres on our own hardware, with streaming replicas', 'S3 → MinIO across two racks'],
-});
-await req(`${base}/context`, { method: 'PATCH', body: { add: { decisions: ['CloudFront → keep for now; revisit in Q3'] } }, jar: fede });
-await req(`${base}/context`, { method: 'PATCH', body: { add: { questions: ['Who owns on-call for the new racks?'] } }, jar: fede });
+await tool(mcpUrl, agent.token, 'add_note', { text: 'RDS → Postgres on our own hardware, with streaming replicas', tag: 'decision' });
+await tool(mcpUrl, agent.token, 'add_note', { text: 'S3 → MinIO across two racks', tag: 'decision' });
+await req(`${base}/notes`, { method: 'POST', body: { text: 'CloudFront → keep for now; revisit in Q3', tag: 'decision' }, jar: fede });
+await req(`${base}/notes`, { method: 'POST', body: { text: 'Who owns on-call for the new racks?', tag: 'question' }, jar: fede });
+// A note the agent takes back: the export keeps it, marked.
+const retracted = (await tool(mcpUrl, agent.token, 'add_note', { text: 'Glacier → tape', tag: 'decision' })).value;
+await tool(mcpUrl, agent.token, 'remove_note', { id: retracted.id });
 
 const plan = (await tool(mcpUrl, agent.token, 'create_output', { kind: 'doc', name: 'Migration plan', content: '## Order\n1. Storage\n2. Databases\n' })).value;
 await tool(mcpUrl, agent.token, 'edit_output', { output_id: plan.id, edits: [{ old_text: '2. Databases\n', new_text: '2. Databases (one replica first)\n' }] });
@@ -157,7 +160,8 @@ const readme = readFileSync(join(dir, 'README.md'), 'utf8');
 check(readme.startsWith(`# Cloud exit ${stamp}`), 'README.md is the session, as one document');
 check(readme.includes(`Exported by @${me.displayName}`), 'it says who exported it…');
 check(/Exported by @[^\n]+ on \d{4}-\d\d-\d\d/.test(readme), '…and when');
-check(readme.includes('## Objective') && readme.includes('Move off managed cloud'), 'it opens with the objective');
+check(readme.includes('## Notes') && readme.includes('**goal** · Move off managed cloud'), 'the notes are there, the goal tagged as it was written');
+check(readme.indexOf('## Timeline') < readme.indexOf('## Notes'), 'NOTES ARE AN APPENDIX, after the record they annotate (ADR 0059)');
 for (const [decision, who] of [
   ['RDS → Postgres on our own hardware, with streaming replicas', `planner-${stamp}`],
   ['S3 → MinIO across two racks', `planner-${stamp}`],
@@ -168,11 +172,10 @@ for (const [decision, who] of [
 }
 check(readme.includes('Who owns on-call for the new racks?'), 'the open question is there');
 check(readme.includes('[infra](https://github.com/acme/infra)'), 'the linked repo is there');
-check(readme.includes('## Context history') && readme.includes(`@planner-${stamp} added a decision`), 'the context history is there, oldest first');
+check(readme.includes('## Removed notes') && readme.includes('Glacier → tape') && readme.includes(`removed by @planner-${stamp}`), 'a removed note is kept, with who removed it');
 check(
-  readme.indexOf('added a decision: RDS') < readme.indexOf('added a decision: S3') &&
-    readme.indexOf('added a decision: S3') < readme.indexOf('added a decision: CloudFront'),
-  '…in the order things happened, even within one write',
+  readme.indexOf('RDS → Postgres') < readme.indexOf('S3 → MinIO') && readme.indexOf('S3 → MinIO') < readme.indexOf('CloudFront → keep'),
+  '…and the notes are in the order things happened',
 );
 
 const planDir = join(dir, 'outputs', 'Migration plan');
@@ -185,8 +188,8 @@ const timeline = readFileSync(join(dir, 'timeline.md'), 'utf8');
 check(timeline.includes('Kicking off the cloud exit.') && timeline.includes(`**@planner-${stamp}**`), 'the timeline is there, with names');
 
 const json = JSON.parse(readFileSync(join(dir, 'session.json'), 'utf8'));
-check(json.format === 'fabrikka-export/1' && json.exportedBy === me.displayName, 'session.json is there, for programs');
-check(json.contextHistory.filter((h) => h.field === 'decisions').length === 3, '…with the context history');
+check(json.format === 'fabrikka-export/2' && json.exportedBy === me.displayName, 'session.json is there, for programs');
+check(json.notes.filter((n) => n.tag === 'decision').length === 3 && json.removedNotes.length === 1 && json.removedNotes[0].removedBy === `planner-${stamp}`, '…with the notes, live and removed');
 check(json.outputs[0].files['document.md'].includes('one replica'), '…and the outputs');
 
 const everything = readdirSync(dir, { recursive: true })

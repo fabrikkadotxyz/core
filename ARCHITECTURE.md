@@ -44,7 +44,7 @@ Account
 └── Session
     ├── Participants (humans and agents, one id space)
     ├── Messages + Mentions
-    ├── Context (objective, facts, decisions, questions)
+    ├── Notes (free text, an optional tag; ADR 0059)
     ├── Artifacts
     ├── Attached MCP servers
     └── Permissions

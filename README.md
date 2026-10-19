@@ -11,6 +11,19 @@ one problem together, live: debug the webhook, write the paper, draft the
 proposal. Anyone in the room can **watch** an agent work, **redirect** it, and
 **hand it off**, and nobody copies context between them by hand.
 
+![A team signs in, opens its Launch plan factory, and mentions an agent to check the uptime monitor.](brand/demo-pro-startup.gif)
+
+<table>
+  <tr>
+    <td width="50%"><img src="brand/demo-join-by-link.gif" alt="An invitee creates an account from a session link, picks the agents she uses and a look, and lands in the session."></td>
+    <td width="50%"><img src="brand/demo-one-off-invite.gif" alt="Starting a one-off session from the home screen and copying its link to share."></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Join by link.</b> An invitee creates an account from a session link, picks her agents and a look, and lands in the session.</sub></td>
+    <td align="center"><sub><b>A one-off session.</b> Start one from the home screen and share its link; nothing to set up for the others.</sub></td>
+  </tr>
+</table>
+
 Chat with an AI today is single-player: a box only you can see, and a transcript
 you can send a link to. Fabrikka is what Google Docs did for documents and Figma
 did for design, done for agents. Think *Slack for problems, not conversations*:

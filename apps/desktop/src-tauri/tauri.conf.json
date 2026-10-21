@@ -28,7 +28,8 @@
       "msi"
     ],
     "icon": [
-      "icons/icon.png"
+      "icons/icon.png",
+      "icons/icon.ico"
     ],
     "copyright": "\u00a9 2026 Federico Aldunate. Free software under the GNU AGPL v3.",
     "license": "AGPL-3.0-only",

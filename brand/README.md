@@ -34,7 +34,8 @@ Generated from these, and committed:
   `site.webmanifest`;
 - `apps/web/public/og-image.png` (1200×600), the card every instance serves
   for link previews (`docs/operations.md`, *Link previews and search engines*);
-- `apps/desktop/src-tauri/icons/icon.png` (the app, 512 px);
+- `apps/desktop/src-tauri/icons/icon.png` (the app, 512 px) and `icon.ico`
+  (Windows, 16 to 256 px; Tauri won't build there without it);
 - `icons/tray.png` (the menu bar, a 44 px black template that macOS tints).
 
 To regenerate them after changing a source, from the repository root:
@@ -47,6 +48,8 @@ rsvg-convert -w 180 -h 180 brand/app-icon.svg -o apps/web/public/apple-touch-ico
 rsvg-convert -w 192 -h 192 brand/app-icon.svg -o apps/web/public/icon-192.png
 rsvg-convert -w 512 -h 512 brand/app-icon.svg -o apps/web/public/icon-512.png
 rsvg-convert -w 512 -h 512 brand/app-icon.svg -o apps/desktop/src-tauri/icons/icon.png
+for n in 16 24 32 48 64 256; do rsvg-convert -w $n -h $n brand/app-icon.svg -o /tmp/win-$n.png; done
+magick /tmp/win-{16,24,32,48,64,256}.png apps/desktop/src-tauri/icons/icon.ico
 rsvg-convert -w 1024 -h 1024 brand/app-icon.svg -o brand/app-icon-1024.png
 rsvg-convert -w 1280 -h 640 brand/social-card.svg -o brand/social-preview.png
 rsvg-convert -w 1200 -h 600 brand/social-card.svg -o apps/web/public/og-image.png

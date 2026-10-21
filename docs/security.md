@@ -721,6 +721,13 @@ of this table.
   inside it stay sealed under `FABRIKKA_ENCRYPTION_KEY`. A restore checks the
   dump's checksum and refuses a wrong passphrase before touching anything.
   Both keys belong somewhere other than the server (`docs/operations.md`).
+- **Profile pictures are images, never documents** (M67, ADR 0061). The
+  browser re-encodes a picture before upload, which drops a photo's location;
+  the server still trusts none of it, accepts PNG, JPEG or WebP by their
+  first bytes only, at most 512 KB, and never SVG. Served from
+  `/api/avatars/<hash>` to signed-in people with `Content-Security-Policy:
+  default-src 'none'` and `nosniff`. The address is content-addressed, and
+  shown only where the person is. Deleting an account deletes it.
 - **Files in a bucket never leave through it** (M66, ADR 0060). With
   `FABRIKKA_FILES=s3` the server reads the bytes and serves them under the
   room's membership check, exactly as from disk. No presigned URL is ever

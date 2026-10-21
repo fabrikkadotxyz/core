@@ -75,6 +75,13 @@ export const users = pgTable('users', {
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   /** Their choice at deletion: true replaced their name on content with "Former member". */
   eraseName: boolean('erase_name').notNull().default(false),
+  /**
+   * The profile picture (M67, ADR 0061): the SHA-256 of its bytes, stored in
+   * the file store at avatars/ab/cd/<hash>. Null: initials on a colour.
+   */
+  avatarKey: text('avatar_key'),
+  /** image/png, image/jpeg or image/webp, as recognised from the bytes. */
+  avatarType: text('avatar_type'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

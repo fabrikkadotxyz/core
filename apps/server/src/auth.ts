@@ -28,6 +28,8 @@ export interface AuthUser {
   isInstanceOwner: boolean;
   /** M64: the address was proven by a link, or vouched for by the deployment or the operator. */
   emailVerified: boolean;
+  /** M67 (ADR 0061): their picture, or null for initials. */
+  avatarUrl?: string | null;
 }
 
 /** Hono env so `c.get('user')` is typed on guarded routes. */
@@ -114,6 +116,7 @@ export async function resolveToken(
       ownerSlug: users.ownerSlug,
       isInstanceOwner: users.isInstanceOwner,
       emailVerifiedAt: users.emailVerifiedAt,
+      avatarKey: users.avatarKey,
     })
     .from(authSessions)
     .innerJoin(users, eq(users.id, authSessions.userId))
@@ -146,6 +149,7 @@ export async function resolveToken(
     ownerSlug: row.ownerSlug,
     isInstanceOwner: row.isInstanceOwner,
     emailVerified: row.emailVerifiedAt !== null,
+    avatarUrl: row.avatarKey ? `/api/avatars/${row.avatarKey}` : null,
   };
 }
 

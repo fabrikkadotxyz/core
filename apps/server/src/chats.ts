@@ -11,6 +11,7 @@ import type { Database } from '@fabrikka/db';
 import { sessions, teamMembers, teams, users } from '@fabrikka/db';
 import type { SessionSummary } from '@fabrikka/types';
 import { addMember, createSession, listSessionsForUser, resolveSessionForUser } from './sessions.ts';
+import { avatarUrl } from './avatars.ts';
 
 export class ChatError extends Error {}
 
@@ -133,9 +134,12 @@ export async function openDirect(db: Database, userId: string, otherUserId: stri
 export async function directCandidates(db: Database, userId: string) {
   const mine = db.select({ id: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, userId));
   const rows = await db
-    .selectDistinct({ id: users.id, displayName: users.displayName })
+    .selectDistinct({ id: users.id, displayName: users.displayName, avatarKey: users.avatarKey })
     .from(teamMembers)
     .innerJoin(users, eq(users.id, teamMembers.userId))
     .where(inArray(teamMembers.teamId, mine));
-  return rows.filter((r) => r.id !== userId).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  return rows
+    .filter((r) => r.id !== userId)
+    .map(({ avatarKey, ...r }) => ({ ...r, avatarUrl: avatarUrl(avatarKey) }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }

@@ -3142,6 +3142,55 @@ status`, and stops a core whose key is wrong; with `FABRIKKA_TEST_BACKUP=1`
 too, it backs up from the bucket and restores into another prefix. Also
 tried by hand against RustFS.
 
+## M67 — A face for everyone
+
+> **Built 2026-10-21** ([ADR 0061](decisions/0061-a-face-for-everyone-a-picture-for-people-who-want-one.md)).
+> The scripted check passes, the owner's manual test is pending. Built
+> before M66's manual test, at the owner's request. Until now a room said
+> who wrote a line with a name and 👤 or 🤖.
+
+- **Everyone has a face:** the picture, or initials on a colour. Initials
+  are the first letter of the first and last name, or the first two
+  letters of a one-word name. The colour is one of eight (`--face-1` to
+  `--face-8`), picked by a hash of the account id, so it is random across a
+  room and the same everywhere. Agents are rounded squares, never pictures.
+- **Where:** a message's author, Setup → People (members, guests, the
+  colleague picker), an organization's members, the new-chat people picker,
+  the account button, Settings → Account. A document's history shows the
+  faces as initials, by participant, without pictures.
+- **Settings → Account → Choose a picture.** The browser crops to the
+  centre square and re-encodes at 256 × 256, which strips a photo's
+  location. The server takes PNG, JPEG or WebP by their first bytes, up to
+  512 KB, never SVG. *Remove* goes back to initials.
+- **Stored** in the file store (M66) at `avatars/ab/cd/<hash>`;
+  `users.avatar_key` (migration 0047). Replaced, removed or the account
+  deleted: the blob is deleted unless another account holds the same bytes.
+- **Served** at `/api/avatars/<hash>` to anyone signed in, immutable,
+  `default-src 'none'`, `nosniff`; payloads naming a person carry
+  `avatarUrl`. Download my data includes it; the trail has
+  `profile.picture_changed` and `profile.picture_removed`.
+
+**Test** (two accounts in one room):
+1. Open the room: every message has a face. A two-word name shows two
+   initials, a one-word name its first two letters, agents a square. The
+   same person is the same colour in the room, in Setup → People and in
+   Settings → People. **0 clicks.**
+2. Settings → Account → **Choose a picture**, pick a photo taken on a
+   phone. **4 clicks.** It appears at once on the account button.
+3. As the other account, reload the room: the photo is on the first
+   account's messages and in People. Download it from the browser and
+   check that it is square, 256 px, and carries no location.
+4. **Remove** it: the initials come back, in the same colour.
+5. Try to upload an SVG through the API: refused.
+
+**Scripted** (`scripts/acceptance/m67.mjs`): the initials and colour rules
+(unit test in the web app); a PNG uploads, appears on `/auth/me`, in the
+room's participants and members and the organization's members, and is
+served with its headers; signed out, it is not; an SVG, a renamed text file
+and a file over 512 KB are refused; a replaced picture's blob is gone from
+the store; removing it clears `avatarUrl`; the export holds it; deleting
+the account removes it; the trail has the events; agents carry no picture.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

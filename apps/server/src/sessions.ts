@@ -26,6 +26,7 @@ import {
   users,
 } from '@fabrikka/db';
 import { accountMark } from './leaving.ts';
+import { avatarUrl } from './avatars.ts';
 import type {
   Mention,
   Message,
@@ -439,6 +440,7 @@ export async function listMembers(
       participantName: participants.displayName,
       deactivatedAt: users.deactivatedAt,
       deletedAt: users.deletedAt,
+      avatarKey: users.avatarKey,
     })
     .from(sessionMembers)
     .innerJoin(users, eq(users.id, sessionMembers.userId))
@@ -450,7 +452,7 @@ export async function listMembers(
     .orderBy(asc(users.displayName));
 
   // M58: a member whose account left is listed with the mark.
-  return rows.map(({ deactivatedAt, deletedAt, ...r }) => ({ ...r, role: r.role as SessionRole, account: accountMark({ deactivatedAt, deletedAt }) }));
+  return rows.map(({ deactivatedAt, deletedAt, avatarKey, ...r }) => ({ ...r, role: r.role as SessionRole, account: accountMark({ deactivatedAt, deletedAt }), avatarUrl: avatarUrl(avatarKey) }));
 }
 
 /**
@@ -540,6 +542,8 @@ export async function listParticipants(
       sessionId: participants.sessionId,
       kind: participants.kind,
       displayName: participants.displayName,
+      userId: participants.userId,
+      avatarKey: users.avatarKey,
       deactivatedAt: users.deactivatedAt,
       deletedAt: users.deletedAt,
     })
@@ -555,6 +559,9 @@ export async function listParticipants(
       sessionId: p.sessionId,
       kind: p.kind as Participant['kind'],
       displayName: p.displayName,
+      userId: p.kind === 'human' ? p.userId : null,
+      // M67: agents never carry a picture, whoever registered them.
+      avatarUrl: p.kind === 'human' ? avatarUrl(p.avatarKey) : null,
       ...(account ? { account } : {}),
     };
   });
@@ -1067,12 +1074,13 @@ export async function setVisibility(
 }
 
 export async function listGuests(db: Database, sessionId: string) {
-  return db
-    .select({ userId: users.id, displayName: users.displayName, email: users.email })
+  const rows = await db
+    .select({ userId: users.id, displayName: users.displayName, email: users.email, avatarKey: users.avatarKey })
     .from(sessionGuests)
     .innerJoin(users, eq(users.id, sessionGuests.userId))
     .where(eq(sessionGuests.sessionId, sessionId))
     .orderBy(asc(users.displayName));
+  return rows.map(({ avatarKey, ...g }) => ({ ...g, avatarUrl: avatarUrl(avatarKey) }));
 }
 
 /** A member who redeems a guest invite stays a member: never a downgrade. */

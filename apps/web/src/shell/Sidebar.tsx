@@ -15,6 +15,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import type { SessionSummary } from '@fabrikka/types';
 import { chats, sessions as sessionsApi } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
+import { Face } from '../components/Face.tsx';
 import { byActivity, useWorkspace } from './workspace.tsx';
 import { PLACE_LABEL, type Place } from './Rail.tsx';
 import { askPermission, bannerDismissed, dismissBanner, permission } from '../notify.ts';
@@ -183,7 +184,7 @@ function AddChat({ teamId, onAdded }: { teamId: string; onAdded: (s: SessionSumm
 
 /** Start a 1:1 chat with someone you share a team with. */
 function NewDirect({ onOpened }: { onOpened: (s: SessionSummary) => void }) {
-  const [people, setPeople] = useState<{ id: string; displayName: string }[] | null>(null);
+  const [people, setPeople] = useState<{ id: string; displayName: string; avatarUrl?: string | null }[] | null>(null);
   if (!people) {
     return (
       <button className="side-item side-more side-button" onClick={() => chats.people().then(setPeople).catch(() => setPeople([]))}>
@@ -204,7 +205,9 @@ function NewDirect({ onOpened }: { onOpened: (s: SessionSummary) => void }) {
             onOpened(s);
           }}
         >
-          <span className="side-icon" aria-hidden>●</span>
+          <span className="side-icon" aria-hidden>
+            <Face name={p.displayName} seed={p.id} url={p.avatarUrl} size="xs" />
+          </span>
           <span className="side-label">{p.displayName}</span>
         </button>
       ))}

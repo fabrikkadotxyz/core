@@ -92,6 +92,8 @@ export function describe(e: AuditEventView): string {
     case 'login.failed': return `a sign-in as ${whom || 'an unknown address'} failed`;
     case 'login.locked': return `sign-ins as ${whom || 'an unknown address'} were refused: too many failures`;
     case 'logout': return `${who} signed out`;
+    case 'profile.picture_changed': return `${who} chose a new profile picture`;
+    case 'profile.picture_removed': return `${who} removed their profile picture`;
     case 'password.reset_requested': return `a password reset was asked for ${whom || 'an unknown address'}`;
     case 'password.reset_completed': return e.outcome === 'ok' ? 'a password was reset by link' : 'a password reset link was refused';
     case 'account.deactivated': return `${who} deactivated ${whom}`;

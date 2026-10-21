@@ -173,6 +173,8 @@ tokens: `--side-bg` behind it, `--side-muted` and `--side-strong` for its icons,
 | `--badge-bg`, `--badge-text`, `--badge-ok-bg`, `--badge-shared-bg` | Badges |
 | `--vendor-bg` | Behind a vendor's logo |
 | `--team-initial` | A team's initial in the switcher |
+| `--face-1` … `--face-8` | The colours a face without a picture sits on (M67, ADR 0061). One per person, picked by a hash of their account. Keep all eight distinct and dark enough for `--on-face` |
+| `--on-face` | The initials on a face |
 
 ### Accent, shadows, shape
 

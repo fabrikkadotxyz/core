@@ -158,6 +158,13 @@ export function createS3Client(cfg: S3Config, doFetch: typeof fetch = fetch) {
       return true;
     },
 
+    /** Gone, or never there: S3 answers 204 either way. */
+    async remove(key: string): Promise<void> {
+      const r = await send('DELETE', key);
+      const body = await r.text();
+      if (!r.ok && r.status !== 404) throw errorFrom(r.status, body);
+    },
+
     /** Every key under the prefix, the prefix stripped. */
     async *list(): AsyncGenerator<string> {
       let token: string | undefined;

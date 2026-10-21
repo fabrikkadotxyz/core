@@ -2,6 +2,8 @@
 
 **Status:** Proposed
 **Date:** 2026-10-21
+**Amended by:** [ADR 0061](0061-a-face-for-everyone-a-picture-for-people-who-want-one.md):
+the store gains a delete, used only for profile pictures.
 **Builds on:** [ADR 0013](0013-context-is-append-only-with-explicit-removal.md)
 (artifacts are content-addressed; that half stands), and M39's promise that
 a self-hoster needs nothing beyond the container and Postgres.

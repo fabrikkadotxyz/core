@@ -48,6 +48,7 @@ import { webKind } from '../outputs/kinds/registry.ts';
 import { CatchUpCard, hasNews } from './CatchUpCard.tsx';
 import { useWorkspace } from '../shell/workspace.tsx';
 import { readWarm, writeWarm } from '../warm.ts';
+import { Face } from '../components/Face.tsx';
 import type { NotifySetting } from '@fabrikka/types';
 
 const NOTIFY_OPTIONS: { value: NotifySetting; label: string; description: string }[] = [
@@ -956,7 +957,8 @@ function PeoplePanel({
           return (
             <li key={m.userId}>
               <span>
-                {name}
+                <Face name={m.displayName} seed={m.userId} url={m.avatarUrl} />
+                <span className="face-name" title={name}>{name}</span>
                 {m.account && (
                   <span className="badge" title={m.account === 'deleted' ? 'This account was deleted. What they wrote stays.' : 'This account cannot sign in.'}>
                     {m.account}
@@ -991,7 +993,10 @@ function PeoplePanel({
         })}
         {(view.guests ?? []).map((g) => (
           <li key={g.userId}>
-            <span>{g.displayName}</span>
+            <span>
+              <Face name={g.displayName} seed={g.userId} url={g.avatarUrl} />
+              <span className="face-name" title={g.displayName}>{g.displayName}</span>
+            </span>
             <span className="role" title="They can read this session and nothing else.">guest · view only</span>
             {isOwner && !isChat && (
               <span className="row-end">
@@ -1024,7 +1029,8 @@ function PeoplePanel({
                 {roster.map((m) => (
                   <li key={m.userId}>
                     <span>
-                      {m.displayName}
+                      <Face name={m.displayName} seed={m.userId} url={m.avatarUrl} />
+                      <span className="face-name" title={m.displayName}>{m.displayName}</span>
                       {m.account && <span className="badge">{m.account}</span>}
                     </span>
                     <span className="row-end">
@@ -2392,6 +2398,8 @@ function Timeline({
   );
 
   const running = runs.filter((r) => r.status === 'running');
+  // M67: who wrote a line, for their face. A person's colour is their account's, the same in every room.
+  const people = useMemo(() => new Map(participants.map((p) => [p.id, p])), [participants]);
 
   if (items.length === 0 && running.length === 0) {
     return (
@@ -2435,7 +2443,11 @@ function Timeline({
             className={item.message.author.kind === 'agent' ? 'msg agent' : 'msg'}
           >
             <div className="meta">
-              <span>{item.message.author.kind === 'agent' ? '🤖' : '👤'}</span>
+              {(() => {
+                const a = item.message.author;
+                const p = people.get(a.participantId);
+                return <Face name={a.displayName} seed={p?.userId ?? a.participantId} url={p?.avatarUrl} agent={a.kind === 'agent'} />;
+              })()}
               <span className="author">@{item.message.author.displayName}</span>
               <time dateTime={item.message.createdAt}>
                 {new Date(item.message.createdAt).toLocaleTimeString([], {

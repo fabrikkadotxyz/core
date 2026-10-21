@@ -158,6 +158,16 @@ export const auth = {
     const filename = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'fabrikka-data.zip';
     return { blob: await res.blob(), filename };
   },
+  /** M67 (ADR 0061): a picture already made square by picture.ts. */
+  setPicture: async (picture: Blob): Promise<{ avatarUrl: string }> => {
+    const form = new FormData();
+    form.append('file', picture, 'picture');
+    const res = await fetch('/api/me/avatar', { method: 'POST', body: form, credentials: 'same-origin' });
+    const json = (await res.json().catch(() => ({}))) as { avatarUrl?: string; error?: string };
+    if (!res.ok || !json.avatarUrl) throw new ApiError(res.status, json.error ?? `request failed (${res.status})`);
+    return { avatarUrl: json.avatarUrl };
+  },
+  removePicture: () => call<{ avatarUrl: null }>('/me/avatar', { method: 'DELETE' }),
   logout: () => call<{ ok: true }>('/auth/logout', { method: 'POST' }),
   /** M39, ADR 0035: whether this instance still needs its owner, and creating them. */
   setupNeeded: () => call<{ needed: boolean }>('/setup'),
@@ -199,7 +209,7 @@ export const chats = {
   create: (teamId: string, name: string) => call<SessionSummary>(`/teams/${teamId}/chats`, { method: 'POST', body: { name } }),
   /** Open (or create) the 1:1 chat with someone you share a team with. */
   direct: (userId: string) => call<SessionSummary>('/directs', { method: 'POST', body: { userId } }),
-  people: () => call<{ id: string; displayName: string }[]>('/directs/people'),
+  people: () => call<{ id: string; displayName: string; avatarUrl?: string | null }[]>('/directs/people'),
 };
 
 /** M33: the command that installs this instance's client and connects a computer, or null if it serves none. */

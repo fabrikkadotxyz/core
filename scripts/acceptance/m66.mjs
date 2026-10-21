@@ -68,7 +68,13 @@ const src = ['apps/server/src/app.ts', 'apps/server/src/artifacts.ts', 'apps/ser
 check(/sessionRoutes\.get\('\/artifacts\/:id\/content', async \(c\) => \{[\s\S]{0,200}const s = await resolveViewer\(c\);\s*if \(!s\) return c\.notFound\(\);\s*const found = await readArtifact\(db, s\.id/.test(app), 'DOWNLOADS STAY BEHIND THE ROOM: the server reads the bytes, after the membership check');
 check(!/X-Amz-Signature|presign|X-Amz-Expires/i.test(src), 'NOTHING PRESIGNS A URL: no link to the bucket ever leaves the server');
 check(/await files\(\)\.put\(blobKey\(hash\), opts\.content\)/.test(read('apps/server/src/artifacts.ts')) && /await files\(\)\.get\(blobKey\(row\.a\.storageKey\)\)/.test(read('apps/server/src/artifacts.ts')), 'uploads and reads go through the configured store, by content key');
-check(!/delete|DELETE/.test(read('apps/server/src/file-store.ts').replace(/never deletes|never deleted/g, '')), 'the store has no delete: write once, never removed by Fabrikka');
+{
+  // M67 (ADR 0061) gave the store a delete, for profile pictures only.
+  const fsrc = read('apps/server/src/file-store.ts');
+  const removers = (fsrc.match(/if \(!key\.startsWith\('avatars\/'\)\) throw new FileStoreError/g) ?? []).length;
+  const callers = ['apps/server/src/artifacts.ts', 'apps/server/src/retention.ts', 'apps/server/src/backup.ts', 'apps/server/src/cli.ts'].filter((f) => /\.remove\(/.test(read(f)));
+  check(removers === 2 && callers.length === 0, "A ROOM'S FILES ARE NEVER REMOVED: both stores refuse any key outside avatars/, and nothing but pictures calls remove");
+}
 check(/await files\(\)\.check\(\);[\s\S]{0,400}process\.exit\(1\);[\s\S]{0,200}await runMigrations\(db\)/.test(app), 'the store is checked before anything else at start');
 
 /* ------------------------------------------------ 2. a store that does not answer */

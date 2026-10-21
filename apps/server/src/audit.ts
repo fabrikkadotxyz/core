@@ -32,6 +32,8 @@ export const AUDIT_ACTIONS = [
   'email.verified',
   'email.change_requested',
   'email.changed',
+  'profile.picture_changed',
+  'profile.picture_removed',
   'team.created',
   'team.member_removed',
   'team.audit_days_changed',

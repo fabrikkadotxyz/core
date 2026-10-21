@@ -14,6 +14,7 @@
 import { Link } from 'react-router-dom';
 import type { SessionSummary } from '@fabrikka/types';
 import { Mark } from '../components/Mark.tsx';
+import { Face } from '../components/Face.tsx';
 import { useAuth } from '../auth-context.tsx';
 import { useWorkspace } from './workspace.tsx';
 
@@ -106,7 +107,7 @@ export function Rail({ place, onPick }: { place: Place; onPick: (p: Place) => vo
       })}
       <span className="rail-spacer" />
       <button type="button" className="rail-account" title={`@${user?.ownerSlug ?? ''} · Settings`} aria-label="Your account, in Settings" onClick={() => onPick('settings')}>
-        {initial}
+        {user ? <Face name={user.displayName || user.ownerSlug} seed={user.id} url={user.avatarUrl} size="md" /> : initial}
       </button>
     </nav>
   );

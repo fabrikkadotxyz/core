@@ -6,12 +6,80 @@
  * "former-member". The account is deactivated at once; signing in within the
  * grace period cancels the deletion. docs/security.md, "Leaving".
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AuditEventView } from '@fabrikka/types';
 import { auth } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { describe } from './ActivityPage.tsx';
+import { Face } from '../components/Face.tsx';
+import { PictureError, squarePicture } from '../picture.ts';
+
+/** M67 (ADR 0061): your picture, or your initials on your colour. */
+function WhoYouAre() {
+  const { user, setUser } = useAuth();
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!user) return null;
+
+  const choose = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { avatarUrl } = await auth.setPicture(await squarePicture(file));
+      setUser({ ...user, avatarUrl });
+    } catch (err) {
+      setError(err instanceof PictureError ? err.message : (err as Error).message);
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = '';
+    }
+  };
+  const remove = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await auth.removePicture();
+      setUser({ ...user, avatarUrl: null });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section aria-label="Who you are">
+      <h2>Who you are</h2>
+      <div className="who-you-are">
+        <Face name={user.displayName} seed={user.id} url={user.avatarUrl} size="lg" />
+        <div className="stack">
+          <strong>{user.displayName}</strong>
+          <div className="picture-actions">
+            <button type="button" disabled={busy} onClick={() => input.current?.click()}>
+              {busy ? 'Saving…' : user.avatarUrl ? 'Change picture' : 'Choose a picture'}
+            </button>
+            {user.avatarUrl && (
+              <button type="button" className="link small" disabled={busy} onClick={remove}>
+                Remove
+              </button>
+            )}
+            <input ref={input} type="file" accept="image/*" hidden onChange={(e) => choose(e.target.files?.[0])} />
+          </div>
+        </div>
+      </div>
+      {error && <p className="error small" role="alert">{error}</p>}
+      <p className="muted small">
+        {user.avatarUrl
+          ? 'People in your rooms and organizations see it next to your name.'
+          : 'Without a picture, people see your initials on a colour.'}{' '}
+        It is cropped square and made small here, in your browser, which also removes where a photo was taken. Your name in a room can differ: rename yourself there, in People.
+      </p>
+    </section>
+  );
+}
 
 /** M60 (ADR 0058): what you did, and what was done to you, anywhere. */
 function MyActivity() {
@@ -226,13 +294,7 @@ export function Account() {
 
   return (
     <>
-      <section aria-label="Who you are">
-        <h2>Who you are</h2>
-        <p>
-          <strong>{user.displayName}</strong>
-        </p>
-        <p className="muted small">Your name in a room can differ: rename yourself there, in People.</p>
-      </section>
+      <WhoYouAre />
 
       <YourEmail />
 

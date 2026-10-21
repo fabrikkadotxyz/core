@@ -31,6 +31,7 @@ import {
 } from '@fabrikka/db';
 import { auditForUser } from './audit.ts';
 import { zip } from './zip.ts';
+import { avatarForExport } from './avatars.ts';
 
 export type ExportResult = { ok: true; filename: string; data: Buffer } | { ok: false; error: string; status: 401 | 404 };
 
@@ -50,6 +51,7 @@ export async function exportAccount(db: Database, userId: string, password: stri
     emailVerifiedAt: u.emailVerifiedAt,
     isInstanceOwner: u.isInstanceOwner,
     theme: u.theme,
+    hasPicture: u.avatarKey !== null,
     preferredAgents: u.preferredAgents,
     wantedAgents: u.wantedAgents,
     deactivatedAt: u.deactivatedAt,
@@ -147,6 +149,7 @@ Exported ${exportedAt} for ${u.email} (${u.displayName}).
 What is here is what this instance holds about you:
 
 - profile.json: your account, as it is now. No password: only a hash is ever stored, and it is not here.
+- picture.webp (or .png, .jpg): your profile picture, if you set one.
 - organizations.json, rooms.json: where you are, with your role and since when; guest-of.json, rooms you may read.
 - messages.json: every message you wrote, with the room and the name you wrote it under.
 - edits.json, comments.json: documents you edited (counts of lines, not the text, which is the room's record) and comments you made.
@@ -160,7 +163,11 @@ A room's full record is exported by its owner from the room. Fabrikka's privacy 
 `;
 
   const json = (v: unknown) => JSON.stringify(v, null, 2) + '\n';
+  // M67: the picture is theirs too, as it is stored.
+  const picture = await avatarForExport(db, userId);
+  const pictureExt = picture ? ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' } as Record<string, string>)[picture.type] ?? 'img' : null;
   const data = zip([
+    ...(picture ? [{ path: `picture.${pictureExt}`, data: picture.bytes }] : []),
     { path: 'README.md', data: readme },
     { path: 'profile.json', data: json(profile) },
     { path: 'organizations.json', data: json(organizations.map((o) => ({ ...o, own: o.own === userId }))) },

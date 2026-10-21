@@ -11,6 +11,7 @@ import type { TeamDetail } from '@fabrikka/types';
 import { teams, ApiError } from '../api.ts';
 import { useAuth } from '../auth-context.tsx';
 import { useWorkspace } from '../shell/workspace.tsx';
+import { Face } from '../components/Face.tsx';
 
 export function OrganizationPeople({ teamId: id }: { teamId: string }) {
   const { user } = useAuth();
@@ -91,7 +92,8 @@ export function OrganizationPeople({ teamId: id }: { teamId: string }) {
     <ul className="session-list">
       {team.members.map((m) => (
         <li key={m.userId} className="team-member">
-          <span>
+          <span className="team-member-name">
+            <Face name={m.displayName} seed={m.userId} url={m.avatarUrl} />
             <strong>{m.displayName}</strong>{' '}
             {m.account ? (
               <span className="badge" title={m.account === 'deleted' ? 'This account was deleted. What they wrote stays.' : 'This account cannot sign in.'}>

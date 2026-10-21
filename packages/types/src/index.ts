@@ -33,6 +33,10 @@ export interface Participant {
   status?: ConnectionStatus;
   /** M15 slice 1: with `blocked`, what the agent waits on (reason, redacted detail). */
   blocked?: { reason: string | null; detail: string | null } | null;
+  /** M67: a person's account, which their face's colour is taken from; null for agents. */
+  userId?: string | null;
+  /** M67 (ADR 0061): the person's picture, or null for initials. Agents never have one. */
+  avatarUrl?: string | null;
 }
 
 /**
@@ -428,7 +432,7 @@ export interface SessionView {
   /** private | team (M22). */
   visibility: SessionVisibility;
   /** Guests of this session (M22) — present for owners only. */
-  guests?: { userId: string; displayName: string; email: string }[];
+  guests?: { userId: string; displayName: string; email: string; avatarUrl?: string | null }[];
   /** The ready-to-paste `claude mcp add` command. See docs/protocol.md. */
   mcpEndpoint: string;
 }
@@ -450,6 +454,8 @@ export interface AuthUser {
   isInstanceOwner: boolean;
   /** M64: the address was proven by a link, or vouched for by the deployment or the operator. */
   emailVerified: boolean;
+  /** M67 (ADR 0061): their picture, or null for initials. Absent where a builder predates it. */
+  avatarUrl?: string | null;
 }
 
 export interface Member {
@@ -465,6 +471,8 @@ export interface Member {
   participantName?: string | null;
   /** M58: their account left; shown with a mark. */
   account?: AccountMark;
+  /** M67: their picture, or null for initials. */
+  avatarUrl?: string | null;
 }
 
 export interface SessionSummary {
@@ -619,6 +627,8 @@ export interface TeamMember {
   role: TeamRole;
   /** M58: their account left; shown with a mark. */
   account?: AccountMark;
+  /** M67: their picture, or null for initials. */
+  avatarUrl?: string | null;
 }
 
 export interface TeamDetail {

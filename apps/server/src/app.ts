@@ -133,6 +133,7 @@ import { loginThrottle } from './login-throttle.ts';
 import { AUDIT_DAYS, audit, auditCsv, auditForTeam, auditForUser, getAuditDays, pruneAudit, setAuditDays, userIdFor, type AuditInput } from './audit.ts';
 import { BACKUP_KEEP_DAYS, createBackup, pruneBackups } from './backup.ts';
 import { files } from './file-store.ts';
+import { MAX_AVATAR_BYTES, readAvatar, removeAvatar, setAvatar } from './avatars.ts';
 import { exportAccount } from './account-export.ts';
 import { getRetention, pruneRetention, RETENTION_DAYS, setRetention, summarize as summarizeRetention } from './retention.ts';
 import { completeVerification, requestVerification, verificationRequired } from './verification.ts';
@@ -565,6 +566,41 @@ export function createApp(options: CreateAppOptions = {}) {
       'content-type': file.type,
       'x-content-type-options': 'nosniff',
       'cache-control': path.endsWith('.css') ? 'no-cache' : 'public, max-age=86400',
+    });
+  });
+
+  /* ---- profile pictures (M67, ADR 0061) ---- */
+
+  app.post('/api/me/avatar', requireUser(db), async (c) => {
+    const form = await c.req.parseBody().catch(() => null);
+    const file = form?.file;
+    if (!(file instanceof File)) return c.json({ error: 'no file provided' }, 400);
+    if (file.size > MAX_AVATAR_BYTES) return c.json({ error: `a picture is limited to ${MAX_AVATAR_BYTES / 1024} KB` }, 413);
+    const result = await setAvatar(db, c.get('user').id, Buffer.from(await file.arrayBuffer()));
+    if (!result.ok) return c.json({ error: result.error }, result.status);
+    trail(c, { action: 'profile.picture_changed', actorUserId: c.get('user').id, subjectUserId: c.get('user').id });
+    return c.json({ avatarUrl: result.avatarUrl });
+  });
+
+  app.delete('/api/me/avatar', requireUser(db), async (c) => {
+    if (await removeAvatar(db, c.get('user').id)) {
+      trail(c, { action: 'profile.picture_removed', actorUserId: c.get('user').id, subjectUserId: c.get('user').id });
+    }
+    return c.json({ avatarUrl: null });
+  });
+
+  // Content-addressed, so immutable. Signed in only: the address is shown only
+  // where the person is, and the payload that shows it checked membership.
+  app.get('/api/avatars/:hash', requireUser(db), async (c) => {
+    const found = await readAvatar(db, c.req.param('hash'));
+    if (!found) return c.notFound();
+    return new Response(new Uint8Array(found.bytes), {
+      headers: {
+        'content-type': found.type,
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'",
+        'cache-control': 'private, max-age=31536000, immutable',
+      },
     });
   });
 

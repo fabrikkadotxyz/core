@@ -39,6 +39,7 @@ import {
 } from '@fabrikka/db';
 
 import { audit } from './audit.ts';
+import { releaseAvatar } from './avatars.ts';
 
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
@@ -241,7 +242,7 @@ export function onUserDeleted(listener: DeletedListener): void {
 /** Delete now. Idempotent on an already deleted account (returns null). */
 export async function deleteUserNow(db: Database, userId: string): Promise<DeletionReport | null> {
   const [row] = await db
-    .select({ id: users.id, deletedAt: users.deletedAt, eraseName: users.eraseName, displayName: users.displayName })
+    .select({ id: users.id, deletedAt: users.deletedAt, eraseName: users.eraseName, displayName: users.displayName, avatarKey: users.avatarKey })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -312,6 +313,9 @@ export async function deleteUserNow(db: Database, userId: string): Promise<Delet
         theme: null,
         preferredAgents: null,
         wantedAgents: null,
+        // M67 (ADR 0061): the picture is personal data, gone whether or not the name stays.
+        avatarKey: null,
+        avatarType: null,
         isInstanceOwner: false,
         displayName: eraseName ? FORMER_MEMBER : row.displayName,
         ownerSlug: eraseName ? `${FORMER_MEMBER}-${userId.slice(0, 8)}` : undefined,
@@ -323,6 +327,7 @@ export async function deleteUserNow(db: Database, userId: string): Promise<Delet
     return { ...p, userId, eraseName, participantsRenamed } satisfies DeletionReport;
   });
 
+  await releaseAvatar(db, row.avatarKey, userId);
   for (const listener of deletedListeners) {
     try {
       await listener({ userId, teamIds: report.teamIds });

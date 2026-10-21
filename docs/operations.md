@@ -491,6 +491,11 @@ Files are named by the **SHA-256 of their content**, sharded two levels deep
 Downloads always go through the server and the room's membership check: no
 presigned URL, no public bucket.
 
+**Profile pictures** (M67, ADR 0061) live in the same store under
+`avatars/`, at most 512 KB each, and are the one thing Fabrikka deletes from
+it: when replaced, removed, or their account deleted. They are in the backup
+and in `files copy` like everything else.
+
 Limits: 10 MB per file. Deleting an artifact removes the row but **leaves the
 blob**, because another artifact may reference the same content; at MVP scale we
 do not collect that garbage, and say so rather than letting you discover it.

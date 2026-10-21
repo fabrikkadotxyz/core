@@ -1913,6 +1913,16 @@ body.resizing-sidebar { cursor: col-resize; user-select: none; }
   --frame: linear-gradient(120deg, var(--powder-blue), var(--dusk-blue) 60%, var(--burnt-peach));
   --stripe: linear-gradient(180deg, var(--powder-blue), var(--dusk-blue));
   --team-initial: linear-gradient(135deg, var(--light-cyan) 0%, var(--powder-blue) 60%, #f3a58e 100%);
+  /* M67 (ADR 0061): a face without a picture is two letters on one of these. */
+  --face-1: #3d5a80;
+  --face-2: #c4492b;
+  --face-3: #2e7d5b;
+  --face-4: #8a5a00;
+  --face-5: #6a4c93;
+  --face-6: #1f7a8c;
+  --face-7: #b0306a;
+  --face-8: #4a6fa5;
+  --on-face: #ffffff;
   --hover-border: var(--powder-blue);
 
   /* The banner: a page's title */
@@ -2657,3 +2667,25 @@ details.notes[open] > summary::before { content: '▾ '; }
 .notes-add input:first-child { flex: 1; }
 .notes-add .notes-tag { flex: 0 0 6.5em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8em; }
 .notes-list .badge { margin-left: 0; margin-right: 0.3rem; }
+
+/* ---- M67: faces (ADR 0061). A picture, or two letters on a colour; agents are squares. ---- */
+.face {
+  display: inline-grid; place-items: center; flex-shrink: 0; overflow: hidden;
+  width: 24px; height: 24px; border-radius: 50%;
+  color: var(--on-face); font-weight: 700; font-size: 0.62rem; letter-spacing: 0.02em; line-height: 1;
+  user-select: none; vertical-align: middle;
+}
+.face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.face-agent { border-radius: 28%; }
+.face-xs { width: 18px; height: 18px; font-size: 0.5rem; }
+.face-md { width: 30px; height: 30px; font-size: 0.75rem; }
+.face-lg { width: 72px; height: 72px; font-size: 1.5rem; }
+.msg .meta .face { margin-right: 0.1rem; }
+.participants li > span:first-child { display: inline-flex; align-items: center; gap: 0.45rem; flex-shrink: 0; max-width: 58%; }
+.participants li .face-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.participants li > .role { flex: 1 1 0; min-width: 0; }
+.rail-account .face { width: 100%; height: 100%; font-size: 0.7rem; }
+.rail-account:has(.face) { padding: 0; overflow: hidden; }
+.who-you-are { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.who-you-are .picture-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.team-member-name { display: inline-flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }

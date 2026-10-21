@@ -426,6 +426,18 @@ derived from the records it describes (devices, rooms, agents, messages,
 invites, team members, connections), like unread. The migration sets
 `welcomed_at` for every existing account, so only new ones see the welcome.
 
+### M67 — profile pictures (ADR 0061)
+
+```
+users  (additions, migration 0047)
+  avatar_key   text   -- SHA-256 of the picture; the bytes are at avatars/ab/cd/<hash> in the file store. Null: initials
+  avatar_type  text   -- image/png | image/jpeg | image/webp, recognised from the bytes
+```
+
+Content-addressed, so a new picture is a new key. Replacing or removing one,
+and deleting the account, deletes the blob unless another account holds the
+same hash. A deleted account's tombstone has both null.
+
 ### M58 — leaving (ADR 0057)
 
 ```

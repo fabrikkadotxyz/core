@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import type { OutputEdit } from '@fabrikka/types';
 import { sessions, type SessionRef } from '../api.ts';
 import { timeAgo } from './Outputs.tsx';
-import { colorFor } from './sync.ts';
+import { Face } from '../components/Face.tsx';
 
 /* -------------------------------------------------------------------------- */
 /* History                                                                    */
@@ -48,9 +48,7 @@ export function History({
       {edits.map((e) => (
         <li key={e.id} className={open === e.id ? 'open' : ''}>
           <button className="history-row" onClick={() => setOpen(open === e.id ? null : e.id)}>
-            <span className="avatar" style={{ background: colorFor(e.participantId ?? e.displayName) }}>
-              {e.displayName.slice(0, 1).toUpperCase()}
-            </span>
+            <Face name={e.displayName} seed={e.participantId ?? e.displayName} agent={e.participantKind === 'agent'} size="xs" />
             <span className="history-who">
               @{e.displayName}
               {e.participantKind === 'agent' && <span className="badge">agent</span>}

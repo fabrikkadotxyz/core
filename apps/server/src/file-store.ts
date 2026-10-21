@@ -4,11 +4,12 @@
  * stores hold the same keys, the content hash sharded `ab/cd/<hash>`, so
  * moving between them is a copy and the database never changes.
  *
- * Content-addressed and write-once: a key's bytes never change, and Fabrikka
- * never deletes one (another row may share it). docs/operations.md, "Files".
+ * Content-addressed and write-once: a key's bytes never change. A room's files
+ * are never removed (another row may share them); only profile pictures are,
+ * under avatars/ (ADR 0061). docs/operations.md, "Files".
  */
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import { createS3Client, type S3Config } from './s3.ts';
 
@@ -22,6 +23,8 @@ export interface FileStore {
   put(key: string, bytes: Buffer): Promise<void>;
   /** Every key in the store. */
   list(): AsyncIterable<string>;
+  /** Profile pictures only (ADR 0061): a room's files are never removed. */
+  remove(key: string): Promise<void>;
   /** Prove the store can be written and read. Throws with the reason. */
   check(): Promise<void>;
 }
@@ -32,6 +35,11 @@ export class FileStoreError extends Error {}
 export function blobKey(hash: string): string {
   if (!/^[0-9a-f]{64}$/.test(hash)) throw new FileStoreError(`not a content hash: ${hash}`);
   return `${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}`;
+}
+
+/** A profile picture's key (ADR 0061): its own tree, the one that may be deleted from. */
+export function avatarKey(hash: string): string {
+  return `avatars/${blobKey(hash)}`;
 }
 
 /** The default directory: `.artifacts/` in the repository root. */
@@ -61,6 +69,10 @@ export function diskStore(dir: string): FileStore {
         if (key !== CHECK_KEY) yield key;
       }
     },
+    async remove(key) {
+      if (!key.startsWith('avatars/')) throw new FileStoreError(`only profile pictures are removed, not ${key}`);
+      await rm(path(key), { force: true });
+    },
     async check() {
       await mkdir(dir, { recursive: true });
     },
@@ -80,6 +92,10 @@ export function s3Store(cfg: S3Config): FileStore {
     },
     async *list() {
       for await (const key of s3.list()) if (key !== CHECK_KEY) yield key;
+    },
+    async remove(key) {
+      if (!key.startsWith('avatars/')) throw new FileStoreError(`only profile pictures are removed, not ${key}`);
+      await s3.remove(key);
     },
     async check() {
       const probe = Buffer.from(`fabrikka ${new Date().toISOString()}\n`);

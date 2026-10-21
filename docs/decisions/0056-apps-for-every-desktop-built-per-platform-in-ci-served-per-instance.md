@@ -51,8 +51,9 @@ instance serves.
 
 **3. Two installers, the same behaviour.**
 
-- `install.sh` stays the line for macOS and Linux. `--app` reads `uname` and
-  installs the app for that platform: the Mac zip into `~/Applications` as
+- `install.sh` stays the line for macOS and Linux. It reads `uname` and,
+  when the instance serves the app for that platform, installs it (amended
+  2026-10-21, below; before, only with `--app`): the Mac zip into `~/Applications` as
   before; the AppImage into `~/.local/bin/fabrikka-app`, executable, with a
   `.desktop` entry so it shows in the launcher. It writes the server address
   into the app's settings folder for that platform, then opens the app.
@@ -106,3 +107,20 @@ per platform; the official route is one runner per target.
 **A single `install.sh` that handles Windows through WSL or Git Bash.** Most
 Windows machines have PowerShell and nothing else; the one-liner people know
 there is `irm … | iex`.
+
+## Amendment (2026-10-21): the app is the default on every desktop
+
+With the first release (`app-v0.1.0`) every desktop platform has an app, and
+the plain line, `curl -fsSL <instance>/install.sh | bash`, should get people
+the thing that needs nothing else. So `install.sh` now behaves like
+`install.ps1`:
+
+- **No option:** the app, if the instance serves one for this computer's
+  platform (it asks for the file's `.sha256`); otherwise the command-line
+  client, saying why.
+- **`--client`:** the command-line client, always (Node 22 or newer).
+- **`--app`:** the app or nothing, as before.
+
+*Your devices* says which one the line installs, from the platforms the
+instance serves. Checks that install the client from a checkout that may
+hold a built app pass `--client`.

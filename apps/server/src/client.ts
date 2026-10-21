@@ -152,7 +152,10 @@ export function installScript(publicUrl: string): string {
 # without sudo: never Node, never an agent runtime. Fabrikka is free software
 # under the GNU AGPL v3 (https://www.gnu.org/licenses/agpl-3.0.html).
 # Options, after "| bash -s --":
-#   --app              install the desktop app for this computer instead (macOS or Linux); no Node needed
+# With no option it installs the desktop app when this server has one for this
+# computer (macOS or Linux; no Node needed), and the command-line client otherwise.
+#   --client           install the command-line client (needs Node.js 22 or newer)
+#   --app              install the desktop app, or stop if there is none for this computer
 #   --no-connect       install only; don't start the host (or open the app)
 #   --no-modify-path   don't add ~/.local/bin to your shell's startup file
 set -eu
@@ -165,10 +168,11 @@ die() { printf 'fabrikka: %s\\n' "$*" >&2; exit 1; }
 main() {
   connect=1
   modify_path=1
-  app=0
+  want=auto
   for arg in "$@"; do
     case "$arg" in
-      --app) app=1 ;;
+      --app) want=app ;;
+      --client) want=client ;;
       --no-connect) connect=0 ;;
       --no-modify-path) modify_path=0 ;;
       *) die "unknown option: $arg" ;;
@@ -182,7 +186,10 @@ main() {
     *) die "refusing to install from $FABRIKKA_SERVER: it isn't https" ;;
   esac
 
-  if [ "$app" = 1 ]; then
+  if [ "$want" = auto ]; then
+    if has_app; then want=app; else want=client; fi
+  fi
+  if [ "$want" = app ]; then
     install_app
     return
   fi
@@ -248,17 +255,31 @@ main() {
   say "done. Connect this computer with: fabrikka host"
 }
 
+# The app's file for this computer's platform, or nothing.
+app_file() {
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64) echo ${APP_PLATFORMS['darwin-arm64']} ;;
+    Darwin-x86_64) echo ${APP_PLATFORMS['darwin-x64']} ;;
+    Linux-x86_64) echo ${APP_PLATFORMS['linux-x64']} ;;
+    *) return 1 ;;
+  esac
+}
+
+# ADR 0056, amended: with no option, the app when this server serves one here.
+has_app() {
+  file=$(app_file) || return 1
+  command -v curl >/dev/null 2>&1 || return 1
+  if curl -fsSL -o /dev/null "$FABRIKKA_SERVER/downloads/$file.sha256"; then return 0; fi
+  say "this server has no desktop app for this computer, so this installs the command-line client"
+  return 1
+}
+
 # The desktop app (M34, ADR 0031; every desktop since M57, ADR 0056): it
 # carries its own Node, so nothing here needs one. The checksum is the
 # system's; the file is the one for this computer's platform.
 install_app() {
   os=$(uname -s); arch=$(uname -m)
-  case "$os-$arch" in
-    Darwin-arm64) file=${APP_PLATFORMS['darwin-arm64']} ;;
-    Darwin-x86_64) file=${APP_PLATFORMS['darwin-x64']} ;;
-    Linux-x86_64) file=${APP_PLATFORMS['linux-x64']} ;;
-    *) die "no desktop app for $os on $arch yet. Run this again without --app to install the command-line client." ;;
-  esac
+  file=$(app_file) || die "no desktop app for $os on $arch yet. Run this again with --client to install the command-line client."
   command -v curl >/dev/null 2>&1 || die "curl is needed"
   if command -v shasum >/dev/null 2>&1; then sum() { shasum -a 256 "$1" | cut -d' ' -f1; }
   elif command -v sha256sum >/dev/null 2>&1; then sum() { sha256sum "$1" | cut -d' ' -f1; }
@@ -267,7 +288,7 @@ install_app() {
   url="$FABRIKKA_SERVER/downloads/$file"
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
-  curl -fsSL "$url.sha256" -o "$tmp/app.sha256" || die "this server has no desktop app for $os on $arch. Run this again without --app to install the command-line client."
+  curl -fsSL "$url.sha256" -o "$tmp/app.sha256" || die "this server has no desktop app for $os on $arch. Run this again with --client to install the command-line client."
   expected=$(cut -d' ' -f1 < "$tmp/app.sha256")
   say "downloading the desktop app from $FABRIKKA_SERVER"
   curl -fsSL "$url" -o "$tmp/$file" || die "the download failed"

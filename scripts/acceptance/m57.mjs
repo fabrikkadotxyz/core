@@ -37,9 +37,14 @@ const rs = read('apps/desktop/src-tauri/src/main.rs');
 check(/let sep = if cfg!\(windows\) \{ ';' \} else \{ ':' \};/.test(rs) && /APPDATA[\s\S]*?npm/.test(rs), "the host's search PATH uses the platform's separator and Windows's npm folder");
 const client = read('apps/server/src/client.ts');
 check(/'darwin-x64': 'Fabrikka-macos-x64\.zip'/.test(client) && /'linux-x64': 'Fabrikka-linux-x64\.AppImage'/.test(client) && /'windows-x64': 'Fabrikka-windows-x64-setup\.exe'/.test(client), 'the server knows the four files');
-check(/Darwin-x86_64\) file=\$\{APP_PLATFORMS\['darwin-x64'\]\}/.test(client) && /Linux-x86_64\) file=\$\{APP_PLATFORMS\['linux-x64'\]\}/.test(client) && /install_app_linux\(\)/.test(client) && /fabrikka\.desktop/.test(client), 'install.sh --app reads uname: the Mac zip, or the AppImage with a launcher entry');
+check(/Darwin-x86_64\) echo \$\{APP_PLATFORMS\['darwin-x64'\]\}/.test(client) && /Linux-x86_64\) echo \$\{APP_PLATFORMS\['linux-x64'\]\}/.test(client) && /install_app_linux\(\)/.test(client) && /fabrikka\.desktop/.test(client), 'install.sh --app reads uname: the Mac zip, or the AppImage with a launcher entry');
 const sh = await (await fetch(`${CORE}/install.sh`)).text();
-check(/Linux-x86_64\) file=Fabrikka-linux-x64\.AppImage/.test(sh) && /no desktop app for \$os on \$arch yet/.test(sh), '…and the served script names the files');
+check(/Linux-x86_64\) echo Fabrikka-linux-x64\.AppImage/.test(sh) && /no desktop app for \$os on \$arch yet/.test(sh), '…and the served script names the files');
+// ADR 0056, amended 2026-10-21: the plain line installs the app wherever one is served.
+check(/want=auto/.test(sh) && /if has_app; then want=app; else want=client; fi/.test(sh) && /--client\) want=client ;;/.test(sh) && /--app\) want=app ;;/.test(sh), 'WITH NO OPTION, THE APP WHEN THIS SERVER HAS ONE FOR THE COMPUTER; --client and --app force one');
+check(/curl -fsSL -o \/dev\/null "\$FABRIKKA_SERVER\/downloads\/\$file\.sha256"/.test(sh) && /so this installs the command-line client/.test(sh), '…it asks for the file\'s checksum, and says so when it falls back to the client');
+check(/unixApp: \(r\.platforms \?\? \[\]\)\.some\(\(p\) => p !== 'windows-x64'\)/.test(read('apps/web/src/pages/DevicesPage.tsx')) && /-s -- --client/.test(read('apps/web/src/pages/DevicesPage.tsx')), 'Your devices says the line installs the app, and how to get the client');
+check(/## Amendment \(2026-10-21\): the app is the default on every desktop/.test(read('docs/decisions/0056-apps-for-every-desktop-built-per-platform-in-ci-served-per-instance.md')) && /\| `--client` \|/.test(read('docs/operations.md')), 'ADR 0056 and operations say so');
 const devices = read('apps/web/src/pages/DevicesPage.tsx');
 check(/macOS · Linux/.test(devices) && /Windows/.test(devices) && /browserOs/.test(devices), 'Your devices shows the line for your platform, with a switch');
 check(/M57 — Apps for every desktop/.test(read('docs/roadmap.md')) && /\| \[0056\]\(0056-apps-for-every-desktop/.test(read('docs/decisions/README.md')) && /install\.ps1/.test(read('docs/operations.md')) && /install\.ps1/.test(read('docs/security.md')), 'the roadmap, the ADR index, operations and security say so');

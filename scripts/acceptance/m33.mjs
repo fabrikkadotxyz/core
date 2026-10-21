@@ -97,7 +97,7 @@ check(!/^\s*sudo\b/m.test(script) && !/(brew|apt-get|apt|npm)\s+(i|install)\b/.t
 
 /* ------------------------------------- 3. install (no connect) */
 
-const install = (args = '') => sh(`curl -fsSL ${INSTANCE}/install.sh | bash -s -- --no-connect ${args}`, env);
+const install = (args = '') => sh(`curl -fsSL ${INSTANCE}/install.sh | bash -s -- --client --no-connect ${args}`, env);
 const first = await install();
 const launcher = join(home, '.local/bin/fabrikka');
 const file = join(home, '.local/share/fabrikka/fabrikka.mjs');
@@ -111,7 +111,7 @@ const instanceManifest = await (await fetch(`${INSTANCE}/downloads/manifest.json
 check((await sh(`"${launcher}" --version`, env)).out.trim() === instanceManifest.version, "the installed client is the instance's version");
 check(/agent tools found: Claude Code|no agent tools found/.test(first.out), 'it reports which agent tools are installed, and installs none');
 const noPath = mkdtempSync(join(tmpdir(), 'm33-home2-'));
-await sh(`curl -fsSL ${INSTANCE}/install.sh | bash -s -- --no-connect --no-modify-path`, { ...env, HOME: noPath });
+await sh(`curl -fsSL ${INSTANCE}/install.sh | bash -s -- --client --no-connect --no-modify-path`, { ...env, HOME: noPath });
 check(!existsSync(join(noPath, '.zshrc')), '--no-modify-path leaves the shell startup file alone');
 
 /* ------------------------------------- 4. a mismatched checksum installs nothing */
@@ -127,7 +127,7 @@ const fake = createServer((req, res) => {
   res.end();
 });
 await new Promise((r) => fake.listen(9197, r));
-const tampered = await sh('curl -fsSL http://localhost:9197/install.sh | bash -s -- --no-connect', { ...env, HOME: fakeHome });
+const tampered = await sh('curl -fsSL http://localhost:9197/install.sh | bash -s -- --client --no-connect', { ...env, HOME: fakeHome });
 fake.close();
 check(tampered.code !== 0 && /doesn't match its checksum/.test(tampered.out), 'A FILE THAT DOES NOT MATCH THE MANIFEST IS REFUSED…');
 check(!existsSync(join(fakeHome, '.local/bin/fabrikka')) && !existsSync(join(fakeHome, '.local/share/fabrikka/fabrikka.mjs')), '…and nothing is installed');
@@ -138,7 +138,7 @@ const insecure = script.replace(`FABRIKKA_SERVER='${CORE}'`, `FABRIKKA_SERVER='h
 const http = await sh(`bash -s -- --no-connect <<'EOF'\n${insecure}\nEOF`, env);
 check(http.code !== 0 && /isn't https/.test(http.out), 'PLAIN http:// FROM A NON-LOCAL ADDRESS IS REFUSED');
 const noNodeHome = mkdtempSync(join(tmpdir(), 'm33-nonode-'));
-const noNode = await sh(`curl -fsSL ${INSTANCE}/install.sh | bash -s -- --no-connect`, { ...env, HOME: noNodeHome, PATH: '/usr/bin:/bin' });
+const noNode = await sh(`curl -fsSL ${INSTANCE}/install.sh | bash -s -- --client --no-connect`, { ...env, HOME: noNodeHome, PATH: '/usr/bin:/bin' });
 check(noNode.code !== 0 && /needs Node\.js 22/.test(noNode.out) && !existsSync(join(noNodeHome, '.local')), 'without Node 22+, it stops with directions and installs nothing');
 
 /* ------------------------------------- 6. connect: the installer ends in pairing */
@@ -154,7 +154,7 @@ const devicesBefore = new Set((await (await api('/devices')).json()).map((d) => 
 let hostOut = '';
 // Its own process group: the installer ends by exec'ing the host, so stopping
 // the shell alone would leave the host running.
-const host = spawn('/bin/sh', ['-c', `curl -fsSL ${INSTANCE}/install.sh | bash`], { env, detached: true });
+const host = spawn('/bin/sh', ['-c', `curl -fsSL ${INSTANCE}/install.sh | bash -s -- --client`], { env, detached: true });
 host.stdout.on('data', (d) => (hostOut += d));
 host.stderr.on('data', (d) => (hostOut += d));
 let code = null;

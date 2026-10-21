@@ -233,15 +233,19 @@ command, shown with a **Copy** button under *Your devices*, is:
 curl -fsSL https://<your instance>/install.sh | bash
 ```
 
-It needs **Node 22 or newer** on the machine, and installs only Fabrikka's own
-client, into `~/.local/share/fabrikka/` with a `fabrikka` launcher in
+When the instance serves a desktop app for the computer it runs on (macOS on
+Apple Silicon or Intel, Linux x64; see *Desktop app*), it installs **the app**,
+which carries its own Node, and opens it on this instance. Otherwise it installs
+the **command-line client**, which needs **Node 22 or newer**: only Fabrikka's
+own client, into `~/.local/share/fabrikka/` with a `fabrikka` launcher in
 `~/.local/bin` (no `sudo`). It then starts `fabrikka host` already pointed at
 this instance, which opens the pairing page. Options, passed as
 `… | bash -s -- --no-connect`:
 
 | Option | Effect |
 | --- | --- |
-| `--app` | Install the desktop app for this computer instead (macOS or Linux; no Node needed). See *Desktop app*. |
+| `--client` | Install the command-line client even when an app is served (Node 22 or newer). |
+| `--app` | Install the app or nothing: stop with an error when this instance serves none for this computer. |
 | `--no-connect` | Install only; run `fabrikka host` later. |
 | `--no-modify-path` | Don't add `~/.local/bin` to `~/.zshrc` / `~/.bashrc`. |
 
@@ -586,7 +590,8 @@ checksum differs. Without the argument, the image serves no app. A checkout
 serves whatever is in `dist-app/`; copying a release's files there is enough.
 
 Install it from the instance: on a Mac or Linux, `curl -fsSL
-https://<instance>/install.sh | bash -s -- --app`; on Windows, `irm
+https://<instance>/install.sh | bash` (the app is the default whenever one is
+served for that computer); on Windows, `irm
 https://<instance>/install.ps1 | iex`. On Linux the AppImage needs `libfuse2`
 (Ubuntu: `sudo apt install libfuse2`); the installer says so when it is
 missing. The app's settings live in Tauri's config folder for the platform:

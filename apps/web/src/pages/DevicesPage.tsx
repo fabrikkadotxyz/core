@@ -21,13 +21,24 @@ const browserOs = (): 'unix' | 'windows' => (/Windows/i.test(navigator.userAgent
  * line for the computer you are on, macOS and Linux or Windows, with a switch.
  */
 export function ConnectCommand({ first }: { first: boolean }) {
-  const [commands, setCommands] = useState<{ unix: string; windows: string | null } | null | undefined>(undefined);
+  const [commands, setCommands] = useState<{ unix: string; windows: string | null; unixApp: boolean } | null | undefined>(undefined);
   const [os, setOs] = useState<'unix' | 'windows'>(browserOs);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     client
       .get()
-      .then((r) => setCommands(r.installCommand ? { unix: r.installCommand, windows: r.installCommandWindows ?? null } : null))
+      .then((r) =>
+        setCommands(
+          r.installCommand
+            ? {
+                unix: r.installCommand,
+                windows: r.installCommandWindows ?? null,
+                // ADR 0056, amended: the plain line installs the app wherever one is served.
+                unixApp: (r.platforms ?? []).some((p) => p !== 'windows-x64'),
+              }
+            : null,
+        ),
+      )
       .catch(() => setCommands(null));
   }, []);
   if (commands === undefined) return null;
@@ -72,11 +83,17 @@ export function ConnectCommand({ first }: { first: boolean }) {
           In PowerShell. It installs the Fabrikka app for your user (no Node, no admin rights), pointed at this site, and opens it. Then
           grant a folder in its Folders window, and use Setup → Add my agent in any session.
         </p>
+      ) : commands.unixApp ? (
+        <p className="muted small">
+          It installs the Fabrikka app for this computer (no Node, no admin rights), pointed at this site, and opens it. Then
+          grant a folder in its Folders window, and use Setup → Add my agent in any session. Add <code>-s -- --client</code>{' '}
+          at the end for the command-line client instead (needs Node.js 22 or newer).
+        </p>
       ) : (
         <p className="muted small">
           It needs Node.js 22 or newer, installs <code>fabrikka</code> in your home folder (no admin rights), then opens
           this site to connect: one click. Then grant a folder in the window it opens, and use Setup → Add my agent in
-          any session. Add <code>-s -- --app</code> at the end to install the desktop app instead (no Node needed).
+          any session.
         </p>
       )}
     </div>

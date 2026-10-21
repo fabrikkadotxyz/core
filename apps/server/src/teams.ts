@@ -66,23 +66,30 @@ export async function teamRole(db: Database, teamId: string, userId: string): Pr
   return (row?.role as TeamRole | undefined) ?? null;
 }
 
+/** The columns a team member is built from, and the building: one shape for the roster and the member list. */
+const memberColumns = {
+  userId: users.id,
+  displayName: users.displayName,
+  email: users.email,
+  role: teamMembers.role,
+  deactivatedAt: users.deactivatedAt,
+  deletedAt: users.deletedAt,
+  avatarKey: users.avatarKey,
+};
+
+// M58: a member whose account left is listed with the mark. M67: with their picture.
+function toTeamMember({ deactivatedAt, deletedAt, avatarKey, ...r }: { userId: string; displayName: string; email: string; role: string; deactivatedAt: Date | null; deletedAt: Date | null; avatarKey: string | null }): TeamMember {
+  return { ...r, role: r.role as TeamRole, account: accountMark({ deactivatedAt, deletedAt }), avatarUrl: avatarUrl(avatarKey) };
+}
+
 export async function listTeamMembers(db: Database, teamId: string): Promise<TeamMember[]> {
   const rows = await db
-    .select({
-      userId: users.id,
-      displayName: users.displayName,
-      email: users.email,
-      role: teamMembers.role,
-      deactivatedAt: users.deactivatedAt,
-      deletedAt: users.deletedAt,
-      avatarKey: users.avatarKey,
-    })
+    .select(memberColumns)
     .from(teamMembers)
     .innerJoin(users, eq(users.id, teamMembers.userId))
     .where(eq(teamMembers.teamId, teamId))
     .orderBy(asc(users.displayName));
-  // M58: a member whose account left is listed with the mark.
-  return rows.map(({ deactivatedAt, deletedAt, avatarKey, ...r }) => ({ ...r, role: r.role as TeamRole, account: accountMark({ deactivatedAt, deletedAt }), avatarUrl: avatarUrl(avatarKey) }));
+  return rows.map(toTeamMember);
 }
 
 export async function getTeam(db: Database, teamId: string, userId: string): Promise<TeamDetail | null> {
@@ -154,20 +161,12 @@ export async function roster(db: Database, sessionId: string): Promise<TeamMembe
     .from(sessionMembers)
     .where(eq(sessionMembers.sessionId, sessionId));
   const rows = await db
-    .select({
-      userId: users.id,
-      displayName: users.displayName,
-      email: users.email,
-      role: teamMembers.role,
-      deactivatedAt: users.deactivatedAt,
-      deletedAt: users.deletedAt,
-      avatarKey: users.avatarKey,
-    })
+    .select(memberColumns)
     .from(teamMembers)
     .innerJoin(users, eq(users.id, teamMembers.userId))
     .where(and(eq(teamMembers.teamId, team.id), notInArray(teamMembers.userId, inSession)))
     .orderBy(asc(users.displayName));
-  return rows.map(({ deactivatedAt, deletedAt, avatarKey, ...r }) => ({ ...r, role: r.role as TeamRole, account: accountMark({ deactivatedAt, deletedAt }), avatarUrl: avatarUrl(avatarKey) }));
+  return rows.map(toTeamMember);
 }
 
 /** Add a teammate from the roster. Refused for anyone not on the session's team. */

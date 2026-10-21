@@ -24,7 +24,6 @@ import type {
   DeviceSummary,
   TemplateSummary,
   CatchUp,
-  WaitingItem,
   HomeView,
   OutputComment,
   TeamDetail,
@@ -205,7 +204,6 @@ export const invites = {
 /* ---------------------------------------------------- personal integrations */
 
 export const chats = {
-  ofTeam: (teamId: string) => call<SessionSummary[]>(`/teams/${teamId}/chats`),
   create: (teamId: string, name: string) => call<SessionSummary>(`/teams/${teamId}/chats`, { method: 'POST', body: { name } }),
   /** Open (or create) the 1:1 chat with someone you share a team with. */
   direct: (userId: string) => call<SessionSummary>('/directs', { method: 'POST', body: { userId } }),
@@ -301,7 +299,6 @@ export const connections = {
   grantDefaults: () => call<{ defaults: { slug: string; name: string; tools: string[]; updatedAt: string }[] }>('/me/grant-defaults'),
   saveGrantDefault: (slug: string, tools: string[]) =>
     call<{ ok: true; tools: number }>(`/me/grant-defaults/${encodeURIComponent(slug)}`, { method: 'PUT', body: { tools } }),
-  removeGrantDefault: (slug: string) => call<{ ok: true }>(`/me/grant-defaults/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
 };
 
 /** M30: the team's shared connections. Owners manage them; members see they exist. */
@@ -377,10 +374,6 @@ export const sessions = {
     call<SessionSummary>(`${base(ref)}/spin-off`, { method: 'POST', body: { title } }),
   /** M27: the export download — a plain link, so the browser handles the file. */
   exportUrl: (ref: SessionRef) => `/api${base(ref)}/export`,
-  /** M25: the template this session started from, and saving it as one. */
-  template: (ref: SessionRef) => call<TemplateSummary | null>(`${base(ref)}/template`),
-  saveTemplate: (ref: SessionRef, body: { name: string; description?: string; teamId?: string | null }) =>
-    call<TemplateSummary>(`${base(ref)}/template`, { method: 'POST', body }),
   /** M21: the session's team, who can be added from it, and adding them. */
   team: (ref: SessionRef) => call<{ id: string; name: string } | null>(`${base(ref)}/team`),
   roster: (ref: SessionRef) => call<TeamMember[]>(`${base(ref)}/roster`),
@@ -433,7 +426,6 @@ export const sessions = {
   revokeToken: (ref: SessionRef, id: string) =>
     call<{ ok: true }>(`${base(ref)}/tokens/${id}/revoke`, { method: 'POST' }),
 
-  pauseState: (ref: SessionRef) => call<PauseState>(`${base(ref)}/pause`),
   pauseAgents: (ref: SessionRef) =>
     call<PauseState & { connectionsAskedToAbort: number }>(`${base(ref)}/pause`, {
       method: 'POST',
@@ -543,8 +535,6 @@ export const sessions = {
   seenOnLeave: (ref: SessionRef) => {
     void fetch(`/api${base(ref)}/seen`, { method: 'POST', credentials: 'same-origin', keepalive: true }).catch(() => {});
   },
-  /** M24: mentions of you across your sessions, since you last opened each. */
-  waiting: () => call<WaitingItem[]>('/waiting'),
   /** M56: the home, in one answer. */
   home: () => call<HomeView>('/me/home'),
   /** M23: comments on an output. Viewers and guests may write these. */

@@ -183,5 +183,3 @@ export function createS3Client(cfg: S3Config, doFetch: typeof fetch = fetch) {
     },
   };
 }
-
-export type S3Client = ReturnType<typeof createS3Client>;

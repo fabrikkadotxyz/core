@@ -8,7 +8,7 @@
  *
  * See docs/decisions/0012-halt-is-server-side-termination-is-cooperative.md.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import { sessionTurnBudget, sessions } from '@fabrikka/db';
 import { publish } from './bus.ts';
@@ -32,20 +32,17 @@ export async function pauseState(
   db: Database,
   sessionId: string,
 ): Promise<PauseState> {
-  const [session] = await db
-    .select({
-      pausedAt: sessions.agentsPausedAt,
-      reason: sessions.agentsPausedReason,
-    })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1);
-
-  const [budget] = await db
-    .select()
-    .from(sessionTurnBudget)
-    .where(eq(sessionTurnBudget.sessionId, sessionId))
-    .limit(1);
+  const [[session], [budget]] = await Promise.all([
+    db
+      .select({
+        pausedAt: sessions.agentsPausedAt,
+        reason: sessions.agentsPausedReason,
+      })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .limit(1),
+    db.select().from(sessionTurnBudget).where(eq(sessionTurnBudget.sessionId, sessionId)).limit(1),
+  ]);
 
   const fresh = !budget || Date.now() - budget.windowStart.getTime() >= WINDOW_MS;
 

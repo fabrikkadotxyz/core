@@ -114,8 +114,14 @@ export function Devices() {
   }, []);
   useEffect(() => {
     load();
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
+    // Nobody is looking at a hidden tab: poll only while visible, and catch up on return.
+    const t = setInterval(() => document.visibilityState === 'visible' && load(), 5000);
+    const onShow = () => document.visibilityState === 'visible' && load();
+    document.addEventListener('visibilitychange', onShow);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onShow);
+    };
   }, [load]);
 
   return (

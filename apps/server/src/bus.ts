@@ -59,7 +59,3 @@ export function publish(sessionId: string, event: ServerEvent): void {
     }
   }
 }
-
-export function subscriberCount(sessionId: string): number {
-  return subscribers.get(sessionId)?.size ?? 0;
-}

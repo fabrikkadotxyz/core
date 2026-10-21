@@ -88,6 +88,8 @@ export function insertBlock(view: EditorView, text: string, select?: string) {
   return true;
 }
 
+/** One empty list for every editor without errors, so a re-render is not a new value to dispatch. */
+const NO_LINES: number[] = [];
 const setErrors = StateEffect.define<number[]>();
 const errorLines = StateField.define({
   create: () => Decoration.none,
@@ -120,7 +122,7 @@ export function CollabEditor({
   toolbar,
   keys = [],
   placeholder,
-  markLines = [],
+  markLines = NO_LINES,
   onView,
   readOnly = false,
 }: {

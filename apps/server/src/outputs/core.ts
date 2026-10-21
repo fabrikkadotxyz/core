@@ -100,17 +100,27 @@ export async function listOutputs(db: Database, sessionId: string): Promise<Outp
     .where(eq(outputs.sessionId, sessionId))
     .orderBy(desc(outputs.updatedAt));
 
+  // Each output's latest edit, looked up together rather than one after another.
+  const lasts = await Promise.all(
+    rows.map(({ o }) =>
+      byId.has(o.kind)
+        ? db
+            .select({ at: outputEdits.createdAt, displayName: participants.displayName })
+            .from(outputEdits)
+            .leftJoin(participants, eq(participants.id, outputEdits.participantId))
+            .where(eq(outputEdits.outputId, o.id))
+            .orderBy(desc(outputEdits.createdAt))
+            .limit(1)
+            .then(([last]) => last)
+        : undefined,
+    ),
+  );
+
   const result: Output[] = [];
-  for (const { o, authorName } of rows) {
+  for (const [i, { o, authorName }] of rows.entries()) {
     const kind = byId.get(o.kind);
     if (!kind) continue;
-    const [last] = await db
-      .select({ at: outputEdits.createdAt, displayName: participants.displayName })
-      .from(outputEdits)
-      .leftJoin(participants, eq(participants.id, outputEdits.participantId))
-      .where(eq(outputEdits.outputId, o.id))
-      .orderBy(desc(outputEdits.createdAt))
-      .limit(1);
+    const last = lasts[i];
 
     const { files, version } = kind.store.describe(o);
     result.push({

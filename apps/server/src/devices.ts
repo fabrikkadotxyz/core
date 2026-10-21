@@ -9,7 +9,7 @@
  * delivery, runs, activity and the kill switch are exactly the runner's.
  */
 import { randomBytes } from 'node:crypto';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import {
   agents,
@@ -132,13 +132,19 @@ export async function listDevices(db: Database, userId: string, online: (id: str
     .from(devices)
     .where(and(eq(devices.userId, userId), isNull(devices.revokedAt)))
     .orderBy(devices.createdAt);
+  // Every device's grants in one query, grouped here in label order.
+  const allGrants = rows.length
+    ? await db
+        .select({ deviceId: deviceGrants.deviceId, id: deviceGrants.grantId, label: deviceGrants.label, providers: deviceGrants.providers, org: deviceGrants.teamId })
+        .from(deviceGrants)
+        .where(inArray(deviceGrants.deviceId, rows.map((d) => d.id)))
+        .orderBy(deviceGrants.label)
+    : [];
+  const grantsOf = new Map<string, Omit<(typeof allGrants)[number], 'deviceId'>[]>();
+  for (const { deviceId, ...g } of allGrants) grantsOf.set(deviceId, [...(grantsOf.get(deviceId) ?? []), g]);
   const out: DeviceSummary[] = [];
   for (const d of rows) {
-    const grants = await db
-      .select({ id: deviceGrants.grantId, label: deviceGrants.label, providers: deviceGrants.providers, org: deviceGrants.teamId })
-      .from(deviceGrants)
-      .where(eq(deviceGrants.deviceId, d.id))
-      .orderBy(deviceGrants.label);
+    const grants = grantsOf.get(d.id) ?? [];
     out.push({
       id: d.id,
       name: d.name,

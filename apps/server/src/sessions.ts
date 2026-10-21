@@ -234,7 +234,7 @@ export async function listSessionsForUser(
   /** M42: just this session, when the per-person stream recomputes one room. */
   onlySessionId?: string,
 ): Promise<SessionSummary[]> {
-  const rows = await db
+  const rowsQuery = db
     .select({
       publicId: sessions.publicId,
       title: sessions.title,
@@ -266,30 +266,12 @@ export async function listSessionsForUser(
     .where(onlySessionId ? and(eq(sessionMembers.userId, userId), eq(sessions.id, onlySessionId)) : eq(sessionMembers.userId, userId))
     .orderBy(desc(sessions.createdAt));
 
-  const mine: SessionSummary[] = rows.map((r) => ({
-    publicId: r.publicId,
-    ownerSlug: r.ownerSlug,
-    title: r.title,
-    status: r.status as Session['status'],
-    role: r.role as SessionRole,
-    memberCount: Number(r.memberCount),
-    team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
-    individual: (r.kind ?? 'session') === 'session' && !!r.individual,
-    createdAt: r.createdAt.toISOString(),
-    lastActivityAt: new Date(r.lastActivityAt).toISOString(),
-    kind: r.kind as SessionKind,
-    peer: r.peer,
-    unread: !!r.unread,
-    needsYou: Number(r.needsYou),
-    notify: r.notify,
-  }));
-
   // M22: sessions you can read without being in them — as a guest, or because
   // they're team-visible to a team you're on. Never one you're already in.
   const memberOf = db.select({ id: sessionMembers.sessionId }).from(sessionMembers).where(eq(sessionMembers.userId, userId));
   const guestOf = db.select({ id: sessionGuests.sessionId }).from(sessionGuests).where(eq(sessionGuests.userId, userId));
   const myTeams = db.select({ id: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, userId));
-  const viewable = await db
+  const viewableQuery = db
     .select({
       publicId: sessions.publicId,
       title: sessions.title,
@@ -314,6 +296,27 @@ export async function listSessionsForUser(
         onlySessionId ? eq(sessions.id, onlySessionId) : undefined,
       ),
     );
+
+  // Independent: run together.
+  const [rows, viewable] = await Promise.all([rowsQuery, viewableQuery]);
+
+  const mine: SessionSummary[] = rows.map((r) => ({
+    publicId: r.publicId,
+    ownerSlug: r.ownerSlug,
+    title: r.title,
+    status: r.status as Session['status'],
+    role: r.role as SessionRole,
+    memberCount: Number(r.memberCount),
+    team: r.teamId ? { id: r.teamId, name: r.teamName! } : null,
+    individual: (r.kind ?? 'session') === 'session' && !!r.individual,
+    createdAt: r.createdAt.toISOString(),
+    lastActivityAt: new Date(r.lastActivityAt).toISOString(),
+    kind: r.kind as SessionKind,
+    peer: r.peer,
+    unread: !!r.unread,
+    needsYou: Number(r.needsYou),
+    notify: r.notify,
+  }));
 
   return [
     ...mine,
@@ -618,7 +621,7 @@ export async function listMessages(
 
   rows.reverse();
 
-  const mentions = await mentionsForSession(db, sessionId);
+  const mentions = await mentionsForMessages(db, rows.map((r) => r.id));
   return rows.map((r) => toMessage(r, mentions.get(r.id) ?? []));
 }
 
@@ -794,10 +797,12 @@ export async function latestNoteSeq(db: Database, sessionId: string): Promise<nu
  * Resolving at read time is what makes a rename correct retroactively — the
  * stored content holds ids, never names. See ADR 0008.
  */
-async function mentionsForSession(
+/** The mentions of these messages only: the page being shown, not the whole session's history. */
+async function mentionsForMessages(
   db: Database,
-  sessionId: string,
+  messageIds: string[],
 ): Promise<Map<string, Mention[]>> {
+  if (messageIds.length === 0) return new Map();
   const rows = await db
     .select({
       messageId: messageMentions.messageId,
@@ -806,9 +811,8 @@ async function mentionsForSession(
       kind: participants.kind,
     })
     .from(messageMentions)
-    .innerJoin(messages, eq(messages.id, messageMentions.messageId))
     .innerJoin(participants, eq(participants.id, messageMentions.participantId))
-    .where(eq(messages.sessionId, sessionId));
+    .where(inArray(messageMentions.messageId, messageIds));
 
   const byMessage = new Map<string, Mention[]>();
   for (const r of rows) {
@@ -951,27 +955,6 @@ export async function renameParticipant(
       kind: updated.kind as Participant['kind'],
       displayName: updated.displayName,
     },
-  };
-}
-
-/** The participant row for a given user in a session, if any. */
-export async function participantForUser(
-  db: Database,
-  sessionId: string,
-  userId: string,
-): Promise<Participant | null> {
-  const [row] = await db
-    .select()
-    .from(participants)
-    .where(and(eq(participants.sessionId, sessionId), eq(participants.userId, userId)))
-    .limit(1);
-
-  if (!row) return null;
-  return {
-    id: row.id,
-    sessionId: row.sessionId,
-    kind: row.kind as Participant['kind'],
-    displayName: row.displayName,
   };
 }
 

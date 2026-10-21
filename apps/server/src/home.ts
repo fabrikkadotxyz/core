@@ -36,7 +36,7 @@ export async function homeFor(db: Database, userId: string, online: (deviceId: s
   const toRef = (r: { ownerSlug: string; publicId: string; title: string }): Ref => ({ ownerSlug: r.ownerSlug, publicId: r.publicId, title: r.title });
 
   // Running now: in-flight runs in rooms you are in.
-  const running = await db
+  const runningQuery = db
     .select({
       id: runs.id,
       agent: participants.displayName,
@@ -58,7 +58,7 @@ export async function homeFor(db: Database, userId: string, online: (deviceId: s
     .limit(20);
 
   // Finished while you were away: your agents' runs that ended since you last looked at their room.
-  const finished = await db
+  const finishedQuery = db
     .select({ id: runs.id, agent: participants.displayName, status: runs.status, endedAt: runs.endedAt, ...ref })
     .from(runs)
     .innerJoin(participants, eq(participants.id, runs.participantId))
@@ -71,7 +71,7 @@ export async function homeFor(db: Database, userId: string, online: (deviceId: s
     .limit(20);
 
   // Since you were away: rooms with messages from someone else since you last looked.
-  const changed = await db
+  const changedQuery = db
     .select({
       ...ref,
       count: sql<number>`count(*)`,
@@ -95,7 +95,7 @@ export async function homeFor(db: Database, userId: string, online: (deviceId: s
     .as('latest');
   const mentioned = sql<string>`(select string_agg(p.display_name, ', ') from ${messageMentions} mm join ${participants} p on p.id = mm.participant_id
     where mm.message_id = ${messages.id} and p.kind = 'human' and (p.user_id is null or p.user_id <> ${userId}))`;
-  const waitingOn = await db
+  const waitingOnQuery = db
     .select({ ...ref, text: messages.content, at: messages.createdAt, to: mentioned })
     .from(latest)
     .innerJoin(messages, eq(messages.id, latest.id))
@@ -107,7 +107,7 @@ export async function homeFor(db: Database, userId: string, online: (deviceId: s
     .limit(20);
 
   // One-off links, open: links you sent for rooms in your own organization that still admit people (ADR 0053 amended: reusable).
-  const openInvites = await db
+  const openInvitesQuery = db
     .select({ id: sessionInvites.id, createdAt: sessionInvites.createdAt, expiresAt: sessionInvites.expiresAt, uses: sessionInvites.uses, ...ref })
     .from(sessionInvites)
     .innerJoin(sessions, eq(sessions.id, sessionInvites.sessionId))
@@ -118,17 +118,28 @@ export async function homeFor(db: Database, userId: string, online: (deviceId: s
     .limit(20);
 
   // Your computers, with how many agents each runs.
-  const bound = await db
+  const boundQuery = db
     .select({ deviceId: sessionAgentHosts.deviceId, count: sql<number>`count(*)` })
     .from(sessionAgentHosts)
     .innerJoin(devices, eq(devices.id, sessionAgentHosts.deviceId))
     .where(eq(devices.userId, userId))
     .groupBy(sessionAgentHosts.deviceId);
+  // None of these reads another's result: one round of queries, not nine in a row.
+  const [running, finished, changed, waitingOn, openInvites, bound, deviceList, needsYou] = await Promise.all([
+    runningQuery,
+    finishedQuery,
+    changedQuery,
+    waitingOnQuery,
+    openInvitesQuery,
+    boundQuery,
+    listDevices(db, userId, online),
+    waitingFor(db, userId),
+  ]);
   const agentsOn = new Map(bound.map((b) => [b.deviceId, Number(b.count)]));
-  const computers = (await listDevices(db, userId, online)).map((d) => ({ id: d.id, name: d.name, online: d.online, agents: agentsOn.get(d.id) ?? 0 }));
+  const computers = deviceList.map((d) => ({ id: d.id, name: d.name, online: d.online, agents: agentsOn.get(d.id) ?? 0 }));
 
   return {
-    needsYou: await waitingFor(db, userId),
+    needsYou,
     running: running.map((r) => {
       const last = lastActivity(r.id);
       return {

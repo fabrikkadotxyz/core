@@ -84,10 +84,6 @@ function chooseTargets(participantId: string): Registration[] {
   return bridges.length > 0 ? bridges : [...set];
 }
 
-export function hasLiveConnection(participantId: string): boolean {
-  return (listeners.get(participantId)?.size ?? 0) > 0;
-}
-
 /**
  * Evaluate and deliver a newly-posted message to every agent it mentions.
  *

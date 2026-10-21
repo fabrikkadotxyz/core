@@ -28,7 +28,6 @@ export function PersonalIntegrations() {
   const asked = params.get('team');
   const scope: string | null = asked || null;
   const orgName = (id: string) => teams.find((t) => t.id === id)?.name ?? 'an organization';
-  const scopeName = scope ? `${orgName(scope)} only` : 'all your rooms';
   /** Search params to keep, so the scope survives a notice or its dismissal. */
   const withScope = (extra: Record<string, string> = {}) => ({ team: scope ?? '', ...extra });
   const [error, setError] = useState<string | null>(null);

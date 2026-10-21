@@ -13,7 +13,7 @@
  * all come through here, so they cannot disagree (docs/operations.md,
  * docs/protocol.md, docs/security.md "Leaving").
  */
-import { and, asc, eq, inArray, isNull, lt, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import {
   agents,
@@ -388,6 +388,3 @@ export async function findUserForLeaving(db: Database, email: string) {
     .limit(1);
   return row ?? null;
 }
-
-/** Keeps the import list honest when a table is only used by name in SQL. */
-export const _tables = { notInArray };

@@ -337,6 +337,13 @@
       "when": 1792592997593,
       "tag": "0047_avatars",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792596240403,
+      "tag": "0048_person-lookups",
+      "breakpoints": true
     }
   ]
 }

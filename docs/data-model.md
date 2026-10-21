@@ -426,6 +426,14 @@ derived from the records it describes (devices, rooms, agents, messages,
 invites, team members, connections), like unread. The migration sets
 `welcomed_at` for every existing account, so only new ones see the welcome.
 
+### Lookups by person (migration 0048)
+
+`session_members`, `session_guests` and `team_members` are keyed by
+`(session_id | team_id, user_id)`, which serves "who is in this room" but not
+"which rooms is this person in", the question the sidebar, the home and the
+per-person stream ask. Each has an index on `user_id`, as do
+`participants(user_id)` and `sessions(team_id)`.
+
 ### M67 — profile pictures (ADR 0061)
 
 ```

@@ -683,13 +683,14 @@ function buildServer(db: Database, actor: TokenActor, publicUrl: string): McpSer
       }),
     },
     async (args) => {
-      const participants = await listParticipantsWithUsers(db, actor.sessionId);
+      const [participants, messages] = await Promise.all([
+        listParticipantsWithUsers(db, actor.sessionId),
+        listMessages(db, actor.sessionId, {
+          limit: args.limit ?? DEFAULT_READ_LIMIT,
+          before: args.before,
+        }),
+      ]);
       const byParticipant = new Map(participants.map((p) => [p.id, p]));
-
-      const messages = await listMessages(db, actor.sessionId, {
-        limit: args.limit ?? DEFAULT_READ_LIMIT,
-        before: args.before,
-      });
 
       return text(
         messages.map((m) => {

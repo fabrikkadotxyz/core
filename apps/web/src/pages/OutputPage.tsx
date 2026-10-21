@@ -61,6 +61,8 @@ export function OutputPage() {
   const [panelsVersion, setPanelsVersion] = useState(0);
   const [outputs, setOutputs] = useState<Output[] | null>(null);
   const [outputsVersion, setOutputsVersion] = useState(0);
+  // History only needs refetching when the document it shows changes, not any in the room.
+  const [openEditsVersion, setOpenEditsVersion] = useState(0);
   const [commentsVersion, setCommentsVersion] = useState(0);
   const [outputTab, setOutputTab] = useState<OutputTab>('edit');
   const [focusEdit, setFocusEdit] = useState<OutputEditSummary | null>(null);
@@ -119,7 +121,11 @@ export function OutputPage() {
           if (event.type === 'notes.updated' || event.type === 'artifact.created' || event.type === 'links.changed') {
             setPanelsVersion((v) => v + 1);
           }
-          if (event.type === 'output.changed' || event.type === 'output.edited') setOutputsVersion((v) => v + 1);
+          if (event.type === 'output.changed' || event.type === 'output.edited') {
+            setOutputsVersion((v) => v + 1);
+            const id = event.type === 'output.changed' ? event.outputId : event.edit.outputId;
+            if (id === tabsRef.current.active) setOpenEditsVersion((v) => v + 1);
+          }
           if (event.type === 'comments.changed') setCommentsVersion((v) => v + 1);
         },
         () => {},
@@ -220,7 +226,7 @@ export function OutputPage() {
                 }}
                 focusEdit={focusEdit}
                 renameOnOpen={renameOnOpen}
-                editsVersion={outputsVersion}
+                editsVersion={openEditsVersion}
                 commentsVersion={commentsVersion}
                 onClose={() => closeTab(open.id)}
               />

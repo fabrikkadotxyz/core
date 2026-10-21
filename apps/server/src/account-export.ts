@@ -9,7 +9,7 @@
  * messages, a room's documents, tool output, any credential. A room's record
  * is exported by its owner (M27), not here.
  */
-import { and, asc, desc, eq, inArray, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import {
   agents,
@@ -185,6 +185,3 @@ A room's full record is exported by its owner from the room. Fabrikka's privacy 
   const filename = `fabrikka-${u.ownerSlug}-${exportedAt.slice(0, 10)}.zip`;
   return { ok: true, filename, data };
 }
-
-/** Keeps `or` imported for the day activity is filtered here too; auditForUser does it today. */
-export const _unused = { or };

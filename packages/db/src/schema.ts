@@ -145,7 +145,8 @@ export const teamMembers = pgTable(
     role: text('role').notNull().default('member'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.teamId, t.userId] })],
+  // The keys below lead with the team or session; the sidebar and home look up by person.
+  (t) => [primaryKey({ columns: [t.teamId, t.userId] }), index('team_members_user_idx').on(t.userId)],
 );
 
 export const sessions = pgTable('sessions', {
@@ -187,7 +188,7 @@ export const sessions = pgTable('sessions', {
     .defaultNow(),
 },
   // M53 (ADR 0051): every session and chat is in an organization; only a direct message is in none.
-  (t) => [check('sessions_in_organization', sql`${t.kind} = 'direct' or ${t.teamId} is not null`)],
+  (t) => [check('sessions_in_organization', sql`${t.kind} = 'direct' or ${t.teamId} is not null`), index('sessions_team_idx').on(t.teamId)],
 );
 
 /**
@@ -214,7 +215,7 @@ export const participants = pgTable(
     sessionAgentId: uuid('session_agent_id'),
     displayName: text('display_name').notNull(),
   },
-  (t) => [unique('participants_session_display_name').on(t.sessionId, t.displayName)],
+  (t) => [unique('participants_session_display_name').on(t.sessionId, t.displayName), index('participants_user_idx').on(t.userId)],
 );
 
 export const messages = pgTable(
@@ -320,7 +321,7 @@ export const sessionMembers = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] }), index('session_members_user_idx').on(t.userId)],
 );
 
 /**
@@ -986,7 +987,7 @@ export const sessionGuests = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] }), index('session_guests_user_idx').on(t.userId)],
 );
 
 /**

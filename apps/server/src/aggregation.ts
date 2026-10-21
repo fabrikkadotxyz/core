@@ -578,9 +578,9 @@ export async function teamServersFor(db: Database, sessionId: string, userId: st
  * team's for every slug they have none of. Their own always wins (ADR 0028).
  */
 export async function usableServers(db: Database, sessionId: string, userId: string): Promise<UsableServer[]> {
-  const own = await serversForUser(db, sessionId, userId);
+  const [own, shared] = await Promise.all([serversForUser(db, sessionId, userId), teamServersFor(db, sessionId, userId)]);
   const mine = new Set(own.map((s) => s.slug));
-  const team = (await teamServersFor(db, sessionId, userId)).filter((s) => !mine.has(s.slug));
+  const team = shared.filter((s) => !mine.has(s.slug));
   return [...own, ...team];
 }
 
@@ -779,39 +779,47 @@ export async function toolsForParticipant(
   const granted = await grantedTools(db, sessionId, servers.map((s) => s.slug));
   if (granted.size === 0) return [];
 
-  const tools: AggregatedTool[] = [];
-
+  // Credentials one at a time: two entries can share one OAuth connection, and
+  // refreshing its token twice at once could spend a rotating refresh token.
+  const reachable: { server: UsableServer; conn: NonNullable<Awaited<ReturnType<typeof credentialFor>>> }[] = [];
   for (const server of servers) {
     const conn = await credentialFor(db, server);
-    if (!conn) continue;
-
-    let client: Client | undefined;
-    try {
-      client = await connect(conn.url, conn.credential, conn.headers, conn.scheme);
-      const { tools: upstream } = await client.listTools();
-
-      for (const t of upstream) {
-        const name = `${server.slug}${SEP}${t.name}`;
-        if (!granted.has(name)) continue;
-        tools.push({
-          name,
-          slug: server.slug,
-          upstreamName: t.name,
-          description: t.description,
-          inputSchema: t.inputSchema,
-          sharedBy: server.team?.name,
-        });
-      }
-    } catch (err) {
-      // One unreachable integration must not remove every other tool from the
-      // agent's list; it simply contributes nothing this time.
-      console.error(`[aggregation] ${server.slug} unreachable:`, (err as Error).message);
-    } finally {
-      await client?.close().catch(() => {});
-    }
+    if (conn) reachable.push({ server, conn });
   }
 
-  return tools;
+  // The network round trips together, each server's tools kept in server order.
+  const perServer = await Promise.all(
+    reachable.map(async ({ server, conn }) => {
+      const found: AggregatedTool[] = [];
+      let client: Client | undefined;
+      try {
+        client = await connect(conn.url, conn.credential, conn.headers, conn.scheme);
+        const { tools: upstream } = await client.listTools();
+
+        for (const t of upstream) {
+          const name = `${server.slug}${SEP}${t.name}`;
+          if (!granted.has(name)) continue;
+          found.push({
+            name,
+            slug: server.slug,
+            upstreamName: t.name,
+            description: t.description,
+            inputSchema: t.inputSchema,
+            sharedBy: server.team?.name,
+          });
+        }
+      } catch (err) {
+        // One unreachable integration must not remove every other tool from the
+        // agent's list; it simply contributes nothing this time.
+        console.error(`[aggregation] ${server.slug} unreachable:`, (err as Error).message);
+      } finally {
+        await client?.close().catch(() => {});
+      }
+      return found;
+    }),
+  );
+
+  return perServer.flat();
 }
 
 /** Tools an upstream server offers, for the grants UI. Owner-facing. */

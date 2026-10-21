@@ -6,7 +6,7 @@
  * template compiles, the toolbar inserts the commands, the status line always
  * says whether the paper builds, and clicking an error takes you to its line.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
@@ -19,8 +19,15 @@ import { History } from '../../History.tsx';
 import type { OutputTab } from '../../Outputs.tsx';
 import type { OutputSync } from '../../sync.ts';
 import { LatexCompiler } from './compiler.ts';
-import { PdfView } from './PdfView.tsx';
 import { SyncTex, type SyncHit } from './synctex.ts';
+
+/**
+ * The preview pulls in PDF.js, most of this editor's weight, which the edit and
+ * history tabs never use: loaded on its own, and fetched ahead once there is a
+ * PDF to show, so opening Preview does not wait.
+ */
+const loadPdfView = () => import('./PdfView.tsx');
+const PdfView = lazy(() => loadPdfView().then((m) => ({ default: m.PdfView })));
 
 /** Wait this long after the last keystroke before compiling. */
 const COMPILE_DEBOUNCE_MS = 700;
@@ -115,6 +122,10 @@ export default function LatexBody({
   const [active, setActive] = useState(output.mainFile);
   const [build, setBuild] = useState<BuildState>({ status: 'waiting' });
   const [pdf, setPdf] = useState<Uint8Array | null>(null);
+  const hasPdf = pdf !== null;
+  useEffect(() => {
+    if (hasPdf) void loadPdfView();
+  }, [hasPdf]);
   const [syncTex, setSyncTex] = useState<SyncTex | null>(null);
   const [figures, setFigures] = useState<string[]>([]);
   const editor = useRef<EditorView | null>(null);
@@ -371,7 +382,9 @@ export default function LatexBody({
               </a>
             </div>
           )}
-          <PdfView pdf={pdf} highlight={highlight} />
+          <Suspense fallback={<p className="muted small">Opening the preview…</p>}>
+            <PdfView pdf={pdf} highlight={highlight} />
+          </Suspense>
         </>
       )}
 

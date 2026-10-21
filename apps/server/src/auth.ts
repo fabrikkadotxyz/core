@@ -9,6 +9,7 @@ import { and, eq, gt, isNull, lt } from 'drizzle-orm';
 import type { Context, MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Database } from '@fabrikka/db';
+import type { AuthUser } from '@fabrikka/types';
 import { authSessions, generateToken, hashToken, users, verifyPassword } from '@fabrikka/db';
 
 export interface LoginResult {
@@ -20,17 +21,8 @@ export interface LoginResult {
 export const COOKIE_NAME = 'fabrikka_session';
 const SESSION_TTL_DAYS = 30;
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  displayName: string;
-  ownerSlug: string;
-  isInstanceOwner: boolean;
-  /** M64: the address was proven by a link, or vouched for by the deployment or the operator. */
-  emailVerified: boolean;
-  /** M67 (ADR 0061): their picture, or null for initials. */
-  avatarUrl?: string | null;
-}
+/** One definition, shared with the web app and deployments (packages/types). */
+export type { AuthUser } from '@fabrikka/types';
 
 /** Hono env so `c.get('user')` is typed on guarded routes. */
 export interface AuthEnv {

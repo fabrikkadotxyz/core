@@ -292,11 +292,6 @@ export function deltaToSplices(
   return out;
 }
 
-export function countLines(text: string): number {
-  if (text === '') return 0;
-  return text.split('\n').length;
-}
-
 /**
  * The lines an edit actually changed, in the file as it is after the edit — not
  * the hunks' context lines. A pure deletion points at where the text was.

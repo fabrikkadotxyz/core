@@ -236,11 +236,6 @@ export function lastActivity(runId: string): ActivityEvent | null {
   return buffer?.length ? buffer[buffer.length - 1]! : null;
 }
 
-/** Stop tracking a session's runs, e.g. when it is deleted. */
-export function forgetSession(runIds: string[]): void {
-  for (const id of runIds) buffers.delete(id);
-}
-
 function toRun(row: typeof runs.$inferSelect, displayName: string): Run {
   return {
     // ADR 0054: the first word of a reported resume argv, never the whole of it.

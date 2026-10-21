@@ -35,32 +35,64 @@ export async function getCatchUp(db: Database, sessionId: string, userId: string
   if (!read) return { firstVisit: true, since: null };
   const since = read.lastSeenAt;
 
-  const people = await db
+  const peopleQuery = db
     .select({ id: participants.id, displayName: participants.displayName, userId: participants.userId })
     .from(participants)
     .where(eq(participants.sessionId, sessionId));
-  const mine = people.find((p) => p.userId === userId)?.id ?? null;
 
   const by = alias(participants, 'by');
-  const newNotes = await db
+  const newNotesQuery = db
     .select({ text: sessionNotes.text, tag: sessionNotes.tag, by: by.displayName })
     .from(sessionNotes)
     .leftJoin(by, eq(by.id, sessionNotes.participantId))
     .where(and(eq(sessionNotes.sessionId, sessionId), gt(sessionNotes.seq, Number(read.notesSeenSeq)), isNull(sessionNotes.removedAt)))
     .orderBy(sessionNotes.seq);
-  const gone = await db
+  const goneQuery = db
     .select({ text: sessionNotes.text, tag: sessionNotes.tag, by: by.displayName })
     .from(sessionNotes)
     .leftJoin(by, eq(by.id, sessionNotes.participantId))
     .where(and(eq(sessionNotes.sessionId, sessionId), isNotNull(sessionNotes.removedAt), gt(sessionNotes.removedAt, since)))
     .orderBy(sessionNotes.seq);
 
-  const newMessages = await db
+  const newMessagesQuery = db
     .select({ id: messages.id, content: messages.content, at: messages.createdAt, author: participants.displayName })
     .from(messages)
     .innerJoin(participants, eq(participants.id, messages.authorParticipantId))
     .where(and(eq(messages.sessionId, sessionId), gt(messages.createdAt, since)))
     .orderBy(desc(messages.createdAt));
+  const editsQuery = db
+    .select({
+      outputName: outputs.name,
+      editor: sql<string>`coalesce(${participants.displayName}, ${outputEdits.externalAuthor}, 'someone')`,
+      n: sql<number>`count(*)`,
+    })
+    .from(outputEdits)
+    .innerJoin(outputs, eq(outputs.id, outputEdits.outputId))
+    .leftJoin(participants, eq(participants.id, outputEdits.participantId))
+    .where(and(eq(outputs.sessionId, sessionId), gt(outputEdits.createdAt, since)))
+    .groupBy(outputs.name, participants.displayName, outputEdits.externalAuthor);
+  // A document created while you were away is news even before anyone edits it.
+  const createdQuery = db
+    .select({ name: outputs.name, by: participants.displayName })
+    .from(outputs)
+    .innerJoin(participants, eq(participants.id, outputs.createdByParticipantId))
+    .where(and(eq(outputs.sessionId, sessionId), gt(outputs.createdAt, since)));
+  const movedQuery = db
+    .select({ title: sessionLinks.title, url: sessionLinks.url, status: sessionLinks.status })
+    .from(sessionLinks)
+    .where(and(eq(sessionLinks.sessionId, sessionId), isNotNull(sessionLinks.statusAt), gt(sessionLinks.statusAt, since)));
+
+  // All of these depend only on the session and when you last looked: run them together.
+  const [people, newNotes, gone, newMessages, edits, created, moved] = await Promise.all([
+    peopleQuery,
+    newNotesQuery,
+    goneQuery,
+    newMessagesQuery,
+    editsQuery,
+    createdQuery,
+    movedQuery,
+  ]);
+  const mine = people.find((p) => p.userId === userId)?.id ?? null;
   const mentionedIds = mine && newMessages.length
     ? new Set(
         (
@@ -72,17 +104,6 @@ export async function getCatchUp(db: Database, sessionId: string, userId: string
       )
     : new Set<string>();
 
-  const edits = await db
-    .select({
-      outputName: outputs.name,
-      editor: sql<string>`coalesce(${participants.displayName}, ${outputEdits.externalAuthor}, 'someone')`,
-      n: sql<number>`count(*)`,
-    })
-    .from(outputEdits)
-    .innerJoin(outputs, eq(outputs.id, outputEdits.outputId))
-    .leftJoin(participants, eq(participants.id, outputEdits.participantId))
-    .where(and(eq(outputs.sessionId, sessionId), gt(outputEdits.createdAt, since)))
-    .groupBy(outputs.name, participants.displayName, outputEdits.externalAuthor);
   const byOutput = new Map<string, { name: string; editors: string[]; edits: number; isNew?: boolean }>();
   for (const e of edits) {
     const o = byOutput.get(e.outputName) ?? { name: e.outputName, editors: [], edits: 0 };
@@ -90,22 +111,11 @@ export async function getCatchUp(db: Database, sessionId: string, userId: string
     o.edits += Number(e.n);
     byOutput.set(e.outputName, o);
   }
-  // A document created while you were away is news even before anyone edits it.
-  const created = await db
-    .select({ name: outputs.name, by: participants.displayName })
-    .from(outputs)
-    .innerJoin(participants, eq(participants.id, outputs.createdByParticipantId))
-    .where(and(eq(outputs.sessionId, sessionId), gt(outputs.createdAt, since)));
   for (const o of created) {
     const entry = byOutput.get(o.name) ?? { name: o.name, editors: [], edits: 0 };
     if (!entry.editors.includes(o.by)) entry.editors.unshift(o.by);
     byOutput.set(o.name, { ...entry, isNew: true } as typeof entry);
   }
-
-  const moved = await db
-    .select({ title: sessionLinks.title, url: sessionLinks.url, status: sessionLinks.status })
-    .from(sessionLinks)
-    .where(and(eq(sessionLinks.sessionId, sessionId), isNotNull(sessionLinks.statusAt), gt(sessionLinks.statusAt, since)));
 
   return {
     firstVisit: false,

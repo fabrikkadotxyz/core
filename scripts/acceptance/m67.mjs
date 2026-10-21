@@ -79,7 +79,7 @@ try {
 }
 const sessionsSrc = read('apps/server/src/sessions.ts');
 check(/avatarUrl: p\.kind === 'human' \? avatarUrl\(p\.avatarKey\) : null/.test(sessionsSrc), 'AGENTS NEVER CARRY A PICTURE, whoever registered them');
-check(/\{\(\(\) => \{\s*const a = item\.message\.author;[\s\S]{0,200}<Face /.test(read('apps/web/src/pages/SessionPage.tsx')) && !/'🤖' : '👤'/.test(read('apps/web/src/pages/SessionPage.tsx')), 'a message shows a face, not 👤 or 🤖');
+check(/const MessageRow = memo\(function MessageRow[\s\S]{0,600}<Face name=\{a\.displayName\} seed=\{person\?\.userId \?\? a\.participantId\}/.test(read('apps/web/src/pages/SessionPage.tsx')) && !/'🤖' : '👤'/.test(read('apps/web/src/pages/SessionPage.tsx')), 'a message shows a face, not 👤 or 🤖');
 const pic = read('apps/web/src/picture.ts');
 check(/PICTURE_SIZE = 256/.test(pic) && /imageOrientation: 'from-image'/.test(pic) && /canvas\.toBlob/.test(pic), 'the browser crops to 256 × 256 and re-encodes, dropping what a camera wrote');
 check(/Choose a picture/.test(read('apps/web/src/pages/AccountPage.tsx')), 'Settings → Account offers Choose a picture');

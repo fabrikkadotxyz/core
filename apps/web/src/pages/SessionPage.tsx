@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Select, TeamInitial } from '../components/Select.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { ConnectCommand } from './DevicesPage.tsx';
@@ -24,7 +24,6 @@ import type {
   LinkType,
   SessionLink,
   TeamMember,
-  TeamSummary,
   CatchUp,
   DeviceSummary,
 } from '@fabrikka/types';
@@ -35,7 +34,6 @@ import {
   openStream,
   devices,
   sessions,
-  teams,
   type SessionRef,
   type TokenSummary,
 } from '../api.ts';
@@ -309,6 +307,8 @@ export function SessionPage() {
   /** Live documents, refetched when the stream says one changed. */
   const [outputs, setOutputs] = useState<Output[]>([]);
   const [outputsVersion, setOutputsVersion] = useState(0);
+  // History only needs refetching when the document it shows changes, not any in the room.
+  const [openEditsVersion, setOpenEditsVersion] = useState(0);
   /** Agent edits, for the timeline. Human typing lives in each document's History. */
   const [agentEdits, setAgentEdits] = useState<OutputEditSummary[]>([]);
   const [outputTab, setOutputTab] = useState<OutputTab>('edit');
@@ -465,11 +465,15 @@ export function SessionPage() {
             // Panels own their own state; a bump is enough to make them refetch.
             setPanelsVersion((v) => v + 1);
           }
-          if (event.type === 'output.changed') setOutputsVersion((v) => v + 1);
+          if (event.type === 'output.changed') {
+            setOutputsVersion((v) => v + 1);
+            if (event.outputId === openOutputRef.current) setOpenEditsVersion((v) => v + 1);
+          }
           if (event.type === 'comments.changed') setCommentsVersion((v) => v + 1);
           if (event.type === 'output.edited') {
             const e = event.edit;
             setOutputsVersion((v) => v + 1);
+            if (e.outputId === openOutputRef.current) setOpenEditsVersion((v) => v + 1);
             if (e.participantKind === 'agent') {
               setAgentEdits((prev) =>
                 prev.some((x) => x.id === e.id) ? prev : [e, ...prev].slice(0, 200),
@@ -856,7 +860,7 @@ export function SessionPage() {
                     }}
                     focusEdit={focusEdit}
                     renameOnOpen={renameOnOpen}
-                    editsVersion={outputsVersion}
+                    editsVersion={openEditsVersion}
                     commentsVersion={commentsVersion}
                     onClose={closeOutput}
                   />
@@ -1426,8 +1430,15 @@ function AgentsPanel({
         setMyDevices(d);
         setChoice((c) => (c ? c : (d.flatMap((x) => x.grants.filter((g) => g.usable && (g.org ?? null) === (roomOrg?.id ?? null)).map((g) => `${x.id}|${g.id}`))[0] ?? '')));
       }).catch(() => {});
-    const id = window.setInterval(tick, foldersOpen ? 2000 : 5000);
-    return () => window.clearInterval(id);
+    // Hidden while the person grants a folder in the desktop app: check again the moment they return.
+    const visible = () => document.visibilityState === 'visible';
+    const id = window.setInterval(() => visible() && tick(), foldersOpen ? 2000 : 5000);
+    const onShow = () => visible() && tick();
+    document.addEventListener('visibilitychange', onShow);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onShow);
+    };
   }, [picking, foldersOpen, roomOrg]);
   useEffect(() => {
     if (startAdding) startPicking();
@@ -2357,6 +2368,44 @@ function IntegrationsPanel({ ref_, isOwner }: { ref_: SessionRef; isOwner: boole
   );
 }
 
+const TIME = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit' });
+
+/**
+ * One message. Memoised: the room re-renders on every activity step, presence
+ * change and run while an agent works, and a message that has not changed, nor
+ * its author or the people its mentions name, need not render again.
+ */
+const MessageRow = memo(function MessageRow({
+  message,
+  person,
+  participants,
+  meParticipantId,
+}: {
+  message: Message;
+  person: Participant | undefined;
+  participants: Participant[];
+  meParticipantId: string | null;
+}) {
+  const a = message.author;
+  return (
+    <article className={a.kind === 'agent' ? 'msg agent' : 'msg'}>
+      <div className="meta">
+        <Face name={a.displayName} seed={person?.userId ?? a.participantId} url={person?.avatarUrl} agent={a.kind === 'agent'} />
+        <span className="author">@{a.displayName}</span>
+        <time dateTime={message.createdAt}>{TIME.format(new Date(message.createdAt))}</time>
+      </div>
+      <p>
+        <MentionText
+          content={message.content}
+          participants={participants}
+          fallback={message.mentions}
+          meParticipantId={meParticipantId ?? undefined}
+        />
+      </p>
+    </article>
+  );
+});
+
 /**
  * The timeline, with agent steps interleaved chronologically.
  *
@@ -2393,7 +2442,8 @@ function Timeline({
         ...messages.map((m) => ({ at: m.createdAt, kind: 'message' as const, message: m })),
         ...activity.map((a) => ({ at: a.at, kind: 'activity' as const, event: a })),
         ...edits.map((e) => ({ at: e.at, kind: 'edit' as const, edit: e })),
-      ].sort((a, b) => a.at.localeCompare(b.at)),
+      // ISO timestamps from the server: plain string order is time order, without locale collation.
+      ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)),
     [messages, activity, edits],
   );
 
@@ -2438,33 +2488,13 @@ function Timeline({
             )}
           </div>
         ) : (
-          <article
+          <MessageRow
             key={item.message.id}
-            className={item.message.author.kind === 'agent' ? 'msg agent' : 'msg'}
-          >
-            <div className="meta">
-              {(() => {
-                const a = item.message.author;
-                const p = people.get(a.participantId);
-                return <Face name={a.displayName} seed={p?.userId ?? a.participantId} url={p?.avatarUrl} agent={a.kind === 'agent'} />;
-              })()}
-              <span className="author">@{item.message.author.displayName}</span>
-              <time dateTime={item.message.createdAt}>
-                {new Date(item.message.createdAt).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </time>
-            </div>
-            <p>
-              <MentionText
-                content={item.message.content}
-                participants={participants}
-                fallback={item.message.mentions}
-                meParticipantId={meParticipantId ?? undefined}
-              />
-            </p>
-          </article>
+            message={item.message}
+            person={people.get(item.message.author.participantId)}
+            participants={participants}
+            meParticipantId={meParticipantId}
+          />
         ),
       )}
 

@@ -32,7 +32,7 @@ check(/function FoldersDialog\(/.test(page) && /<Modal label=\{`Folders for \$\{
 check((page.match(/Add a folder…/g) ?? []).length >= 3, 'ADD A FOLDER… from the empty state, under the list, and per computer in the dialog');
 check(/if \(inDesktopApp\(\)\) await openFolders\(org\.id\);\s*else await devices\.openFolders\(d\.id, org\.id\);/.test(page), 'the app is asked directly; a browser asks through the server');
 check(/<ConnectCommand first=\{list\.length === 0\} \/>/.test(page), 'Connect another computer, with the install command, in the same dialog');
-check(/window\.setInterval\(tick, foldersOpen \? 2000 : 5000\)/.test(page), 'the picker refreshes while picking, faster while the dialog is open');
+check(/window\.setInterval\(\(\) => visible\(\) && tick\(\), foldersOpen \? 2000 : 5000\)/.test(page) && /addEventListener\('visibilitychange', onShow\)/.test(page), 'the picker refreshes while picking, faster while the dialog is open, and at once on return to the tab');
 check(!/menu-bar icon → Folders/.test(page), 'the sentence that sent you away is gone');
 const host = read('packages/bridge/src/host/host.ts');
 check(/frame\.type === 'open_folders' && typeof frame\.org === 'string' && this\.organizations\.some\(\(o\) => o\.id === frame\.org\)/.test(host), 'THE HOST HONOURS open_folders ONLY FOR AN ORGANIZATION IT KNOWS');

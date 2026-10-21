@@ -72,7 +72,6 @@ import {
   pruneTeamCalls,
   setCallRecordDays,
   usableServers,
-  replaceGrants,
   listGrantDefaults,
   saveGrantDefault,
   removeGrantDefault,
@@ -1437,23 +1436,31 @@ export function createApp(options: CreateAppOptions = {}) {
     const s = await resolveViewer(c);
     if (!s) return c.notFound();
 
-    const statuses = await connectionStatuses(db, s.id);
-    // M15 slice 1: what a blocked agent waits on, so the room can say so.
-    const blocked = await blockedOn(db, s.id);
     const viewer = s.access === 'viewer';
+    // None of these reads another's result: one round of queries, not nine in a row.
+    const [statuses, blocked, agents, participantList, members, visibility, guests] = await Promise.all([
+      connectionStatuses(db, s.id),
+      // M15 slice 1: what a blocked agent waits on, so the room can say so.
+      blockedOn(db, s.id),
+      pauseState(db, s.id),
+      listParticipants(db, s.id),
+      viewer ? [] : membersWithOrigin(s.id),
+      getVisibility(db, s.id),
+      s.role === 'owner' ? listGuests(db, s.id) : undefined,
+    ]);
     const view: SessionView = {
-      agents: await pauseState(db, s.id),
+      agents,
       session: s.view,
-      participants: (await listParticipants(db, s.id)).map((p) => ({
+      participants: participantList.map((p) => ({
         ...p,
         status: statuses.get(p.id),
         blocked: blocked.get(p.id) ?? null,
       })),
-      members: viewer ? [] : await membersWithOrigin(s.id),
+      members,
       me: { role: s.role, participantId: s.participantId },
       mcpEndpoint: viewer ? '' : `${PUBLIC_URL}/mcp/o/${s.view.ownerSlug}/s/${s.view.publicId}`,
-      visibility: await getVisibility(db, s.id),
-      ...(s.role === 'owner' ? { guests: await listGuests(db, s.id) } : {}),
+      visibility,
+      ...(guests ? { guests } : {}),
     };
     return c.json(view);
   });
@@ -1744,12 +1751,14 @@ export function createApp(options: CreateAppOptions = {}) {
     const s = await resolve(c);
     if (!s) return c.notFound();
     const out: Record<string, { deviceName: string; label: string | null; online: boolean; fromPersonal: boolean }> = {};
-    const inOrg = (await sessionTeam(db, s.id)) !== null;
-    for (const a of await listSessionAgents(db, s.id)) {
-      const h = await hostOf(db, a.sessionAgentId);
+    const [team, agentList] = await Promise.all([sessionTeam(db, s.id), listSessionAgents(db, s.id)]);
+    const inOrg = team !== null;
+    const hosts = await Promise.all(agentList.map((a) => hostOf(db, a.sessionAgentId)));
+    agentList.forEach((a, i) => {
+      const h = hosts[i];
       // ADR 0043: a Personal folder bound here before folders had organizations.
       if (h) out[a.participantId] = { deviceName: h.deviceName, label: h.label, online: hostHub.online(h.deviceId), fromPersonal: h.fromPersonal && inOrg };
-    }
+    });
     return c.json(out);
   });
 
@@ -3203,8 +3212,8 @@ export function createApp(options: CreateAppOptions = {}) {
 
   /** Members, each marked with whether their access came from the team roster (M21). */
   async function membersWithOrigin(sessionId: string) {
-    const origins = await membershipOrigins(db, sessionId);
-    return (await listMembers(db, sessionId)).map((m) => ({ ...m, viaTeam: origins.has(m.userId) }));
+    const [origins, members] = await Promise.all([membershipOrigins(db, sessionId), listMembers(db, sessionId)]);
+    return members.map((m) => ({ ...m, viaTeam: origins.has(m.userId) }));
   }
 
   /** The viewer-aware resolver (M22). Only allowlisted read routes may use it. */

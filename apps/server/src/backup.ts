@@ -1,7 +1,8 @@
 /**
  * Backups that restore (M61). One encrypted archive holds everything an
  * instance keeps: the database (pg_dump, custom format) and the artifact
- * files, with a manifest and checksums. `restoreBackup` takes it back into an
+ * files, read from whichever store holds them (disk or a bucket, M66), with a
+ * manifest and checksums. `restoreBackup` takes it back into an
  * empty instance. docs/operations.md, "Backups".
  *
  * The archive is a gzipped tar, encrypted with AES-256-GCM under a key derived
@@ -13,11 +14,12 @@
 import { spawn } from 'node:child_process';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip, createGzip } from 'node:zlib';
+import type { FileStore } from './file-store.ts';
 
 export const MAGIC = Buffer.from('FBK1');
 const SALT_BYTES = 16;
@@ -79,7 +81,8 @@ async function walk(dir: string): Promise<{ count: number; bytes: number }> {
 
 export interface CreateOptions {
   databaseUrl: string;
-  artifactDir: string;
+  /** Where the files are: the archive layout is the same for disk and a bucket. */
+  store: FileStore;
   passphrase: string;
   /** The directory the archive is written to, named fabrikka-<instant>.fbk. */
   dir: string;
@@ -94,8 +97,14 @@ export async function createBackup(o: CreateOptions): Promise<{ file: string; ma
     const dump = join(work, 'db.dump');
     await run('pg_dump', ['--format=custom', '--no-owner', '--no-acl', '--file', dump, o.databaseUrl]);
     const dumpedWith = (await run('pg_dump', ['--version'])).trim();
-    if (existsSync(o.artifactDir)) await cp(o.artifactDir, join(work, 'artifacts'), { recursive: true });
-    else await mkdir(join(work, 'artifacts'));
+    await mkdir(join(work, 'artifacts'));
+    for await (const key of o.store.list()) {
+      const bytes = await o.store.get(key);
+      if (!bytes) continue;
+      const to = join(work, 'artifacts', ...key.split('/'));
+      await mkdir(dirname(to), { recursive: true });
+      await writeFile(to, bytes, { mode: 0o600 });
+    }
     const manifest: BackupManifest = {
       version: 1,
       createdAt: new Date().toISOString(),
@@ -197,11 +206,12 @@ export async function readManifest(file: string, passphrase: string): Promise<Ba
 export interface RestoreOptions {
   file: string;
   databaseUrl: string;
-  artifactDir: string;
+  /** Where the files go: the configured store, whatever the archive came from. */
+  store: FileStore;
   passphrase: string;
   /** Whether the target database holds any Fabrikka table yet. */
   hasTables: () => Promise<boolean>;
-  /** Replace what is there: pg_restore --clean, and artifacts overwritten. */
+  /** Replace what is there: pg_restore --clean. Files are content-addressed, so present ones are already right. */
   force?: boolean;
 }
 
@@ -216,8 +226,15 @@ export async function restoreBackup(o: RestoreOptions): Promise<BackupManifest> 
     const args = ['--no-owner', '--no-acl', '--exit-on-error', '--dbname', o.databaseUrl];
     if (o.force) args.unshift('--clean', '--if-exists');
     await run('pg_restore', [...args, join(work, 'db.dump')]);
-    await mkdir(o.artifactDir, { recursive: true });
-    await cp(join(work, 'artifacts'), o.artifactDir, { recursive: true, force: true });
+    await o.store.check();
+    const root = join(work, 'artifacts');
+    if (existsSync(root)) {
+      for (const e of await readdir(root, { withFileTypes: true, recursive: true })) {
+        if (!e.isFile()) continue;
+        const from = join(e.parentPath, e.name);
+        await o.store.put(relative(root, from).split(sep).join('/'), await readFile(from));
+      }
+    }
     return manifest;
   } finally {
     await rm(work, { recursive: true, force: true });

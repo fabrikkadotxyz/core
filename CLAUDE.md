@@ -90,6 +90,7 @@ FABRIKKA_TEST_SPAWN=1 node scripts/acceptance/m10.mjs  # asserts activity is liv
 FABRIKKA_TEST_DOCKER=1 node scripts/acceptance/m39.mjs # builds the image, runs the self-hosted stack
 FABRIKKA_TEST_DOCKER=1 node scripts/acceptance/m40.mjs # runs the image the way Render does
 FABRIKKA_TEST_BACKUP=1 node scripts/acceptance/m61.mjs # backs up and restores into a scratch database (needs pg_dump, pg_restore, psql)
+FABRIKKA_TEST_S3=1 node scripts/acceptance/m66.mjs     # runs an S3-compatible server in Docker; files in a bucket
 ```
 
 Run **every** existing acceptance check before committing a milestone, not just the current one.

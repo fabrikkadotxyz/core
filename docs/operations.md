@@ -454,21 +454,61 @@ database, and separately from it.
 A credential is never returned by any API and never logged; the UI shows only
 whether one is set.
 
-## Artifacts
+## Files
 
-Uploaded files are stored on local disk — a self-hoster should not have to
-configure object storage to attach a CSV. The location is `ARTIFACT_DIR`,
-defaulting to `.artifacts/` in the repo root.
+Uploaded files live in one of two stores, the operator's choice
+([ADR 0060](decisions/0060-files-live-on-disk-or-in-an-s3-compatible-bucket.md)):
 
-Files are named by the **SHA-256 of their content**, sharded two levels deep. Two
-people uploading `notes.md` therefore share one blob and neither overwrites the
-other ([ADR 0013](decisions/0013-context-is-append-only-with-explicit-removal.md)).
+- **On disk** (the default, `FABRIKKA_FILES=disk`): a self-hoster should not
+  have to configure object storage to attach a CSV. The location is
+  `ARTIFACT_DIR`, defaulting to `.artifacts/` in the repo root, `/data/artifacts`
+  in the image.
+- **In an S3-compatible bucket** (`FABRIKKA_FILES=s3`, M66): AWS S3,
+  Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces, Scaleway,
+  Hetzner, MinIO, Garage, anything that speaks the S3 API. For a hosted
+  instance on an ephemeral or one-machine disk, and to choose the files'
+  region.
+
+| Variable | Meaning |
+| --- | --- |
+| `FABRIKKA_FILES` | `disk` (default) or `s3` |
+| `FABRIKKA_S3_ENDPOINT` | The store's URL, e.g. `https://<account>.r2.cloudflarestorage.com`, `https://s3.eu-central-003.backblazeb2.com`, `http://minio:9000`. Empty means AWS for the region. |
+| `FABRIKKA_S3_BUCKET` | The bucket, which must exist. Keep it private: nothing is ever served from it directly. |
+| `FABRIKKA_S3_REGION` | Default `us-east-1`. R2 takes `auto`. |
+| `FABRIKKA_S3_ACCESS_KEY_ID`, `FABRIKKA_S3_SECRET_ACCESS_KEY` | A key that may read, write and list that bucket. Never logged. |
+| `FABRIKKA_S3_PREFIX` | Optional, e.g. `fabrikka/`, to share a bucket. |
+| `FABRIKKA_S3_PATH_STYLE` | `true` for `https://host/bucket/key`, `false` for `https://bucket.host/key`. Default: `true` when an endpoint is given, `false` for AWS. |
+
+With a bucket, the server writes and reads back a small `fabrikka-check`
+object at start, and **refuses to start** if it can't, saying why: the key was
+rejected, no such bucket, the region, or the endpoint not reachable. It never
+falls back to disk. Its first lines name the store in use.
+
+Files are named by the **SHA-256 of their content**, sharded two levels deep
+(`ab/cd/abcd…`), the same keys on disk and in a bucket. Two people uploading
+`notes.md` share one blob and neither overwrites the other
+([ADR 0013](decisions/0013-context-is-append-only-with-explicit-removal.md)).
+Downloads always go through the server and the room's membership check: no
+presigned URL, no public bucket.
 
 Limits: 10 MB per file. Deleting an artifact removes the row but **leaves the
 blob**, because another artifact may reference the same content; at MVP scale we
 do not collect that garbage, and say so rather than letting you discover it.
 
-Back up `ARTIFACT_DIR` alongside the database — the rows are useless without it.
+**Moving to a bucket** (or back). Stop the server, add the `FABRIKKA_S3_*`
+settings, then:
+
+```bash
+pnpm admin files copy --to s3   # every blob from ARTIFACT_DIR into the bucket; rerunnable
+pnpm admin files status         # with FABRIKKA_FILES=s3: the store, and any file missing from it
+```
+
+Set `FABRIKKA_FILES=s3` and start the server. `--to disk` goes the other way.
+The copy skips what is already there, so a second run after new uploads only
+copies those. Keep the disk tree until `files status` says nothing is missing.
+
+The backup copies every file from whichever store is in use (*Backups*,
+below); the database rows are useless without them.
 
 ## Outputs
 
@@ -626,7 +666,8 @@ and `FABRIKKA_BACKUP_KEY` (seals the archives). A backup is **one encrypted
 archive** of the first two; the secrets you keep yourself.
 
 **What a backup is.** `fabrikka-<instant>.fbk`: a gzipped tar holding
-`db.dump` (`pg_dump --format=custom`), `artifacts/` (the whole file tree) and
+`db.dump` (`pg_dump --format=custom`), `artifacts/` (every file, read from
+the store in use, disk or bucket) and
 `manifest.json` (when, the instance, the dump's size and SHA-256, the file
 count), encrypted with AES-256-GCM under a key derived from
 `FABRIKKA_BACKUP_KEY`. A copy that leaks is just bytes; an archive restored
@@ -655,7 +696,8 @@ pnpm admin backups --dir /path/to/backups                        # what is there
 ```
 
 **Restoring.** Into an **empty** instance: a fresh database (`createdb`, or a
-new managed one) and an empty artifact directory, with the same
+new managed one) and the file store you want, an empty `ARTIFACT_DIR` or a
+bucket (`FABRIKKA_FILES=s3`), with the same
 `FABRIKKA_ENCRYPTION_KEY` as before (or every vendor connection must be
 attached again).
 
@@ -666,7 +708,9 @@ FABRIKKA_BACKUP_KEY=… pnpm admin restore --file /path/to/fabrikka-….fbk
 
 It checks the checksum, refuses a database that already has tables (pass
 `--force` to replace one that was started and is empty), runs `pg_restore`,
-copies the files, and records `admin.restore` in the trail. Then start the
+writes the files into the configured store, and records `admin.restore` in
+the trail. An archive taken on disk restores into a bucket, and the other
+way round. Then start the
 server: it applies any migration newer than the archive. Point `PUBLIC_URL`
 at the new address if it changed.
 

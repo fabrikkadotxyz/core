@@ -3087,6 +3087,61 @@ and a spaced one normalised; removal is soft and shows in `?removed=1`; the
 old tools are not offered; the source holds the collapsed panel; M3, M7,
 M24, M25 and M27 are rewritten for notes and pass.
 
+## M66 — Files in a bucket
+
+> **Built 2026-10-21** ([ADR 0060](decisions/0060-files-live-on-disk-or-in-an-s3-compatible-bucket.md)).
+> The scripted check passes, the owner's manual test is pending. Until now an
+> uploaded file could only live on the server's disk, which a hosted instance
+> on an ephemeral or single-machine disk cannot keep, and whose region is
+> wherever the container runs.
+
+- **The operator picks the store:** `FABRIKKA_FILES=disk` (the default,
+  `ARTIFACT_DIR`, unchanged) or `FABRIKKA_FILES=s3` with an S3-compatible
+  endpoint URL, bucket, region and key (`FABRIKKA_S3_*`,
+  `docs/operations.md`, *Files*). AWS S3, Cloudflare R2, Backblaze B2,
+  MinIO and the rest; path-style by default when an endpoint is given.
+- **Same keys in both:** the content hash, sharded `ab/cd/<hash>`, under an
+  optional prefix. Written once, never deleted by Fabrikka, as on disk.
+- **Downloads still go through the room's membership check.** No presigned
+  URLs, no public bucket.
+- **A bucket that does not answer stops the server at start,** with the
+  reason, and never falls back to disk.
+- **Moving:** `fabrikka admin files copy --to s3` (or `--to disk`) copies
+  every blob across, skipping what is there; `fabrikka admin files status`
+  names the store and counts any file row without its blob. The backup reads
+  from the configured store and a restore writes into it; the archive format
+  is unchanged.
+- **No SDK:** `apps/server/src/s3.ts` signs its own requests (Signature
+  Version 4), tested against AWS's published example.
+
+**Test** (Docker, and an instance with a few files already uploaded):
+1. Start a bucket. Versity Gateway serves a folder as S3, and a directory
+   is a bucket (MinIO no longer publishes images; any S3 store will do):
+   `docker run -d --name fabrikka-s3 -p 7070:7070 --entrypoint sh versity/versitygw:latest -c 'mkdir -p /data/fabrikka && exec versitygw --access fabrikka --secret fabrikka-s3-secret posix /data'`.
+2. Stop the server. Add to `.env`: `FABRIKKA_FILES=s3`,
+   `FABRIKKA_S3_ENDPOINT=http://localhost:7070`, `FABRIKKA_S3_BUCKET=fabrikka`,
+   `FABRIKKA_S3_ACCESS_KEY_ID=fabrikka`, `FABRIKKA_S3_SECRET_ACCESS_KEY=fabrikka-s3-secret`.
+3. `pnpm admin files status`: *s3*, and every file missing. `pnpm admin files copy --to s3`,
+   then status again: none missing.
+4. Start the server: its first lines name the bucket. Open a room with a file
+   and download it: the same bytes. Upload a new one: it appears in the
+   bucket (`docker exec fabrikka-s3 find /data/fabrikka -type f`), not in
+   `.artifacts/`. **2 clicks** to download.
+5. Set a wrong secret key and start the server: it refuses, saying the
+   bucket rejected the key. Put it back.
+
+**Scripted** (`scripts/acceptance/m66.mjs`): the source keeps downloads
+behind the membership check and never builds a presigned URL; a core started
+with an unreachable bucket, incomplete settings or an unknown store refuses
+to start and says why, without the secret; the signer matches AWS's two
+published examples (unit test). With `FABRIKKA_TEST_S3=1` it starts Versity
+Gateway in Docker, spawns a core with `FABRIKKA_FILES=s3`, uploads and downloads a
+file through a room, finds the object at its key in the bucket, copies a
+disk tree across with `admin files copy` and back, reads `admin files
+status`, and stops a core whose key is wrong; with `FABRIKKA_TEST_BACKUP=1`
+too, it backs up from the bucket and restores into another prefix. Also
+tried by hand against RustFS.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

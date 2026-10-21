@@ -721,6 +721,13 @@ of this table.
   inside it stay sealed under `FABRIKKA_ENCRYPTION_KEY`. A restore checks the
   dump's checksum and refuses a wrong passphrase before touching anything.
   Both keys belong somewhere other than the server (`docs/operations.md`).
+- **Files in a bucket never leave through it** (M66, ADR 0060). With
+  `FABRIKKA_FILES=s3` the server reads the bytes and serves them under the
+  room's membership check, exactly as from disk. No presigned URL is ever
+  made: a link to the bucket would outlive a person's place in the room. The
+  bucket should be private. Its key is the operator's, in the environment
+  beside `DATABASE_URL`, and is never logged; the start line names only the
+  endpoint, bucket and prefix. The bucket's region is the files' region.
 - **The web app keeps a copy of what a tab last showed** (ADR 0044) in that tab's `sessionStorage`: who you are, your organizations and rooms, and the last room's details and latest 100 messages. It's for painting a reload at once, never for deciding what's allowed. The server checks every action as before. It's gone when the tab closes, and dropped on sign-out or when the server says you're signed out.
 
 ## Security checks that gate release

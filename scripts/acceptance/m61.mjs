@@ -58,7 +58,7 @@ const adminFails = (env, ...args) => {
 check(/postgresql-client-17/.test(read('docker/Dockerfile')), 'THE IMAGE HAS pg_dump AND pg_restore 17');
 const entry = read('docker/entrypoint.sh');
 check(/FABRIKKA_BACKUP_DIR="\$data\/backups"/.test(entry) && /backup\.key/.test(entry), 'the entrypoint backs up by default, sealed with a generated passphrase');
-check(/createBackup\(\{ databaseUrl: process\.env\.DATABASE_URL!, artifactDir: STORAGE_DIR, passphrase: backupKey, dir: backupDir/.test(read('apps/server/src/app.ts')), 'the server writes one a day');
+check(/createBackup\(\{ databaseUrl: process\.env\.DATABASE_URL!, store: files\(\), passphrase: backupKey, dir: backupDir/.test(read('apps/server/src/app.ts')), 'the server writes one a day, from whichever store holds the files (M66)');
 check(/The restore drill/.test(read('docs/operations.md')) && /Recovery point: 24 hours/.test(read('docs/operations.md')), 'the docs state the targets and the drill');
 const bk = read('apps/server/src/backup.ts');
 check(/createCipheriv\('aes-256-gcm'/.test(bk) && /scryptSync\(passphrase, salt, 32/.test(bk) && /if \(sum !== manifest\.database\.sha256\)/.test(bk), 'sealed with a derived key, checksum verified before restore');

@@ -132,7 +132,7 @@ import { GRACE_DAYS, requestDeletion, runDueDeletions } from './leaving.ts';
 import { loginThrottle } from './login-throttle.ts';
 import { AUDIT_DAYS, audit, auditCsv, auditForTeam, auditForUser, getAuditDays, pruneAudit, setAuditDays, userIdFor, type AuditInput } from './audit.ts';
 import { BACKUP_KEEP_DAYS, createBackup, pruneBackups } from './backup.ts';
-import { STORAGE_DIR } from './artifacts.ts';
+import { files } from './file-store.ts';
 import { exportAccount } from './account-export.ts';
 import { getRetention, pruneRetention, RETENTION_DAYS, setRetention, summarize as summarizeRetention } from './retention.ts';
 import { completeVerification, requestVerification, verificationRequired } from './verification.ts';
@@ -3249,6 +3249,16 @@ export function createApp(options: CreateAppOptions = {}) {
      * listen on PORT with the sockets attached (M39: nobody migrates by hand).
      */
     async start(port = PORT) {
+      // M66 (ADR 0060): a store that does not answer stops the server, never a
+      // quiet fall back to disk that would leave the files in two places.
+      try {
+        await files().check();
+      } catch (err) {
+        console.error(`[files] ${(err as Error).message}`);
+        console.error('[files] refusing to start: uploads would fail. Fix the store, or set FABRIKKA_FILES=disk (docs/operations.md, "Files").');
+        process.exit(1);
+      }
+      console.log(`[files] ${files().describe()}`);
       await runMigrations(db);
       await setup.prepare();
       // M43: call records expire. Once now, then daily; never keeps the process alive.
@@ -3278,7 +3288,7 @@ export function createApp(options: CreateAppOptions = {}) {
       const backupKey = process.env.FABRIKKA_BACKUP_KEY;
       if (backupDir && backupKey) {
         const save = () =>
-          createBackup({ databaseUrl: process.env.DATABASE_URL!, artifactDir: STORAGE_DIR, passphrase: backupKey, dir: backupDir, publicUrl: PUBLIC_URL })
+          createBackup({ databaseUrl: process.env.DATABASE_URL!, store: files(), passphrase: backupKey, dir: backupDir, publicUrl: PUBLIC_URL })
             .then(async (r) => {
               const pruned = await pruneBackups(backupDir, BACKUP_KEEP_DAYS);
               console.log(`[backup] wrote ${r.file} (${(r.bytes / 1024 / 1024).toFixed(1)} MB)${pruned ? `, pruned ${pruned} older` : ''}`);

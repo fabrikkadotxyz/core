@@ -830,7 +830,8 @@ silently deletes what a human typed a minute earlier. See
 **`storage_key` is the SHA-256 of the file's content**, not its name. Two people
 uploading `notes.md` get two artifact rows sharing one blob, and neither
 overwrites the other. The display name lives on the row, so collisions are a
-non-event rather than data loss.
+non-event rather than data loss. The blob lives at `ab/cd/<hash>` in the file
+store, on disk or in a bucket (M66, ADR 0060); the key is the same in both.
 
 Context is **not** over-normalized. Facts and decisions are lists of text with timestamps, not an entity graph. If this needs to become relational later, that will be obvious from use — it is not obvious now.
 

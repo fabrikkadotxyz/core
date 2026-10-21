@@ -10,7 +10,8 @@
  */
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
-import { createClient } from '@fabrikka/db';
+import { artifacts, createClient } from '@fabrikka/db';
+import { eq } from 'drizzle-orm';
 import {
   countUsers,
   createUser,
@@ -22,7 +23,7 @@ import { deactivateUser, deleteUserNow, findUserForLeaving, GRACE_DAYS, previewD
 import { audit, auditForInstance, type AuditAction } from './audit.ts';
 import { BackupError, createBackup, listBackups, readManifest, restoreBackup } from './backup.ts';
 import { pruneRetention, summarize as summarizeRetention } from './retention.ts';
-import { STORAGE_DIR } from './artifacts.ts';
+import { blobKey, fileStoreFromEnv, files, FileStoreError } from './file-store.ts';
 /** M60 (ADR 0058): every command leaves one event, as the operator. */
 const record = (action: AuditAction, e: { subjectUserId?: string | null; detail?: Record<string, string | number | boolean | null> } = {}) =>
   audit(db, { action, actorKind: 'operator', ...e });
@@ -43,7 +44,9 @@ const USAGE = `fabrikka admin
   backup        [--to <dir>]    one encrypted archive: database + files (M61); FABRIKKA_BACKUP_KEY
   backups       [--dir <dir>]   the archives in a directory, newest first
   restore       --file <archive> [--force]
-                                into an empty instance (DATABASE_URL, ARTIFACT_DIR); --force replaces
+                                into an empty instance (DATABASE_URL, and the configured file store); --force replaces
+  files status                  which store holds the files (FABRIKKA_FILES, M66), and any file row without its blob
+  files copy    --to <disk|s3>  copy every blob from the other store into that one; rerunnable
   prune-retention [--team <id>] delete what organizations chose not to keep (M63), now
 
 Passwords are read from a TTY prompt, or from stdin with --password-stdin so
@@ -258,7 +261,7 @@ try {
       try {
         const r = await createBackup({
           databaseUrl: process.env.DATABASE_URL!,
-          artifactDir: STORAGE_DIR,
+          store: files(),
           passphrase,
           dir,
           publicUrl: process.env.PUBLIC_URL ?? null,
@@ -292,7 +295,7 @@ try {
         const manifest = await restoreBackup({
           file,
           databaseUrl: process.env.DATABASE_URL!,
-          artifactDir: STORAGE_DIR,
+          store: files(),
           passphrase,
           force: has(argv, 'force'),
           hasTables: async () => {
@@ -301,9 +304,56 @@ try {
           },
         });
         await record('admin.restore', { detail: { from: manifest.createdAt, artifacts: manifest.artifacts.count, force: has(argv, 'force') } });
-        console.log(`restored: ${manifest.artifacts.count} file(s) into ${STORAGE_DIR}, the database from ${manifest.createdAt}. Start the server; it applies any newer migrations.`);
+        console.log(`restored: ${manifest.artifacts.count} file(s) into ${files().describe()}, the database from ${manifest.createdAt}. Start the server; it applies any newer migrations.`);
       } catch (err) {
-        if (err instanceof BackupError) die(err.message);
+        if (err instanceof BackupError || err instanceof FileStoreError) die(err.message);
+        throw err;
+      }
+      break;
+    }
+
+    case 'files': {
+      // M66 (ADR 0060): which store, and moving between them.
+      const sub = argv[1];
+      try {
+        if (sub === 'status') {
+          const store = files();
+          console.log(`FABRIKKA_FILES=${store.kind}: ${store.describe()}`);
+          await store.check();
+          const rows = await db.selectDistinct({ key: artifacts.storageKey }).from(artifacts).where(eq(artifacts.type, 'file'));
+          const missing: string[] = [];
+          for (const r of rows) if (!(await store.has(blobKey(r.key)))) missing.push(r.key);
+          console.log(`${rows.length} distinct file(s) referenced, ${missing.length} missing from this store`);
+          for (const k of missing.slice(0, 20)) console.log(`  missing ${k}`);
+          if (missing.length > 20) console.log(`  … and ${missing.length - 20} more`);
+          if (missing.length) process.exitCode = 2;
+        } else if (sub === 'copy') {
+          const to = flag(argv, 'to');
+          if (to !== 'disk' && to !== 's3') die('--to disk or --to s3');
+          const target = fileStoreFromEnv(process.env, to);
+          const source = fileStoreFromEnv(process.env, to === 's3' ? 'disk' : 's3');
+          await target.check();
+          console.log(`copying from ${source.describe()} into ${target.describe()}`);
+          let copied = 0;
+          let present = 0;
+          for await (const key of source.list()) {
+            if (await target.has(key)) {
+              present++;
+              continue;
+            }
+            const bytes = await source.get(key);
+            if (!bytes) continue;
+            await target.put(key, bytes);
+            copied++;
+            if (copied % 100 === 0) console.log(`  ${copied} copied`);
+          }
+          await record('admin.files_copy', { detail: { to, copied, present } });
+          console.log(`${copied} copied, ${present} already there. Set FABRIKKA_FILES=${to} and restart the server to use it.`);
+        } else {
+          die('files status, or files copy --to <disk|s3>');
+        }
+      } catch (err) {
+        if (err instanceof FileStoreError) die(err.message);
         throw err;
       }
       break;

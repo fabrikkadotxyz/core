@@ -7,28 +7,23 @@
  * silent data loss. See ADR 0013.
  */
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { and, desc, eq } from 'drizzle-orm';
 import type { Database } from '@fabrikka/db';
 import { artifacts, participants } from '@fabrikka/db';
 import type { Artifact } from '@fabrikka/types';
+import { blobKey, files } from './file-store.ts';
 
-/** A self-hoster should not have to configure object storage to attach a CSV. */
-/** Where the files live. Exported for the backup (M61), which copies the whole tree. */
-export const STORAGE_DIR = process.env.ARTIFACT_DIR ?? join(process.cwd(), '..', '..', '.artifacts');
+/*
+ * Where the bytes live is the file store's business (M66, ADR 0060): disk by
+ * default, so a self-hoster need not configure object storage to attach a
+ * CSV, or an S3-compatible bucket the operator names.
+ */
 
 export const MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
 
 export type ArtifactResult =
   | { ok: true; artifact: Artifact }
   | { ok: false; error: string };
-
-/** Sharded two levels so a directory never holds a hundred thousand entries. */
-function blobPath(hash: string): string {
-  return join(STORAGE_DIR, hash.slice(0, 2), hash.slice(2, 4), hash);
-}
 
 export async function createFileArtifact(
   db: Database,
@@ -51,16 +46,8 @@ export async function createFileArtifact(
   }
 
   const hash = createHash('sha256').update(opts.content).digest('hex');
-  const path = blobPath(hash);
-
-  // Identical content is already on disk; writing again would be a no-op with a
-  // chance of a torn write.
-  if (!existsSync(path)) {
-    await mkdir(join(STORAGE_DIR, hash.slice(0, 2), hash.slice(2, 4)), {
-      recursive: true,
-    });
-    await writeFile(path, opts.content, { mode: 0o600 });
-  }
+  // Identical content already stored is left alone: the store writes once.
+  await files().put(blobKey(hash), opts.content);
 
   const [row] = await db
     .insert(artifacts)
@@ -138,7 +125,7 @@ export async function readArtifact(
 
   if (!row || row.a.type !== 'file') return null;
 
-  const content = await readFile(blobPath(row.a.storageKey)).catch(() => null);
+  const content = await files().get(blobKey(row.a.storageKey));
   if (!content) return null;
 
   return { artifact: toArtifact(row.a, row.authorName), content };
@@ -149,7 +136,7 @@ export async function deleteArtifact(
   sessionId: string,
   artifactId: string,
 ): Promise<boolean> {
-  // The blob is deliberately left on disk: another artifact may share it, and at
+  // The blob is deliberately left in the store: another artifact may share it, and at
   // MVP scale reference counting costs more than the bytes. Said out loud rather
   // than discovered later.
   const deleted = await db

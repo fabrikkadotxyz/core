@@ -91,3 +91,4 @@ What we rejected and why.
 | [0057](0057-leaving-an-account-is-deactivated-then-deleted-the-record-stays.md) | Leaving: an account is deactivated, then deleted; the record stays | Proposed |
 | [0058](0058-the-trail-who-did-what-kept-per-organization-never-what-they-said.md) | The trail: who did what, kept per organization, never what they said | Proposed |
 | [0059](0059-a-room-keeps-notes-not-a-form.md) | A room keeps notes, not a form | Proposed |
+| [0060](0060-files-live-on-disk-or-in-an-s3-compatible-bucket.md) | Files live on disk, or in an S3-compatible bucket the operator names | Proposed |

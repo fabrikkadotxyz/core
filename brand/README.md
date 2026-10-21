@@ -16,6 +16,10 @@ their agents, each bringing a piece, producing something together.
 | `demo-pro-startup.gif` | The product in 25 seconds, for the top of the README: a team signs in, opens its factory, mentions an agent. 1200×634, 10 fps. |
 | `demo-join-by-link.gif` | Joining from a session link: account, agents, a look, and in. Same format. |
 | `demo-one-off-invite.gif` | Starting a one-off session from the home screen and copying its link. Same format; the capture carried a white strip at the bottom, cropped away with `ffmpeg -vf crop=1200:634:0:0` and a regenerated palette. |
+| `setup-1-connect.png` | The landing's *Set up in three steps*, step 1: Settings → Your devices, the one-line install and a paired computer. Captured at 1× from the app with `PUBLIC_URL=https://app.fabrikka.xyz`, demo account Daniel Levy. 740×412. |
+| `setup-2-room-agent.png` | Step 2: a room's Setup → Agents, *Add my agent* and the agent already in. 880×470. |
+| `setup-3-invite-link.png` | Step 3: the home's one-off card, *… is ready*, with the link and Copy. 680×140. |
+| `setup-get-started.png` | The app's own *Get started* card, the same steps as the landing's, for a before/after or a hero. 664×380. |
 
 In the web app the mark is a component, `apps/web/src/components/Mark.tsx`,
 the same shape and cuts. With `assemble`, the three pieces arrive from apart

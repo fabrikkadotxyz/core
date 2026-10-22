@@ -10,19 +10,29 @@ test.
 Fabrikka is licensed [AGPL-3.0-only](LICENSE)
 ([ADR 0034](docs/decisions/0034-license-agpl-3.0.md)).
 
-Contributions are accepted under a **contributor license agreement (CLA)**:
+**Pull requests are welcome.** Contributions are accepted under a
+[contributor license agreement (CLA)](CLA.md):
 
 - you keep the copyright to your work;
 - you license it to the project under the AGPL-3.0, **and** to the project's
-  maintainer under terms that let them also offer it as part of the hosted
-  Fabrikka service;
+  maintainer under terms that let them also offer it as part of a hosted
+  Fabrikka service and under other license terms;
 - you confirm the work is yours to contribute.
 
 The second grant is the reason for a CLA rather than only a sign-off.
 
-**The CLA's full text will be published before outside pull requests are
-accepted.** Until then, please open an issue to discuss a change instead of a
-pull request.
+You agree once. On your first pull request a check asks you to post this
+comment, and records it:
+
+> I have read the CLA Document and I hereby sign the CLA
+
+It then covers all your contributions. If your employer may own what you write,
+check with them first (section 4 of the CLA).
+
+For a larger change, open an issue first so we can agree on the approach before
+you build it. Fabrikka is documentation-first: a pull request that changes
+behaviour updates the docs that describe it, and an architectural choice comes
+with an ADR (`docs/decisions/`).
 
 ## Reporting a security problem
 

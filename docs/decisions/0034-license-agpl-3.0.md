@@ -31,7 +31,9 @@ contributor license agreement (CLA).**
 - `LICENSE` is the AGPL-3.0 text. The README and `package.json` files say
   `AGPL-3.0-only`. The desktop app's About window and the client installer say
   so too.
-- `CONTRIBUTING.md` explains the CLA. A CLA check runs on pull requests.
+- `CLA.md` is the agreement's text, adapted from the Apache Individual CLA 2.2.
+  `CONTRIBUTING.md` explains it. A CLA check (`.github/workflows/cla.yml`) runs
+  on pull requests: a contributor agrees once, by a comment on their first one.
 - **Dependencies:** everything the server and app bundle must be compatible with
   AGPL-3.0 (MIT, BSD, Apache-2.0 and ISC all are). A license check runs over
   them.

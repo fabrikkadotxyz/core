@@ -1,0 +1,102 @@
+# CI for pull requests and main (CONTRIBUTING.md, "Checks on a pull request"):
+# typecheck, unit tests, the bridge and web builds, and the desktop app's cargo
+# tests when it changed. A change that touches only documentation runs none of
+# it and passes at once, so the "ci" check never waits on a docs-only PR. The
+# acceptance checks need a running instance, so they stay local (CLAUDE.md).
+# "[skip ci]" in the head commit's message skips every run, as GitHub does.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+      desktop: ${{ steps.diff.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        name: What changed
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # A new branch's first push has no "before": check everything.
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; echo "desktop=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files=$(git diff --name-only "$BASE"..."$HEAD")
+          printf '%s\n' "$files"
+          # Documentation: Markdown anywhere, docs/, brand/, LICENSE, CITATION.cff.
+          code=$(printf '%s\n' "$files" | grep -vE '\.md$|^docs/|^brand/|^LICENSE$|^CITATION\.cff$' | grep -c . || true)
+          desktop=$(printf '%s\n' "$files" | grep -cE '^apps/desktop/|^packages/bridge/' || true)
+          echo "code=$([ "$code" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "desktop=$([ "$desktop" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  check:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - name: Unit tests (the desktop app's run in their own job)
+        run: pnpm -r --if-present --filter '!@fabrikka/desktop' test
+      - run: pnpm --filter @fabrikka/bridge build
+      - run: pnpm --filter ./apps/web build
+
+  desktop:
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux build dependencies (Tauri 2)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - run: pnpm install --frozen-lockfile
+      - name: The client and Node the app bundles
+        run: |
+          pnpm --filter @fabrikka/bridge build
+          node apps/desktop/scripts/copy-client.mjs
+          node apps/desktop/scripts/fetch-node.mjs
+      - run: cd apps/desktop/src-tauri && cargo test
+
+  # The one check to require: passes when the others passed or weren't needed.
+  ci:
+    needs: [changes, check, desktop]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Result
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "jobs: $RESULTS"
+          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1 ;; esac

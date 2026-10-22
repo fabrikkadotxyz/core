@@ -34,6 +34,19 @@ you build it. Fabrikka is documentation-first: a pull request that changes
 behaviour updates the docs that describe it, and an architectural choice comes
 with an ADR (`docs/decisions/`).
 
+## Checks on a pull request
+
+GitHub runs the `ci` workflow on every pull request: typecheck, unit tests,
+the bridge and web builds, and the desktop app's `cargo test` when
+`apps/desktop/` or `packages/bridge/` changed. A pull request that changes only
+documentation (Markdown, `docs/`, `brand/`, `LICENSE`, `CITATION.cff`) skips
+them and passes at once. Put `[skip ci]` in a commit message to skip the run
+for that push.
+
+The acceptance checks (`pnpm acceptance`) need a running instance, so they
+aren't part of it: run them locally before a change to a milestone's behaviour
+(`CLAUDE.md`).
+
 ## Reporting a security problem
 
 Please don't open a public issue. See [`SECURITY.md`](SECURITY.md).

@@ -155,6 +155,35 @@ try {
   check(!(await tool(mcp, agent.token, 'read_messages', {})).error, '…and the agent can still read');
   check((await req(DEP, `/api/teams/${gatedTeam.id}/invites`, { method: 'POST', body: {}, jar: fede })).status === 402, 'inviting into a gated team is refused');
 
+  /* ------------------------------------------- M68: creating and joining an organization */
+
+  const fedeId = (await req(DEP, '/api/auth/me', { jar: fede })).json.user.id;
+  const ownId = (await req(DEP, '/api/teams', { jar: fede })).json.find((t) => t.own)?.id;
+  const ownInfo = (await req(DEP, `/api/fixture/team/${ownId}`)).json;
+  check(ownInfo?.ownOfUserId === fedeId, "KIT.TEAM() SAYS WHOSE SELF A TEAM IS");
+  check((await req(DEP, `/api/fixture/team/${openTeam.id}`)).json?.ownOfUserId === null, '…and null for an organization');
+
+  const joinTeam = (await req(DEP, '/api/teams', { method: 'POST', body: { name: `Join ${stamp}` }, jar: fede })).json;
+  const joinInvite = (await req(DEP, `/api/teams/${joinTeam.id}/invites`, { method: 'POST', body: {}, jar: fede })).json;
+  await req(DEP, `/api/fixture/gate/${joinTeam.id}`, { method: 'POST', body: {} });
+  const fourth = `m46-d-${stamp}@example.com`;
+  const signupJoin = await req(DEP, '/api/auth/signup', { method: 'POST', body: { token: joinInvite.token, email: fourth, password: 'm46-password', displayName: `m46d${stamp}` } });
+  check(signupJoin.status === 402 && /\(join\)/.test(signupJoin.json?.error ?? '') && signupJoin.json?.gated === true, 'A REFUSED JOIN, SIGNING UP THROUGH THE LINK, ANSWERS 402');
+  check((await sql(`select count(*) from users where email = '${fourth}'`)).trim() === '0', '…and makes no account');
+  const member = jar();
+  await req(DEP, '/api/auth/login', { method: 'POST', body: { email: first, password: 'm46-password' }, jar: member });
+  const redeemJoin = await req(DEP, `/api/invites/${joinInvite.token}/redeem`, { method: 'POST', body: {}, jar: member });
+  check(redeemJoin.status === 402 && /\(join\)/.test(redeemJoin.json?.error ?? ''), 'A REFUSED JOIN, SIGNED IN, ANSWERS 402');
+  check((await sql(`select uses from session_invites where team_id = '${joinTeam.id}'`)).trim() === '0', '…and the invite is not used up');
+  await req(DEP, `/api/fixture/gate/${joinTeam.id}`, { method: 'DELETE' });
+  check((await req(DEP, `/api/invites/${joinInvite.token}/redeem`, { method: 'POST', body: {}, jar: member })).json?.team?.id === joinTeam.id, '…so the same link works once the deployment allows it');
+
+  await req(DEP, '/api/fixture/refuse-organizations', { method: 'POST', body: {} });
+  const before = (await sql('select count(*) from teams')).trim();
+  const refusedOrg = await req(DEP, '/api/teams', { method: 'POST', body: { name: `Refused ${stamp}` }, jar: fede });
+  check(refusedOrg.status === 402 && refusedOrg.json?.error === 'Fixture refuses new organizations.' && refusedOrg.json?.url === '/fixture-notice', 'A REFUSED NEW ORGANIZATION ANSWERS 402, with the reason and link');
+  check((await sql('select count(*) from teams')).trim() === before, '…and makes no organization');
+
   /* ------------------------------------------- the core alone */
 
   const coreFede = jar();
@@ -162,11 +191,14 @@ try {
   check((await req(CORE, `${base}/messages`, { method: 'POST', body: { content: 'core' }, jar: coreFede })).status === 201, 'THE CORE ALONE GATES NOTHING: the same room takes messages');
   const coreTeams = (await req(CORE, '/api/teams', { jar: coreFede })).json;
   check(coreTeams.every((t) => !t.notice), '…and shows no notices');
+  const coreOrg = await req(CORE, '/api/teams', { method: 'POST', body: { name: `Core ${stamp}` }, jar: coreFede });
+  check(coreOrg.status === 201, '…and refuses no new organization');
+  if (coreOrg.json?.id) await sql(`delete from teams where id = '${coreOrg.json.id}'`).catch(() => {});
 
   /* ------------------------------------------- cleanup */
 
   await req(CORE, `${base}`, { method: 'DELETE', jar: coreFede });
-  for (const t of [gatedTeam, openTeam]) await sql(`delete from teams where id = '${t.id}'`).catch(() => {});
+  for (const t of [gatedTeam, openTeam, joinTeam]) await sql(`delete from teams where id = '${t.id}'`).catch(() => {});
 } finally {
   for (const e of created) await admin(['delete-user', '--email', e]).catch(() => {});
   deployment.kill();

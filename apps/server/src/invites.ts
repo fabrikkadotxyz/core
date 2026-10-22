@@ -114,7 +114,9 @@ export type RedeemFailure =
   | 'already_redeemed'
   | 'revoked'
   | 'expired'
-  | 'wrong_email';
+  | 'wrong_email'
+  /** M68 (ADR 0062): an organization invite to someone's Self, made before Self became one person's. */
+  | 'self';
 
 export type RedeemResult =
   | { ok: true; session: { ownerSlug: string; publicId: string }; team?: undefined }
@@ -146,6 +148,10 @@ export async function redeemInvite(
 
     if (!invite) return { ok: false as const, reason: 'not_found' as const };
     if (invite.revokedAt) return { ok: false as const, reason: 'revoked' as const };
+    if (invite.teamId) {
+      const [team] = await tx.select({ ownOf: teams.ownOfUserId }).from(teams).where(eq(teams.id, invite.teamId)).limit(1);
+      if (team?.ownOf) return { ok: false as const, reason: 'self' as const };
+    }
     if (invite.redeemedAt || (invite.maxUses !== null && invite.uses >= invite.maxUses)) {
       return { ok: false as const, reason: 'already_redeemed' as const };
     }
@@ -253,6 +259,7 @@ export async function describeInvite(
       sessionTitle: sessionsPublicId.title,
       sessionTeamId: sessionsPublicId.teamId,
       teamName: teams.name,
+      teamOwnOf: teams.ownOfUserId,
       invitedEmail: sessionInvites.invitedEmail,
       role: sessionInvites.role,
       createdBy: sessionInvites.createdByUserId,
@@ -269,6 +276,8 @@ export async function describeInvite(
     .limit(1);
 
   if (!row) return null;
+  // M68 (ADR 0062): nobody joins someone else's Self, so such a link describes nothing.
+  if (row.teamOwnOf) return null;
   if (row.redeemedAt || row.revokedAt) return null;
   if (row.maxUses !== null && row.uses >= row.maxUses) return null;
   if (row.expiresAt.getTime() <= Date.now()) return null;
@@ -295,4 +304,18 @@ function toSummary(row: typeof sessionInvites.$inferSelect): InviteSummary {
     revokedAt: row.revokedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/**
+ * M68 (ADR 0062): the organization an invite joins, and who made it, for the
+ * deployment's `join` check before the invite is claimed. Null for a session
+ * invite, or a token that doesn't match.
+ */
+export async function inviteTeam(db: Database, token: string): Promise<{ teamId: string; createdByUserId: string } | null> {
+  const [row] = await db
+    .select({ teamId: sessionInvites.teamId, createdBy: sessionInvites.createdByUserId })
+    .from(sessionInvites)
+    .where(eq(sessionInvites.tokenHash, hashToken(token)))
+    .limit(1);
+  return row?.teamId ? { teamId: row.teamId, createdByUserId: row.createdBy } : null;
 }

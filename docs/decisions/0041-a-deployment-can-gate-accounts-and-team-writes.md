@@ -60,6 +60,8 @@ the deployment's own use.
     uploading, editing context and links, outputs and their comments,
     integrations, invites;
   - in a team: creating rooms, team chats and invites;
+  - *(amended 2026-10-22, ADR 0062)* creating a team (`organization`, with
+    `teamId` null) and joining one through its invite (`join`);
   - over MCP: every tool that writes.
 - **What it never guards,** so a gated team can still leave, clean up and take
   its data away: reading anything; marking read; notification settings;

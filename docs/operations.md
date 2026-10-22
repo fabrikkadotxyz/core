@@ -552,6 +552,26 @@ simply absent from **Add output**. Connecting a Google account also requires
 connecting is refused without it. Keep the client secret with the same care as the
 key.
 
+## Releases
+
+Two kinds of tag, on their own schedules:
+
+- **`v<major>.<minor>.<patch>`** is a release of the server, with the web app
+  and the client it carries. A deployment that builds from this repository can
+  pin one and know exactly what it runs. A tag can name an older commit than
+  `main`'s newest: it marks what was released, not what came last.
+- **`app-v<major>.<minor>.<patch>`** is a release of the desktop apps (below,
+  *Desktop app*). Pushing one builds them and attaches the files to a GitHub
+  release. A server release doesn't need a new app release, nor the other way
+  round.
+
+Tags are annotated and never moved: a fix is the next patch.
+
+```bash
+git tag -a v0.1.0 <commit> -m "v0.1.0"
+git push origin v0.1.0
+```
+
 ## Desktop app
 
 A Tauri app around the same web app that, since M34, also **runs your agents**:

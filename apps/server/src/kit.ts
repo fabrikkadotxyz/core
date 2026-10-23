@@ -73,8 +73,8 @@ export interface Kit {
   teamNotice(provide: NoticeProvider): void;
   /** After a team's membership changed, with its new size. */
   onTeamMembersChanged(listener: MembersListener): void;
-  /** A team's basics, or null. */
-  team(teamId: string): Promise<{ id: string; name: string; createdAt: Date; createdByUserId: string | null; members: number } | null>;
+  /** A team's basics, or null. `ownOfUserId` (ADR 0062): the account whose Self it is, or null for an organization. */
+  team(teamId: string): Promise<{ id: string; name: string; createdAt: Date; createdByUserId: string | null; ownOfUserId: string | null; members: number } | null>;
   /** Someone's role in a team, or null. */
   teamRole(teamId: string, userId: string): Promise<'owner' | 'member' | null>;
   /** How many accounts exist: to refuse early, before guardNewAccounts would. */

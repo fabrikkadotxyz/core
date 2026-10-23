@@ -344,6 +344,13 @@
       "when": 1792596240403,
       "tag": "0048_person-lookups",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792705726864,
+      "tag": "0049_self-alone",
+      "breakpoints": true
     }
   ]
 }

@@ -107,6 +107,7 @@ import {
 import {
   createInvite,
   describeInvite,
+  inviteTeam,
   listInvites,
   redeemInvite,
   revokeInvite,
@@ -144,6 +145,7 @@ import {
   addFromRoster,
   createTeam,
   getTeam,
+  isOwnOrganization,
   listTeamsForUser,
   membershipOrigins,
   removeTeamMember,
@@ -763,6 +765,9 @@ export function createApp(options: CreateAppOptions = {}) {
     ) {
       return c.json({ error: 'this invite is for a different email address' }, 403);
     }
+    // M68: a refused join makes no account.
+    const joinGated = await gateJoin(c, body.token, null);
+    if (joinGated) return joinGated;
 
     // In a transaction, so a deployment's account check and the insert are one step (ADR 0041).
     const created = await db.transaction((tx) =>
@@ -818,6 +823,8 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!rateLimit(`redeem:user:${c.get('user').id}`, { max: 300, windowMs: 15 * 60_000 })) {
       return c.json({ error: 'too many attempts; try again later' }, 429);
     }
+    const joinGated = await gateJoin(c, c.req.param('token'), c.get('user').id);
+    if (joinGated) return joinGated;
     const result = await redeemInvite(db, c.req.param('token'), c.get('user'));
     if (!result.ok) return c.json({ error: result.reason }, 400);
     if (result.team) membersChanged(db, result.team.id);
@@ -851,6 +858,19 @@ export function createApp(options: CreateAppOptions = {}) {
   ): Promise<Response | null> {
     if (!writesGuarded()) return null;
     const refusal = await checkWrite({ userId: c.get('user').id, ...scope, action });
+    return refusal ? c.json({ error: refusal.reason, url: refusal.url ?? null, gated: true }, 402) : null;
+  }
+
+  /**
+   * M68 (ADR 0062): joining an organization through its invite is a write the
+   * deployment may check, before the invite is claimed, so a refused link stays
+   * usable. `userId` is null for someone signing up through the link.
+   */
+  async function gateJoin(c: Context, token: string, userId: string | null): Promise<Response | null> {
+    if (!writesGuarded()) return null;
+    const target = await inviteTeam(db, token);
+    if (!target) return null;
+    const refusal = await checkWrite({ userId, teamId: target.teamId, ownerUserId: target.createdByUserId, action: 'join' });
     return refusal ? c.json({ error: refusal.reason, url: refusal.url ?? null, gated: true }, 402) : null;
   }
 
@@ -896,6 +916,9 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.post('/api/teams', requireUser(db), async (c) => {
     const { name } = await c.req.json<{ name?: string }>().catch(() => ({ name: undefined }));
+    // M68 (ADR 0062): creating an organization is a write a deployment may check.
+    const gated = await gateWrite(c, { teamId: null, ownerUserId: c.get('user').id }, 'organization');
+    if (gated) return gated;
     try {
       const team = await createTeam(db, c.get('user').id, name ?? '');
       membersChanged(db, team.id);
@@ -922,6 +945,8 @@ export function createApp(options: CreateAppOptions = {}) {
   app.post('/api/teams/:id/invites', requireUser(db), async (c) => {
     const teamId = c.req.param('id');
     if ((await teamRole(db, teamId, c.get('user').id)) !== 'owner') return c.notFound();
+    // M68 (ADR 0062): Self is one person; people join a session in it, by that session's link.
+    if (await isOwnOrganization(db, teamId)) return c.json({ error: 'Self is yours alone: invite people to an organization, or to one session' }, 400);
     const gated = await gateWrite(c, { teamId, ownerUserId: c.get('user').id }, 'invite');
     if (gated) return gated;
     const body = await c.req.json<{ invitedEmail?: string; role?: string }>().catch(() => ({}) as { invitedEmail?: string; role?: string });

@@ -286,7 +286,8 @@ team_id is not null)` holds it.
 
 **Each account has its own team, "Self"** (`teams.own_of_user_id`, unique),
 created with the account. It has no #general and no shared connections. Its person cannot be removed
-from it. Sessions created without naming a team go there. A session is
+from it, and nobody else is ever on it (ADR 0062): no organization invite
+targets it. Sessions created without naming a team go there. A session is
 *individual* when it is private and has one member and no guest; that is
 derived on listing, never stored.
 

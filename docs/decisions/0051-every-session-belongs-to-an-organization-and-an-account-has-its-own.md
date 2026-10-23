@@ -37,7 +37,8 @@ named, is the caller's own.
 one word that says what it is in the switcher of every account). It is
 marked as the account's own (`teams.own_of_user_id`), its person cannot
 leave it or be removed from it, so the account is never without one, and it
-is renamable like any organization. **Inside Self there is no distinction
+is renamable like any organization. (Amended 2026-10-22, ADR 0062: **Self
+has exactly one member**; nobody can be invited to it.) **Inside Self there is no distinction
 between personal and organization integrations:** the Integrations place
 shows one list, your own connections, and Self has no shared connections of
 its own. **Self has no Chats place at all** (amended 2026-10-16): a chat

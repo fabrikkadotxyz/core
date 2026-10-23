@@ -3191,6 +3191,43 @@ and a file over 512 KB are refused; a replaced picture's blob is gone from
 the store; removing it clears `avatarUrl`; the export holds it; deleting
 the account removes it; the trail has the events; agents carry no picture.
 
+## M68 — Self is one person
+
+> **Built 2026-10-22** ([ADR 0062](decisions/0062-self-is-one-person-working-together-is-an-organization.md)).
+> The scripted check passes, the owner's manual test is pending. Until now
+> an owner could invite people into their Self like into any organization.
+
+- **Nobody can be invited to Self.** An organization invite for Self is
+  refused; one made before is refused when opened. Settings has no *People*
+  page in Self. The migration (0049) revokes open organization invites to a
+  Self and takes anyone but its person off it.
+- **One-off sessions stay:** a session in Self still takes people by its
+  link, into that session only.
+- **Creating and joining an organization are checked writes**
+  (`organization`, `join`): with no deployment check they are always
+  allowed. A refused join answers 402 and leaves the invite unused.
+- **`kit.team()` says whose Self a team is** (`ownOfUserId`).
+
+**Test** (two accounts, A and B):
+1. As A, in Self, open Settings: there is no *People* page. **1 click.**
+2. Switch to an organization A owns → Settings → People → **Create invite
+   link**: an organization invite, as before. **4 clicks.**
+3. As A, in Self, start a one-off session and send B the link; B joins the
+   session, and B's switcher shows only B's own Self. **2 clicks and a
+   title.**
+4. Settings → Organizations (in Self) → a name → **Create organization**:
+   it is created and selected. **3 clicks.**
+
+**Scripted** (`scripts/acceptance/m68.mjs`): an organization invite for
+Self is refused (400); an invite to Self written straight into the database
+is refused on redemption, signed in or signing up, and makes no account;
+Self's members are its person only; an organization invite still works; a
+one-off session in Self still takes a second person, who is not on Self.
+`m46` (the gates fixture) covers the rest: a refused `organization` makes
+no organization, a refused `join` answers 402 and leaves the invite usable,
+a sign-up through it makes no account, and `kit.team()` carries
+`ownOfUserId`.
+
 ## Later — Resuming offline agents
 
 An agent that was mentioned while its runner or host was offline (the laptop

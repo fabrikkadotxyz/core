@@ -16,15 +16,16 @@ import { Account } from './AccountPage.tsx';
 import { OrganizationActivity } from './ActivityPage.tsx';
 
 const TABS = [
-  { key: 'people', label: 'People', org: true, self: false },
+  // M68 (ADR 0062): not in Self, which is one person.
+  { key: 'people', label: 'People', org: true, self: false, notSelf: true },
   // M60 (ADR 0058): who did what, for the organization's owners.
-  { key: 'activity', label: 'Activity', org: true, self: false },
+  { key: 'activity', label: 'Activity', org: true, self: false, notSelf: false },
   // 2026-10-16: organizations are made here, in Self only; the home is for what needs you.
-  { key: 'organizations', label: 'Organizations', org: true, self: true },
-  { key: 'devices', label: 'Your devices', org: false, self: false },
-  { key: 'appearance', label: 'Appearance', org: false, self: false },
+  { key: 'organizations', label: 'Organizations', org: true, self: true, notSelf: false },
+  { key: 'devices', label: 'Your devices', org: false, self: false, notSelf: false },
+  { key: 'appearance', label: 'Appearance', org: false, self: false, notSelf: false },
   // M58 (ADR 0057): who you are, and the door out.
-  { key: 'account', label: 'Account', org: false, self: false },
+  { key: 'account', label: 'Account', org: false, self: false, notSelf: false },
 ] as const;
 
 export function SettingsPage() {
@@ -33,7 +34,7 @@ export function SettingsPage() {
   const { team, loaded } = useWorkspace();
   if (tab === 'integrations') return <Navigate to={`/integrations${search}`} replace />;
   if (tab === 'organization') return <Navigate to={`/integrations/organization${search}`} replace />;
-  const offered = TABS.filter((t) => (!t.org || team) && (!t.self || team?.own));
+  const offered = TABS.filter((t) => (!t.org || team) && (!t.self || team?.own) && (!t.notSelf || !team?.own));
   const current = offered.find((t) => t.key === tab);
   if (!current) {
     // People before the organizations are listed: wait rather than forward away from it.

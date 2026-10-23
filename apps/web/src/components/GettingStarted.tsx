@@ -71,7 +71,8 @@ export function GettingStarted() {
         }
         return <Link className="button" to={`/o/${state.room.ownerSlug}/s/${state.room.publicId}?add-agent=1`}>Add</Link>;
       case 'invite':
-        if (team) return <Link className="button" to="/settings/people">Invite</Link>;
+        // M68 (ADR 0062): nobody joins Self; there, people are invited to a room.
+        if (team && !team.own) return <Link className="button" to="/settings/people">Invite</Link>;
         if (state.room) return <Link className="button" to={`/o/${state.room.ownerSlug}/s/${state.room.publicId}`}>Invite</Link>;
         return <span className="muted small">Start a room first</span>;
       case 'integration':

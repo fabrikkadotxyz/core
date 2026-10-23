@@ -93,3 +93,4 @@ What we rejected and why.
 | [0059](0059-a-room-keeps-notes-not-a-form.md) | A room keeps notes, not a form | Proposed |
 | [0060](0060-files-live-on-disk-or-in-an-s3-compatible-bucket.md) | Files live on disk, or in an S3-compatible bucket the operator names | Proposed |
 | [0061](0061-a-face-for-everyone-a-picture-for-people-who-want-one.md) | A face for everyone, a picture for people who want one | Proposed |
+| [0062](0062-self-is-one-person-working-together-is-an-organization.md) | Self is one person; working together is an organization | Proposed |

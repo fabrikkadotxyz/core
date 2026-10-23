@@ -375,7 +375,8 @@ export function Sidebar({ place, onNavigate }: { place: Place; onNavigate: () =>
       {place === 'settings' && (
         <section className="side-section" aria-label="Settings">
           <h2>Settings</h2>
-          {team && <PageLink to="/settings/people" label="People" onNavigate={onNavigate} />}
+          {/* M68 (ADR 0062): Self is one person, so it has no People. */}
+          {team && !team.own && <PageLink to="/settings/people" label="People" onNavigate={onNavigate} />}
           {/* M60 (ADR 0058): who did what, per organization. */}
           {team && <PageLink to="/settings/activity" label="Activity" onNavigate={onNavigate} />}
           {team?.own && <PageLink to="/settings/organizations" label="Organizations" onNavigate={onNavigate} />}

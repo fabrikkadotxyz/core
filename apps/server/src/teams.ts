@@ -55,6 +55,12 @@ export async function ownOrganizationOf(db: Database, userId: string): Promise<{
   return row ?? null;
 }
 
+/** M68 (ADR 0062): whether a team is someone's Self, which nobody else joins. */
+export async function isOwnOrganization(db: Database, teamId: string): Promise<boolean> {
+  const [row] = await db.select({ ownOf: teams.ownOfUserId }).from(teams).where(eq(teams.id, teamId)).limit(1);
+  return !!row?.ownOf;
+}
+
 /** The caller's role on a team, or null — which every route must answer with 404. */
 export async function teamRole(db: Database, teamId: string, userId: string): Promise<TeamRole | null> {
   if (!/^[0-9a-f-]{36}$/i.test(teamId)) return null;

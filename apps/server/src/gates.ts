@@ -18,7 +18,7 @@ export interface WriteContext {
   teamId: string | null;
   /** The room's owner (for a room outside any team), or the person acting. */
   ownerUserId: string;
-  /** A short name: message, room, agent, agent-run, upload, context, output, integration, invite, member. */
+  /** A short name: message, room, agent, agent-run, upload, context, output, integration, invite, member, organization, join. */
   action: string;
 }
 export interface Refusal {
@@ -140,7 +140,7 @@ export function membersChanged(db: Database, teamId: string): void {
 /** For the kit: a team's basics, or null. */
 export async function teamInfo(db: Database, teamId: string) {
   const [team] = await db
-    .select({ id: teams.id, name: teams.name, createdAt: teams.createdAt, createdByUserId: teams.createdByUserId })
+    .select({ id: teams.id, name: teams.name, createdAt: teams.createdAt, createdByUserId: teams.createdByUserId, ownOfUserId: teams.ownOfUserId })
     .from(teams)
     .where(eq(teams.id, teamId))
     .limit(1);
